@@ -1,0 +1,36 @@
+import { contextBridge, ipcRenderer } from 'electron'
+import { electronAPI } from '@electron-toolkit/preload'
+import type { DeviceInput, SubnetInput, VwDeviceManagerApi } from '../shared/types'
+
+// Custom APIs for renderer
+const api: VwDeviceManagerApi = {
+  subnets: {
+    list: () => ipcRenderer.invoke('subnets:list'),
+    create: (input: SubnetInput) => ipcRenderer.invoke('subnets:create', input),
+    update: (id: number, input: SubnetInput) => ipcRenderer.invoke('subnets:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('subnets:remove', id)
+  },
+  devices: {
+    list: () => ipcRenderer.invoke('devices:list'),
+    create: (input: DeviceInput) => ipcRenderer.invoke('devices:create', input),
+    update: (id: number, input: DeviceInput) => ipcRenderer.invoke('devices:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('devices:remove', id)
+  }
+}
+
+// Use `contextBridge` APIs to expose Electron APIs to
+// renderer only if context isolation is enabled, otherwise
+// just add to the DOM global.
+if (process.contextIsolated) {
+  try {
+    contextBridge.exposeInMainWorld('electron', electronAPI)
+    contextBridge.exposeInMainWorld('api', api)
+  } catch (error) {
+    console.error(error)
+  }
+} else {
+  // @ts-ignore (define in dts)
+  window.electron = electronAPI
+  // @ts-ignore (define in dts)
+  window.api = api
+}
