@@ -243,3 +243,138 @@ code {
 .muted {
   color: var(--ev-c-text-2);
 }
+
+.badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  background: rgba(59, 111, 224, 0.18);
+  color: #8fb0ff;
+  border: 1px solid rgba(59, 111, 224, 0.35);
+}
+
+/* A checkbox row inside the two-column device form. */
+.checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--ev-c-text-1);
+  cursor: pointer;
+}
+
+.checkbox-field input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  min-width: auto;
+  padding: 0;
+}
+
+.checkbox-field small {
+  flex-basis: 100%;
+}
+
+/* ---- Ports / trunking ------------------------------------------------ */
+
+.ports-row td {
+  background: var(--ev-c-black-soft);
+  padding: 12px;
+}
+
+.ports-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.port-row {
+  border: 1px solid var(--ev-c-black-mute);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--ev-c-black);
+}
+
+.port-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.port-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ev-c-text-2);
+}
+
+.port-fields input,
+.port-fields select {
+  min-width: 160px;
+}
+
+.port-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.port-tagged {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ev-c-black-mute);
+}
+
+.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.chk input {
+  min-width: auto;
+}
+
+/* ---- Settings: network signals --------------------------------------- */
+
+.signal-add {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.signal-add input {
+  max-width: 260px;
+}
+
+.signal-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+}
+
+.signal-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--ev-c-black-mute);
+  border-radius: 6px;
+}

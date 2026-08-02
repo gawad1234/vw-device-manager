@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import * as repo from './repository'
-import type { DeviceInput, SubnetInput } from '../shared/types'
+import type { DeviceInput, PortInput, SubnetInput } from '../shared/types'
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('subnets:list', () => repo.listSubnets())
@@ -16,4 +16,17 @@ export function registerIpcHandlers(): void {
     repo.updateDevice(id, input)
   )
   ipcMain.handle('devices:remove', (_e, id: number) => repo.deleteDevice(id))
+
+  ipcMain.handle('ports:create', (_e, deviceId: number, input: PortInput) =>
+    repo.createPort(deviceId, input)
+  )
+  ipcMain.handle('ports:update', (_e, id: number, input: PortInput) => repo.updatePort(id, input))
+  ipcMain.handle('ports:remove', (_e, id: number) => repo.deletePort(id))
+  ipcMain.handle('ports:setTaggedVlans', (_e, id: number, subnetIds: number[]) =>
+    repo.setPortTaggedVlans(id, subnetIds)
+  )
+
+  ipcMain.handle('signals:list', () => repo.listNetworkSignals())
+  ipcMain.handle('signals:add', (_e, signal: string) => repo.addNetworkSignal(signal))
+  ipcMain.handle('signals:remove', (_e, signal: string) => repo.removeNetworkSignal(signal))
 }

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { DeviceInput, SubnetInput, VwDeviceManagerApi } from '../shared/types'
+import type { DeviceInput, PortInput, SubnetInput, VwDeviceManagerApi } from '../shared/types'
 
 // Custom APIs for renderer
 const api: VwDeviceManagerApi = {
@@ -15,6 +15,19 @@ const api: VwDeviceManagerApi = {
     create: (input: DeviceInput) => ipcRenderer.invoke('devices:create', input),
     update: (id: number, input: DeviceInput) => ipcRenderer.invoke('devices:update', id, input),
     remove: (id: number) => ipcRenderer.invoke('devices:remove', id)
+  },
+  ports: {
+    create: (deviceId: number, input: PortInput) =>
+      ipcRenderer.invoke('ports:create', deviceId, input),
+    update: (id: number, input: PortInput) => ipcRenderer.invoke('ports:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('ports:remove', id),
+    setTaggedVlans: (id: number, subnetIds: number[]) =>
+      ipcRenderer.invoke('ports:setTaggedVlans', id, subnetIds)
+  },
+  networkSignals: {
+    list: () => ipcRenderer.invoke('signals:list'),
+    add: (signal: string) => ipcRenderer.invoke('signals:add', signal),
+    remove: (signal: string) => ipcRenderer.invoke('signals:remove', signal)
   }
 }
 

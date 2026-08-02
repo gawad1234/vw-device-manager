@@ -1,25 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { Device, DeviceInput, DeviceWarning, Subnet } from '../../../shared/types'
+import PortsSection from '../components/PortsSection'
 
 const EMPTY_FORM: DeviceInput = {
   name: '',
   deviceType: null,
-  ipAddress: null,
   macAddress: null,
-  subnetId: null,
   location: null,
-  notes: null
+  notes: null,
+  isSwitch: false,
+  managementIp: null,
+  oobIp: null
 }
 
 interface Props {
   devices: Device[]
   subnets: Subnet[]
   onChanged: () => void
-}
-
-function subnetName(subnets: Subnet[], id: number | null): string {
-  if (id == null) return '—'
-  return subnets.find((s) => s.id === id)?.name ?? '—'
 }
 
 function DevicesPage({ devices, subnets, onChanged }: Props): React.JSX.Element {
@@ -29,6 +26,7 @@ function DevicesPage({ devices, subnets, onChanged }: Props): React.JSX.Element 
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<DeviceWarning[]>([])
   const [search, setSearch] = useState('')
+  const [expandedId, setExpandedId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!showForm) {
@@ -42,11 +40,12 @@ function DevicesPage({ devices, subnets, onChanged }: Props): React.JSX.Element 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return devices
-    return devices.filter((d) =>
-      [d.name, d.deviceType, d.ipAddress, d.macAddress, d.location, d.notes]
+    return devices.filter((d) => {
+      const portText = d.ports.flatMap((p) => [p.label, p.ipAddress])
+      return [d.name, d.deviceType, d.macAddress, d.location, d.notes, ...portText]
         .filter(Boolean)
         .some((v) => (v as string).toLowerCase().includes(q))
-    )
+    })
   }, [devices, search])
 
   function startEdit(device: Device): void {
@@ -54,11 +53,12 @@ function DevicesPage({ devices, subnets, onChanged }: Props): React.JSX.Element 
     setForm({
       name: device.name,
       deviceType: device.deviceType,
-      ipAddress: device.ipAddress,
       macAddress: device.macAddress,
-      subnetId: device.subnetId,
       location: device.location,
-      notes: device.notes
+      notes: device.notes,
+      isSwitch: device.isSwitch,
+      managementIp: device.managementIp,
+      oobIp: device.oobIp
     })
     setError(null)
     setWarnings([])
@@ -82,15 +82,22 @@ function DevicesPage({ devices, subnets, onChanged }: Props): React.JSX.Element 
       return
     }
     setError(null)
-    setWarnings(result.warnings)
     onChanged()
-    if (result.warnings.length === 0) {
-      setShowForm(false)
+
+    // Non-blocking warnings (e.g. a mistyped management IP): the save went
+    // through, but keep the form open so they're seen. Adopt the new id so a
+    // re-submit updates this device instead of creating a duplicate.
+    if (result.warnings.length > 0) {
+      setWarnings(result.warnings)
+      if (result.device) setEditingId(result.device.id)
+      return
     }
+    setWarnings([])
+    setShowForm(false)
   }
 
   async function handleDelete(device: Device): Promise<void> {
-    if (!window.confirm(`Delete device "${device.name}"?`)) return
+    if (!window.confirm(`Delete device "${device.name}" and its ports?`)) return
     await window.api.devices.remove(device.id)
     onChanged()
   }
@@ -133,17 +140,11 @@ function DevicesPage({ devices, subnets, onChanged }: Props): React.JSX.Element 
             Type
             <input
               value={form.deviceType ?? ''}
-              onChange={(e) => setForm({ ...form, deviceType: e.target.value || null })}
-              placeholder="Camera, Switch, DSP…"
+              readOnly
+              placeholder="— from Vectorworks —"
+              title="Synced from the drawing (Model field) — edit it in Vectorworks."
             />
-          </label>
-          <label>
-            IP address
-            <input
-              value={form.ipAddress ?? ''}
-              onChange={(e) => setForm({ ...form, ipAddress: e.target.value || null })}
-              placeholder="10.0.10.21"
-            />
+            <small className="muted">Synced from Vectorworks (Model)</small>
           </label>
           <label>
             MAC address
@@ -154,29 +155,46 @@ function DevicesPage({ devices, subnets, onChanged }: Props): React.JSX.Element 
             />
           </label>
           <label>
-            Subnet
-            <select
-              value={form.subnetId ?? ''}
-              onChange={(e) =>
-                setForm({ ...form, subnetId: e.target.value ? Number(e.target.value) : null })
-              }
-            >
-              <option value="">— none —</option>
-              {subnets.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.cidr})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
             Location
             <input
               value={form.location ?? ''}
-              onChange={(e) => setForm({ ...form, location: e.target.value || null })}
-              placeholder="Rack 3 / FOH"
+              readOnly
+              placeholder="— from Vectorworks —"
+              title="Synced from the drawing (Room / Rack / Rack U / Slot) — edit it in Vectorworks."
             />
+            <small className="muted">Synced from Vectorworks (Room / Rack / Rack U / Slot)</small>
           </label>
+          <label className="checkbox-field span-2">
+            <input
+              type="checkbox"
+              checked={form.isSwitch}
+              onChange={(e) => setForm({ ...form, isSwitch: e.target.checked })}
+            />
+            This is a network switch
+            <small className="muted">
+              Switches use a management + OOB IP instead of a per-port IP; their ports are VLAN-only.
+            </small>
+          </label>
+          {form.isSwitch && (
+            <>
+              <label>
+                Management IP
+                <input
+                  value={form.managementIp ?? ''}
+                  onChange={(e) => setForm({ ...form, managementIp: e.target.value || null })}
+                  placeholder="10.0.10.2"
+                />
+              </label>
+              <label>
+                Out-of-band (OOB) IP
+                <input
+                  value={form.oobIp ?? ''}
+                  onChange={(e) => setForm({ ...form, oobIp: e.target.value || null })}
+                  placeholder="192.168.100.2"
+                />
+              </label>
+            </>
+          )}
           <label className="span-2">
             Notes
             <textarea
@@ -198,38 +216,62 @@ function DevicesPage({ devices, subnets, onChanged }: Props): React.JSX.Element 
           <tr>
             <th>Name</th>
             <th>Type</th>
-            <th>IP address</th>
             <th>MAC</th>
-            <th>Subnet</th>
             <th>Location</th>
+            <th>Ports</th>
             <th />
           </tr>
         </thead>
         <tbody>
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={7} className="empty-cell">
+              <td colSpan={6} className="empty-cell">
                 {devices.length === 0 ? 'No devices yet.' : 'No devices match your search.'}
               </td>
             </tr>
           )}
           {filtered.map((d) => (
-            <tr key={d.id}>
-              <td>{d.name}</td>
-              <td className="muted">{d.deviceType ?? '—'}</td>
-              <td>{d.ipAddress ? <code>{d.ipAddress}</code> : '—'}</td>
-              <td className="muted">{d.macAddress ?? '—'}</td>
-              <td>{subnetName(subnets, d.subnetId)}</td>
-              <td className="muted">{d.location ?? '—'}</td>
-              <td className="row-actions">
-                <button className="btn btn-small" onClick={() => startEdit(d)}>
-                  Edit
-                </button>
-                <button className="btn btn-small btn-danger" onClick={() => handleDelete(d)}>
-                  Delete
-                </button>
-              </td>
-            </tr>
+            <Fragment key={d.id}>
+              <tr>
+                <td>
+                  {d.name}
+                  {d.isSwitch && (
+                    <span
+                      className="badge"
+                      title={`Switch — mgmt ${d.managementIp ?? '—'} · OOB ${d.oobIp ?? '—'}`}
+                    >
+                      switch
+                    </span>
+                  )}
+                </td>
+                <td className="muted">{d.deviceType ?? '—'}</td>
+                <td className="muted">{d.macAddress ?? '—'}</td>
+                <td className="muted">{d.location ?? '—'}</td>
+                <td>
+                  <button
+                    className="btn btn-small"
+                    onClick={() => setExpandedId((cur) => (cur === d.id ? null : d.id))}
+                  >
+                    {expandedId === d.id ? '▾' : '▸'} {d.ports.length}
+                  </button>
+                </td>
+                <td className="row-actions">
+                  <button className="btn btn-small" onClick={() => startEdit(d)}>
+                    Edit
+                  </button>
+                  <button className="btn btn-small btn-danger" onClick={() => handleDelete(d)}>
+                    Delete
+                  </button>
+                </td>
+              </tr>
+              {expandedId === d.id && (
+                <tr className="ports-row">
+                  <td colSpan={6}>
+                    <PortsSection device={d} subnets={subnets} onChanged={onChanged} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>

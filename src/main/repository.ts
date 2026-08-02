@@ -5,7 +5,10 @@ import type {
   Device,
   DeviceInput,
   DeviceWarning,
+  Port,
+  PortInput,
   SaveDeviceResult,
+  SavePortResult,
   Subnet,
   SubnetInput
 } from '../shared/types'
@@ -24,18 +27,32 @@ function mapSubnet(row: Row): Subnet {
   }
 }
 
-function mapDevice(row: Row): Device {
+function mapPort(row: Row, taggedSubnetIds: number[]): Port {
+  return {
+    id: row.id as number,
+    deviceId: row.device_id as number,
+    label: row.label as string,
+    ipAddress: (row.ip_address as string | null) ?? null,
+    untaggedSubnetId: (row.untagged_subnet_id as number | null) ?? null,
+    taggedSubnetIds,
+    vwSocketKey: (row.vw_socket_key as string | null) ?? null
+  }
+}
+
+function mapDevice(row: Row, ports: Port[]): Device {
   return {
     id: row.id as number,
     name: row.name as string,
     deviceType: (row.device_type as string | null) ?? null,
-    ipAddress: (row.ip_address as string | null) ?? null,
     macAddress: (row.mac_address as string | null) ?? null,
-    subnetId: (row.subnet_id as number | null) ?? null,
     location: (row.location as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
+    isSwitch: Boolean(row.is_switch),
+    managementIp: (row.management_ip as string | null) ?? null,
+    oobIp: (row.oob_ip as string | null) ?? null,
     createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string
+    updatedAt: row.updated_at as string,
+    ports
   }
 }
 
@@ -90,30 +107,63 @@ export function updateSubnet(id: number, input: SubnetInput): Subnet {
 }
 
 export function deleteSubnet(id: number): void {
+  // A deleted subnet is dereferenced everywhere it was used (untagged +
+  // tagged), so ports don't point at a phantom network.
+  getDb().run('UPDATE ports SET untagged_subnet_id = NULL WHERE untagged_subnet_id = ?', [id])
+  getDb().run('DELETE FROM port_tagged_vlans WHERE subnet_id = ?', [id])
   getDb().run('DELETE FROM subnets WHERE id = ?', [id])
   persist()
 }
 
-// ---- Devices ------------------------------------------------------------
+// ---- Ports --------------------------------------------------------------
 
-export function listDevices(): Device[] {
-  return queryAll('SELECT * FROM devices ORDER BY name COLLATE NOCASE').map(mapDevice)
+function taggedForPort(portId: number): number[] {
+  return queryAll('SELECT subnet_id FROM port_tagged_vlans WHERE port_id = ? ORDER BY subnet_id', [
+    portId
+  ]).map((t) => t.subnet_id as number)
 }
 
-function getDeviceById(id: number): Device | null {
-  const row = queryOne('SELECT * FROM devices WHERE id = ?', [id])
-  return row ? mapDevice(row) : null
-}
-
-function findDeviceByIp(ip: string, excludeId?: number): Device | null {
-  return (
-    queryAll('SELECT * FROM devices WHERE ip_address = ?', [ip])
-      .map(mapDevice)
-      .find((d) => d.id !== excludeId) ?? null
+function portsForDevice(deviceId: number): Port[] {
+  return queryAll('SELECT * FROM ports WHERE device_id = ? ORDER BY id', [deviceId]).map((r) =>
+    mapPort(r, taggedForPort(r.id as number))
   )
 }
 
-function buildWarnings(input: DeviceInput): DeviceWarning[] {
+function getPortById(id: number): Port | null {
+  const row = queryOne('SELECT * FROM ports WHERE id = ?', [id])
+  return row ? mapPort(row, taggedForPort(id)) : null
+}
+
+/**
+ * Find any OTHER place this IP is already used, for conflict detection. An IP
+ * is an IP: this spans both port IPs and the device-level switch IPs
+ * (management / out-of-band), so nothing can be double-assigned anywhere.
+ *
+ * `exclude` skips the slot being saved: `portId` skips that one port row;
+ * `deviceId` skips BOTH of a device's own mgmt/OOB rows (they get rewritten
+ * together, and a mgmt-vs-OOB clash within one save is checked separately).
+ */
+function findIpUse(
+  ip: string,
+  exclude?: { portId?: number; deviceId?: number }
+): { label: string; deviceName: string } | null {
+  const rows = queryAll(
+    `SELECT 'port' AS kind, p.id AS ref_id, p.label AS label, d.name AS device_name
+       FROM ports p JOIN devices d ON d.id = p.device_id
+      WHERE p.ip_address = ?
+     UNION ALL
+     SELECT 'device', id, 'Management IP', name FROM devices WHERE management_ip = ?
+     UNION ALL
+     SELECT 'device', id, 'Out-of-band IP', name FROM devices WHERE oob_ip = ?`,
+    [ip, ip, ip]
+  )
+  const hit = rows.find((r) =>
+    r.kind === 'port' ? (r.ref_id as number) !== exclude?.portId : (r.ref_id as number) !== exclude?.deviceId
+  )
+  return hit ? { label: hit.label as string, deviceName: hit.device_name as string } : null
+}
+
+function buildPortWarnings(input: PortInput): DeviceWarning[] {
   const warnings: DeviceWarning[] = []
   if (!input.ipAddress) return warnings
 
@@ -125,8 +175,8 @@ function buildWarnings(input: DeviceInput): DeviceWarning[] {
     return warnings
   }
 
-  if (input.subnetId != null) {
-    const subnet = getSubnetById(input.subnetId)
+  if (input.untaggedSubnetId != null) {
+    const subnet = getSubnetById(input.untaggedSubnetId)
     if (subnet && ipInCidr(input.ipAddress, subnet.cidr) === false) {
       warnings.push({
         type: 'ip-outside-subnet',
@@ -137,71 +187,205 @@ function buildWarnings(input: DeviceInput): DeviceWarning[] {
   return warnings
 }
 
-export function createDevice(input: DeviceInput): SaveDeviceResult {
+export function createPort(deviceId: number, input: PortInput): SavePortResult {
   if (input.ipAddress) {
-    const conflict = findDeviceByIp(input.ipAddress)
+    const conflict = findIpUse(input.ipAddress)
     if (conflict) {
       return {
-        device: null,
+        port: null,
         warnings: [],
-        error: `IP ${input.ipAddress} is already assigned to "${conflict.name}".`
+        error: `IP ${input.ipAddress} is already on "${conflict.deviceName}" (${conflict.label}).`
       }
     }
   }
 
-  const warnings = buildWarnings(input)
+  const warnings = buildPortWarnings(input)
   getDb().run(
-    `INSERT INTO devices (name, device_type, ip_address, mac_address, subnet_id, location, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO ports (device_id, label, ip_address, untagged_subnet_id) VALUES (?, ?, ?, ?)`,
+    [deviceId, input.label, input.ipAddress, input.untaggedSubnetId]
+  )
+  const id = lastInsertRowId()
+  persist()
+  return { port: getPortById(id), warnings }
+}
+
+export function updatePort(id: number, input: PortInput): SavePortResult {
+  if (input.ipAddress) {
+    const conflict = findIpUse(input.ipAddress, { portId: id })
+    if (conflict) {
+      return {
+        port: null,
+        warnings: [],
+        error: `IP ${input.ipAddress} is already on "${conflict.deviceName}" (${conflict.label}).`
+      }
+    }
+  }
+
+  const warnings = buildPortWarnings(input)
+  getDb().run(
+    `UPDATE ports SET label = ?, ip_address = ?, untagged_subnet_id = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+    [input.label, input.ipAddress, input.untaggedSubnetId, id]
+  )
+  persist()
+  return { port: getPortById(id), warnings }
+}
+
+export function deletePort(id: number): void {
+  getDb().run('DELETE FROM port_tagged_vlans WHERE port_id = ?', [id])
+  getDb().run('DELETE FROM ports WHERE id = ?', [id])
+  persist()
+}
+
+/** Replace the port's tagged-VLAN set with exactly the given subnet ids. */
+export function setPortTaggedVlans(portId: number, subnetIds: number[]): void {
+  const db = getDb()
+  db.run('DELETE FROM port_tagged_vlans WHERE port_id = ?', [portId])
+  for (const subnetId of subnetIds) {
+    db.run('INSERT OR IGNORE INTO port_tagged_vlans (port_id, subnet_id) VALUES (?, ?)', [
+      portId,
+      subnetId
+    ])
+  }
+  persist()
+}
+
+// ---- Devices ------------------------------------------------------------
+
+export function listDevices(): Device[] {
+  return queryAll('SELECT * FROM devices ORDER BY name COLLATE NOCASE').map((r) =>
+    mapDevice(r, portsForDevice(r.id as number))
+  )
+}
+
+function getDeviceById(id: number): Device | null {
+  const row = queryOne('SELECT * FROM devices WHERE id = ?', [id])
+  return row ? mapDevice(row, portsForDevice(id)) : null
+}
+
+/** The two switch IPs, normalized: only kept when the device is a switch, and
+ *  trimmed to null when blank — so toggling switch off clears them. */
+function switchIps(input: DeviceInput): { mgmt: string | null; oob: string | null } {
+  if (!input.isSwitch) return { mgmt: null, oob: null }
+  return {
+    mgmt: input.managementIp?.trim() || null,
+    oob: input.oobIp?.trim() || null
+  }
+}
+
+/** Validate a switch's management/OOB IPs. A duplicate (or the two being equal)
+ *  is a hard error; an unparseable IP is a non-blocking warning — same
+ *  conventions ports use. `excludeDeviceId` skips the device's own rows. */
+function checkSwitchIps(
+  mgmt: string | null,
+  oob: string | null,
+  excludeDeviceId: number
+): { error?: string; warnings: DeviceWarning[] } {
+  const warnings: DeviceWarning[] = []
+  if (mgmt && oob && mgmt === oob) {
+    return { warnings, error: `Management IP and Out-of-band IP can't both be ${mgmt}.` }
+  }
+  const slots: Array<[string | null, string]> = [
+    [mgmt, 'Management IP'],
+    [oob, 'Out-of-band IP']
+  ]
+  for (const [ip, human] of slots) {
+    if (!ip) continue
+    const conflict = findIpUse(ip, { deviceId: excludeDeviceId })
+    if (conflict) {
+      return {
+        warnings,
+        error: `${human} ${ip} is already on "${conflict.deviceName}" (${conflict.label}).`
+      }
+    }
+    if (!isValidIpv4(ip)) {
+      warnings.push({ type: 'invalid-ip', message: `${human} "${ip}" is not a valid IPv4 address.` })
+    }
+  }
+  return { warnings }
+}
+
+export function createDevice(input: DeviceInput): SaveDeviceResult {
+  const { mgmt, oob } = switchIps(input)
+  const check = checkSwitchIps(mgmt, oob, -1) // no id yet — nothing to exclude
+  if (check.error) return { device: null, warnings: [], error: check.error }
+
+  getDb().run(
+    `INSERT INTO devices (name, device_type, mac_address, location, notes, is_switch, management_ip, oob_ip)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.name,
       input.deviceType,
-      input.ipAddress,
       input.macAddress,
-      input.subnetId,
       input.location,
-      input.notes
+      input.notes,
+      input.isSwitch ? 1 : 0,
+      mgmt,
+      oob
     ]
   )
   const id = lastInsertRowId()
   persist()
-  return { device: getDeviceById(id), warnings }
+  return { device: getDeviceById(id), warnings: check.warnings }
 }
 
 export function updateDevice(id: number, input: DeviceInput): SaveDeviceResult {
-  if (input.ipAddress) {
-    const conflict = findDeviceByIp(input.ipAddress, id)
-    if (conflict) {
-      return {
-        device: null,
-        warnings: [],
-        error: `IP ${input.ipAddress} is already assigned to "${conflict.name}".`
-      }
-    }
-  }
+  const { mgmt, oob } = switchIps(input)
+  const check = checkSwitchIps(mgmt, oob, id)
+  if (check.error) return { device: null, warnings: [], error: check.error }
 
-  const warnings = buildWarnings(input)
   getDb().run(
     `UPDATE devices
-     SET name = ?, device_type = ?, ip_address = ?, mac_address = ?, subnet_id = ?, location = ?, notes = ?,
+     SET name = ?, device_type = ?, mac_address = ?, location = ?, notes = ?,
+         is_switch = ?, management_ip = ?, oob_ip = ?,
          updated_at = datetime('now')
      WHERE id = ?`,
     [
       input.name,
       input.deviceType,
-      input.ipAddress,
       input.macAddress,
-      input.subnetId,
       input.location,
       input.notes,
+      input.isSwitch ? 1 : 0,
+      mgmt,
+      oob,
       id
     ]
   )
   persist()
-  return { device: getDeviceById(id), warnings }
+  return { device: getDeviceById(id), warnings: check.warnings }
 }
 
 export function deleteDevice(id: number): void {
-  getDb().run('DELETE FROM devices WHERE id = ?', [id])
+  const db = getDb()
+  db.run(
+    'DELETE FROM port_tagged_vlans WHERE port_id IN (SELECT id FROM ports WHERE device_id = ?)',
+    [id]
+  )
+  db.run('DELETE FROM ports WHERE device_id = ?', [id])
+  db.run('DELETE FROM devices WHERE id = ?', [id])
   persist()
+}
+
+// ---- Network signals ----------------------------------------------------
+
+export function listNetworkSignals(): string[] {
+  return queryAll('SELECT signal FROM network_signals ORDER BY signal COLLATE NOCASE').map(
+    (r) => r.signal as string
+  )
+}
+
+export function addNetworkSignal(signal: string): string[] {
+  const s = signal.trim()
+  if (s) {
+    getDb().run('INSERT OR IGNORE INTO network_signals (signal) VALUES (?)', [s])
+    persist()
+  }
+  return listNetworkSignals()
+}
+
+export function removeNetworkSignal(signal: string): string[] {
+  getDb().run('DELETE FROM network_signals WHERE signal = ?', [signal])
+  persist()
+  return listNetworkSignals()
 }

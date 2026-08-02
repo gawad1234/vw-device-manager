@@ -1,0 +1,62 @@
+# vw-device-manager
+
+Electron + React + TypeScript desktop app for tracking network devices
+(IP/subnet/MAC/type/location/notes), meant to be the source-of-truth
+database that the sibling `vectorworks-scripts/` sync onto a Vectorworks
+ConnectCAD drawing. See `../CLAUDE.md` and `../PROGRESS.md` for the wider
+workspace context and the cross-machine handoff log — check those first.
+
+## Architecture
+
+- **Main process** (`src/main/`):
+  - `db.ts` — SQLite via `sql.js` (WASM, not a native binding), persists the
+    whole DB to `data/vw-device-manager.sqlite3` on change (see `paths.ts`
+    for the resolved path). This is why the app and a Vectorworks sync
+    script must never touch the file concurrently — whichever writes last
+    wins.
+  - `repository.ts` — CRUD + validation for devices/subnets (IP conflict
+    checks, IP-outside-subnet checks, etc. — see `DeviceWarning` types).
+  - `ipc.ts` — wires repository methods to IPC handlers.
+  - `ip-utils.ts` — CIDR/IP helper functions.
+  - `index.ts` — Electron app bootstrap/window creation.
+- **Preload** (`src/preload/`): exposes the typed `VwDeviceManagerApi`
+  (`src/shared/types.ts`) to the renderer via `contextBridge`.
+- **Renderer** (`src/renderer/src/`): React UI — `App.tsx` shell,
+  `pages/DevicesPage.tsx` and `pages/SubnetsPage.tsx`.
+- **Shared** (`src/shared/types.ts`): `Device`, `Subnet`, `DeviceWarning`,
+  and the `VwDeviceManagerApi` contract shared between main/preload/renderer.
+
+## Data model (as of last read — verify against `types.ts` before relying on this)
+
+- `Subnet`: id, name, cidr, vlan, gateway, notes, createdAt. Doubles as a
+  VLAN/network (it carries `vlan`).
+- `Device`: id, name, deviceType, macAddress, location, notes, timestamps, and
+  `ports: Port[]`. **IP + subnet are NOT on the device** — they moved to the
+  port. `deviceType`/`location` are drawing-owned (read-only in the app).
+  Switch fields: `isSwitch` (bool) + device-level `managementIp` / `oobIp`.
+  When `isSwitch`, the app hides the per-port IP (switch ports are VLAN-only)
+  and validates mgmt/OOB IPs through the same shared IP-conflict check as ports
+  (`findIpUse` in repository.ts). Non-switch devices keep mgmt/OOB null.
+- `Port`: id, deviceId, label (jack name), ipAddress, untaggedSubnetId (the
+  native/untagged network), taggedSubnetIds (trunked VLANs, stored in the
+  `port_tagged_vlans` join table), vwSocketKey (ties it to a ConnectCAD jack;
+  null = added manually in the app). Port saves return warnings for IP
+  conflict / IP-outside-untagged-subnet / invalid IP, and can be rejected
+  outright for a hard duplicate IP.
+- One-time migration in `db.ts` moves each legacy device's single ip/subnet
+  into a "Port 1" and drops those columns.
+
+## Vectorworks sync (`vectorworks-scripts/`)
+
+One-directional: this app's DB is the source of truth for `vwdm_*` fields;
+device *name* is the one field read the other direction (from Vectorworks,
+once, at link time via `link_selected.py`). Full workflow and current
+limitations are documented in `vectorworks-scripts/README.md` — read it
+before changing anything that touches the sync contract (field names,
+`VWDM Sync` record format, `vwdm_id` semantics).
+
+## Git
+
+Local-only repo, no remote — cross-machine sync happens via Dropbox, not
+git push/pull. `Launch App.bat` and `vectorworks-scripts/` are currently
+untracked (see `PROGRESS.md` for whether that's still true).

@@ -7,3 +7,7 @@ out
 
 # local SQLite database (lives in this Dropbox-synced folder, not in git)
 /data
+
+# Dropbox sync conflict copies
+node_modules 2
+*conflicted copy*

@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Device, Subnet } from '../../shared/types'
 import SubnetsPage from './pages/SubnetsPage'
 import DevicesPage from './pages/DevicesPage'
+import SettingsPage from './pages/SettingsPage'
 
-type Tab = 'devices' | 'subnets'
+type Tab = 'devices' | 'subnets' | 'settings'
 
 function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('devices')
@@ -41,6 +42,12 @@ function App(): React.JSX.Element {
           >
             Subnets
           </button>
+          <button
+            className={`tab ${tab === 'settings' ? 'active' : ''}`}
+            onClick={() => setTab('settings')}
+          >
+            Settings
+          </button>
         </nav>
       </header>
 
@@ -49,8 +56,10 @@ function App(): React.JSX.Element {
           <p className="muted">Loading…</p>
         ) : tab === 'devices' ? (
           <DevicesPage devices={devices} subnets={subnets} onChanged={refresh} />
-        ) : (
+        ) : tab === 'subnets' ? (
           <SubnetsPage subnets={subnets} onChanged={refresh} />
+        ) : (
+          <SettingsPage />
         )}
       </main>
     </div>
