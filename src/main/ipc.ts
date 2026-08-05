@@ -1,6 +1,13 @@
 import { ipcMain } from 'electron'
 import * as repo from './repository'
-import type { DeviceInput, PortInput, SubnetInput } from '../shared/types'
+import type {
+  BundleInput,
+  CableInput,
+  CableTypeInput,
+  DeviceInput,
+  PortInput,
+  SubnetInput
+} from '../shared/types'
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('subnets:list', () => repo.listSubnets())
@@ -29,4 +36,26 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('signals:list', () => repo.listNetworkSignals())
   ipcMain.handle('signals:add', (_e, signal: string) => repo.addNetworkSignal(signal))
   ipcMain.handle('signals:remove', (_e, signal: string) => repo.removeNetworkSignal(signal))
+
+  ipcMain.handle('bundles:list', () => repo.listBundles())
+  ipcMain.handle('bundles:create', (_e, input: BundleInput) => repo.createBundle(input))
+  ipcMain.handle('bundles:update', (_e, id: number, input: BundleInput) =>
+    repo.updateBundle(id, input)
+  )
+  ipcMain.handle('bundles:remove', (_e, id: number) => repo.deleteBundle(id))
+
+  ipcMain.handle('cables:create', (_e, bundleId: number, input: CableInput) =>
+    repo.createCable(bundleId, input)
+  )
+  ipcMain.handle('cables:update', (_e, id: number, input: CableInput) =>
+    repo.updateCable(id, input)
+  )
+  ipcMain.handle('cables:remove', (_e, id: number) => repo.deleteCable(id))
+
+  ipcMain.handle('cableTypes:list', () => repo.listCableTypes())
+  ipcMain.handle('cableTypes:create', (_e, input: CableTypeInput) => repo.createCableType(input))
+  ipcMain.handle('cableTypes:update', (_e, id: number, input: CableTypeInput) =>
+    repo.updateCableType(id, input)
+  )
+  ipcMain.handle('cableTypes:remove', (_e, id: number) => repo.deleteCableType(id))
 }

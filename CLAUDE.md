@@ -45,6 +45,17 @@ workspace context and the cross-machine handoff log — check those first.
   outright for a hard duplicate IP.
 - One-time migration in `db.ts` moves each legacy device's single ip/subnet
   into a "Port 1" and drops those columns.
+- **Cable bundle manager** (own "Cables" tab): `CableType` (managed catalog,
+  in Settings), `Bundle` (name + **color** + from/to location + **length** +
+  notes + `cables: Cable[]`), and `Cable` (name, cableTypeId, pulled, labeled,
+  notes, plus
+  `source`/`destination` `CableEndpoint`s). **Length is bundle-level** — cables
+  in a bundle share the run. A `CableEndpoint` links to a device + optional port, or
+  falls back to free `text`. Tables `cable_types` / `bundles` / `cables` are
+  additive (`CREATE TABLE IF NOT EXISTS`, no migration). Endpoint names are
+  resolved in the UI from the loaded devices — the repo returns raw ids.
+  Phase 1 = data + entry UI; outputs (pull sheets/labels), conduit-fill %, and
+  ConnectCAD auto-recognition are future (see `../ROADMAP.md`).
 
 ## Vectorworks sync (`vectorworks-scripts/`)
 

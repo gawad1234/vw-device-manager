@@ -1,24 +1,31 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Device, Subnet } from '../../shared/types'
+import type { Bundle, CableType, Device, Subnet } from '../../shared/types'
 import SubnetsPage from './pages/SubnetsPage'
 import DevicesPage from './pages/DevicesPage'
+import CablesPage from './pages/CablesPage'
 import SettingsPage from './pages/SettingsPage'
 
-type Tab = 'devices' | 'subnets' | 'settings'
+type Tab = 'devices' | 'subnets' | 'cables' | 'settings'
 
 function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('devices')
   const [subnets, setSubnets] = useState<Subnet[]>([])
   const [devices, setDevices] = useState<Device[]>([])
+  const [bundles, setBundles] = useState<Bundle[]>([])
+  const [cableTypes, setCableTypes] = useState<CableType[]>([])
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
-    const [subnetList, deviceList] = await Promise.all([
+    const [subnetList, deviceList, bundleList, cableTypeList] = await Promise.all([
       window.api.subnets.list(),
-      window.api.devices.list()
+      window.api.devices.list(),
+      window.api.bundles.list(),
+      window.api.cableTypes.list()
     ])
     setSubnets(subnetList)
     setDevices(deviceList)
+    setBundles(bundleList)
+    setCableTypes(cableTypeList)
   }, [])
 
   useEffect(() => {
@@ -43,6 +50,12 @@ function App(): React.JSX.Element {
             Subnets
           </button>
           <button
+            className={`tab ${tab === 'cables' ? 'active' : ''}`}
+            onClick={() => setTab('cables')}
+          >
+            Cables
+          </button>
+          <button
             className={`tab ${tab === 'settings' ? 'active' : ''}`}
             onClick={() => setTab('settings')}
           >
@@ -58,8 +71,15 @@ function App(): React.JSX.Element {
           <DevicesPage devices={devices} subnets={subnets} onChanged={refresh} />
         ) : tab === 'subnets' ? (
           <SubnetsPage subnets={subnets} onChanged={refresh} />
+        ) : tab === 'cables' ? (
+          <CablesPage
+            bundles={bundles}
+            devices={devices}
+            cableTypes={cableTypes}
+            onChanged={refresh}
+          />
         ) : (
-          <SettingsPage />
+          <SettingsPage cableTypes={cableTypes} onChanged={refresh} />
         )}
       </main>
     </div>

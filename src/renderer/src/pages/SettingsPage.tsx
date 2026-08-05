@@ -1,22 +1,51 @@
 import { useEffect, useState } from 'react'
+import type { CableType } from '../../../shared/types'
 
-function SettingsPage(): React.JSX.Element {
+interface Props {
+  cableTypes: CableType[]
+  onChanged: () => void
+}
+
+function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
   const [signals, setSignals] = useState<string[]>([])
-  const [input, setInput] = useState('')
+  const [signalInput, setSignalInput] = useState('')
+  const [typeName, setTypeName] = useState('')
+  const [typeNotes, setTypeNotes] = useState('')
+  const [typeError, setTypeError] = useState<string | null>(null)
 
   useEffect(() => {
     window.api.networkSignals.list().then(setSignals)
   }, [])
 
-  async function add(e: React.FormEvent): Promise<void> {
+  async function addSignal(e: React.FormEvent): Promise<void> {
     e.preventDefault()
-    if (!input.trim()) return
-    setSignals(await window.api.networkSignals.add(input))
-    setInput('')
+    if (!signalInput.trim()) return
+    setSignals(await window.api.networkSignals.add(signalInput))
+    setSignalInput('')
   }
 
-  async function remove(signal: string): Promise<void> {
+  async function removeSignal(signal: string): Promise<void> {
     setSignals(await window.api.networkSignals.remove(signal))
+  }
+
+  async function addCableType(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    if (!typeName.trim()) return
+    try {
+      await window.api.cableTypes.create({ name: typeName.trim(), notes: typeNotes.trim() || null })
+      setTypeName('')
+      setTypeNotes('')
+      setTypeError(null)
+      onChanged()
+    } catch {
+      setTypeError(`A cable type named "${typeName.trim()}" already exists.`)
+    }
+  }
+
+  async function removeCableType(t: CableType): Promise<void> {
+    if (!window.confirm(`Remove cable type "${t.name}"? Cables using it become untyped.`)) return
+    await window.api.cableTypes.remove(t.id)
+    onChanged()
   }
 
   return (
@@ -34,10 +63,10 @@ function SettingsPage(): React.JSX.Element {
           devices use (e.g. Dante, AES67). Matching is case-insensitive.
         </p>
 
-        <form onSubmit={add} className="signal-add">
+        <form onSubmit={addSignal} className="signal-add">
           <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
+            value={signalInput}
+            onChange={(e) => setSignalInput(e.target.value)}
             placeholder="e.g. LAN, Dante, AES67"
           />
           <button className="btn btn-primary" type="submit">
@@ -52,7 +81,47 @@ function SettingsPage(): React.JSX.Element {
           {signals.map((s) => (
             <li key={s}>
               <code>{s}</code>
-              <button className="btn btn-small btn-danger" onClick={() => remove(s)}>
+              <button className="btn btn-small btn-danger" onClick={() => removeSignal(s)}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="panel">
+        <h3>Cable types</h3>
+        <p className="muted">
+          The catalog of cable types you can assign to cables in the Cables tab (e.g. Cat6,
+          Fiber SM, XLR, Coax). Names are case-insensitive and must be unique.
+        </p>
+
+        <form onSubmit={addCableType} className="signal-add">
+          <input
+            value={typeName}
+            onChange={(e) => setTypeName(e.target.value)}
+            placeholder="e.g. Cat6"
+          />
+          <input
+            value={typeNotes}
+            onChange={(e) => setTypeNotes(e.target.value)}
+            placeholder="Notes (optional)"
+          />
+          <button className="btn btn-primary" type="submit">
+            Add
+          </button>
+        </form>
+        {typeError && <div className="banner banner-error">{typeError}</div>}
+
+        <ul className="signal-list">
+          {cableTypes.length === 0 && <li className="muted">No cable types yet.</li>}
+          {cableTypes.map((t) => (
+            <li key={t.id}>
+              <span>
+                <code>{t.name}</code>
+                {t.notes && <span className="muted"> — {t.notes}</span>}
+              </span>
+              <button className="btn btn-small btn-danger" onClick={() => removeCableType(t)}>
                 Remove
               </button>
             </li>

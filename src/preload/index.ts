@@ -1,6 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { DeviceInput, PortInput, SubnetInput, VwDeviceManagerApi } from '../shared/types'
+import type {
+  BundleInput,
+  CableInput,
+  CableTypeInput,
+  DeviceInput,
+  PortInput,
+  SubnetInput,
+  VwDeviceManagerApi
+} from '../shared/types'
 
 // Custom APIs for renderer
 const api: VwDeviceManagerApi = {
@@ -28,6 +36,25 @@ const api: VwDeviceManagerApi = {
     list: () => ipcRenderer.invoke('signals:list'),
     add: (signal: string) => ipcRenderer.invoke('signals:add', signal),
     remove: (signal: string) => ipcRenderer.invoke('signals:remove', signal)
+  },
+  bundles: {
+    list: () => ipcRenderer.invoke('bundles:list'),
+    create: (input: BundleInput) => ipcRenderer.invoke('bundles:create', input),
+    update: (id: number, input: BundleInput) => ipcRenderer.invoke('bundles:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('bundles:remove', id)
+  },
+  cables: {
+    create: (bundleId: number, input: CableInput) =>
+      ipcRenderer.invoke('cables:create', bundleId, input),
+    update: (id: number, input: CableInput) => ipcRenderer.invoke('cables:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('cables:remove', id)
+  },
+  cableTypes: {
+    list: () => ipcRenderer.invoke('cableTypes:list'),
+    create: (input: CableTypeInput) => ipcRenderer.invoke('cableTypes:create', input),
+    update: (id: number, input: CableTypeInput) =>
+      ipcRenderer.invoke('cableTypes:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('cableTypes:remove', id)
   }
 }
 

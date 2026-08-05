@@ -2,6 +2,12 @@ import { getDb, persist } from './db'
 import { isValidIpv4, ipInCidr } from './ip-utils'
 import type { SqlValue } from 'sql.js'
 import type {
+  Bundle,
+  BundleInput,
+  Cable,
+  CableInput,
+  CableType,
+  CableTypeInput,
   Device,
   DeviceInput,
   DeviceWarning,
@@ -388,4 +394,191 @@ export function removeNetworkSignal(signal: string): string[] {
   getDb().run('DELETE FROM network_signals WHERE signal = ?', [signal])
   persist()
   return listNetworkSignals()
+}
+
+// ---- Cable types --------------------------------------------------------
+
+function mapCableType(row: Row): CableType {
+  return {
+    id: row.id as number,
+    name: row.name as string,
+    notes: (row.notes as string | null) ?? null
+  }
+}
+
+export function listCableTypes(): CableType[] {
+  return queryAll('SELECT * FROM cable_types ORDER BY name COLLATE NOCASE').map(mapCableType)
+}
+
+function getCableTypeById(id: number): CableType | null {
+  const row = queryOne('SELECT * FROM cable_types WHERE id = ?', [id])
+  return row ? mapCableType(row) : null
+}
+
+export function createCableType(input: CableTypeInput): CableType {
+  getDb().run('INSERT INTO cable_types (name, notes) VALUES (?, ?)', [
+    input.name.trim(),
+    input.notes
+  ])
+  const id = lastInsertRowId()
+  persist()
+  return getCableTypeById(id) as CableType
+}
+
+export function updateCableType(id: number, input: CableTypeInput): CableType {
+  getDb().run('UPDATE cable_types SET name = ?, notes = ? WHERE id = ?', [
+    input.name.trim(),
+    input.notes,
+    id
+  ])
+  persist()
+  return getCableTypeById(id) as CableType
+}
+
+export function deleteCableType(id: number): void {
+  // Cables referencing this type keep existing, just untyped.
+  getDb().run('UPDATE cables SET cable_type_id = NULL WHERE cable_type_id = ?', [id])
+  getDb().run('DELETE FROM cable_types WHERE id = ?', [id])
+  persist()
+}
+
+// ---- Cables -------------------------------------------------------------
+
+function mapCable(row: Row): Cable {
+  return {
+    id: row.id as number,
+    bundleId: row.bundle_id as number,
+    name: row.name as string,
+    cableTypeId: (row.cable_type_id as number | null) ?? null,
+    source: {
+      deviceId: (row.source_device_id as number | null) ?? null,
+      portId: (row.source_port_id as number | null) ?? null,
+      text: (row.source_text as string | null) ?? null
+    },
+    destination: {
+      deviceId: (row.dest_device_id as number | null) ?? null,
+      portId: (row.dest_port_id as number | null) ?? null,
+      text: (row.dest_text as string | null) ?? null
+    },
+    pulled: Boolean(row.pulled),
+    labeled: Boolean(row.labeled),
+    notes: (row.notes as string | null) ?? null
+  }
+}
+
+function cablesForBundle(bundleId: number): Cable[] {
+  return queryAll('SELECT * FROM cables WHERE bundle_id = ? ORDER BY id', [bundleId]).map(mapCable)
+}
+
+function getCableById(id: number): Cable | null {
+  const row = queryOne('SELECT * FROM cables WHERE id = ?', [id])
+  return row ? mapCable(row) : null
+}
+
+/** Flatten a CableInput into the positional column values shared by insert/update. */
+function cableColumnValues(input: CableInput): SqlValue[] {
+  return [
+    input.name,
+    input.cableTypeId,
+    input.source.deviceId,
+    input.source.portId,
+    input.source.text,
+    input.destination.deviceId,
+    input.destination.portId,
+    input.destination.text,
+    input.pulled ? 1 : 0,
+    input.labeled ? 1 : 0,
+    input.notes
+  ]
+}
+
+export function createCable(bundleId: number, input: CableInput): Cable {
+  getDb().run(
+    `INSERT INTO cables
+       (bundle_id, name, cable_type_id,
+        source_device_id, source_port_id, source_text,
+        dest_device_id, dest_port_id, dest_text, pulled, labeled, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [bundleId, ...cableColumnValues(input)]
+  )
+  const id = lastInsertRowId()
+  persist()
+  return getCableById(id) as Cable
+}
+
+export function updateCable(id: number, input: CableInput): Cable {
+  getDb().run(
+    `UPDATE cables SET
+       name = ?, cable_type_id = ?,
+       source_device_id = ?, source_port_id = ?, source_text = ?,
+       dest_device_id = ?, dest_port_id = ?, dest_text = ?,
+       pulled = ?, labeled = ?, notes = ?,
+       updated_at = datetime('now')
+     WHERE id = ?`,
+    [...cableColumnValues(input), id]
+  )
+  persist()
+  return getCableById(id) as Cable
+}
+
+export function deleteCable(id: number): void {
+  getDb().run('DELETE FROM cables WHERE id = ?', [id])
+  persist()
+}
+
+// ---- Bundles ------------------------------------------------------------
+
+function mapBundle(row: Row, cables: Cable[]): Bundle {
+  return {
+    id: row.id as number,
+    name: row.name as string,
+    color: (row.color as string | null) ?? null,
+    fromLocation: (row.from_location as string | null) ?? null,
+    toLocation: (row.to_location as string | null) ?? null,
+    length: (row.length as string | null) ?? null,
+    notes: (row.notes as string | null) ?? null,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+    cables
+  }
+}
+
+export function listBundles(): Bundle[] {
+  return queryAll('SELECT * FROM bundles ORDER BY name COLLATE NOCASE').map((r) =>
+    mapBundle(r, cablesForBundle(r.id as number))
+  )
+}
+
+function getBundleById(id: number): Bundle | null {
+  const row = queryOne('SELECT * FROM bundles WHERE id = ?', [id])
+  return row ? mapBundle(row, cablesForBundle(id)) : null
+}
+
+export function createBundle(input: BundleInput): Bundle {
+  getDb().run(
+    `INSERT INTO bundles (name, color, from_location, to_location, length, notes)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [input.name, input.color, input.fromLocation, input.toLocation, input.length, input.notes]
+  )
+  const id = lastInsertRowId()
+  persist()
+  return getBundleById(id) as Bundle
+}
+
+export function updateBundle(id: number, input: BundleInput): Bundle {
+  getDb().run(
+    `UPDATE bundles
+       SET name = ?, color = ?, from_location = ?, to_location = ?, length = ?, notes = ?,
+           updated_at = datetime('now')
+     WHERE id = ?`,
+    [input.name, input.color, input.fromLocation, input.toLocation, input.length, input.notes, id]
+  )
+  persist()
+  return getBundleById(id) as Bundle
+}
+
+export function deleteBundle(id: number): void {
+  getDb().run('DELETE FROM cables WHERE bundle_id = ?', [id])
+  getDb().run('DELETE FROM bundles WHERE id = ?', [id])
+  persist()
 }

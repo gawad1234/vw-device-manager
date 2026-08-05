@@ -57,6 +57,52 @@ CREATE TABLE IF NOT EXISTS network_signals (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   signal TEXT NOT NULL UNIQUE COLLATE NOCASE
 );
+
+-- ---- Cable bundle manager -------------------------------------------------
+-- Managed cable-type catalog (Cat6, Fiber SM, XLR, …). Managed in Settings.
+-- outer_diameter (for conduit-fill %) is a deliberate future addition.
+CREATE TABLE IF NOT EXISTS cable_types (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  notes TEXT
+);
+
+-- A bundle is a group of cables that travel together (conduit/tray/snake).
+-- length is bundle-level: cables in a bundle share the same run.
+CREATE TABLE IF NOT EXISTS bundles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  color TEXT,
+  from_location TEXT,
+  to_location TEXT,
+  length TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- A cable belongs to one bundle. Each endpoint (source/dest) links to a device
+-- and optionally a specific port, OR falls back to free text (*_text) when the
+-- device isn't in the app. FK cascade/set-null is declarative — like the rest
+-- of the app, deletes are cascaded manually in the repository (pragma off).
+CREATE TABLE IF NOT EXISTS cables (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bundle_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  cable_type_id INTEGER REFERENCES cable_types(id) ON DELETE SET NULL,
+  source_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+  source_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
+  source_text TEXT,
+  dest_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+  dest_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
+  dest_text TEXT,
+  -- install check sheet: ticked off as each cable is pulled / labeled.
+  pulled INTEGER NOT NULL DEFAULT 0,
+  labeled INTEGER NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `
 
 let db: Database | null = null
@@ -132,6 +178,72 @@ function migrateAddSwitchColumns(database: Database): void {
   `)
 }
 
+/**
+ * Moves cable length from per-cable to per-bundle. Adds `bundles.length` if
+ * missing, and rebuilds `cables` without its `length` column (dropping any
+ * per-cable lengths — length is now the bundle's). Guarded so it runs once and
+ * is a no-op on fresh DBs (SCHEMA already has the final shape).
+ */
+function migrateCableLengthToBundle(database: Database): void {
+  if (tableExists(database, 'bundles') && !tableHasColumn(database, 'bundles', 'length')) {
+    database.exec('ALTER TABLE bundles ADD COLUMN length TEXT')
+  }
+  if (!tableExists(database, 'cables') || !tableHasColumn(database, 'cables', 'length')) return
+
+  database.exec('BEGIN')
+  try {
+    database.exec(`
+      CREATE TABLE cables_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bundle_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        cable_type_id INTEGER REFERENCES cable_types(id) ON DELETE SET NULL,
+        source_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+        source_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
+        source_text TEXT,
+        dest_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+        dest_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
+        dest_text TEXT,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO cables_new
+        (id, bundle_id, name, cable_type_id, source_device_id, source_port_id, source_text,
+         dest_device_id, dest_port_id, dest_text, notes, created_at, updated_at)
+        SELECT id, bundle_id, name, cable_type_id, source_device_id, source_port_id, source_text,
+         dest_device_id, dest_port_id, dest_text, notes, created_at, updated_at FROM cables;
+      DROP TABLE cables;
+      ALTER TABLE cables_new RENAME TO cables;
+    `)
+    database.exec('COMMIT')
+  } catch (e) {
+    database.exec('ROLLBACK')
+    throw e
+  }
+}
+
+/**
+ * Adds the install-checklist columns (pulled / labeled) to an existing `cables`
+ * table. Guarded on the column not yet existing → no-op once applied and on
+ * fresh DBs (SCHEMA already has them).
+ */
+function migrateCableChecklist(database: Database): void {
+  if (!tableExists(database, 'cables')) return
+  if (tableHasColumn(database, 'cables', 'pulled')) return
+  database.exec(`
+    ALTER TABLE cables ADD COLUMN pulled INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE cables ADD COLUMN labeled INTEGER NOT NULL DEFAULT 0;
+  `)
+}
+
+/** Adds `bundles.color` (hex color code for the bundle). Guarded, additive. */
+function migrateBundleColor(database: Database): void {
+  if (!tableExists(database, 'bundles')) return
+  if (tableHasColumn(database, 'bundles', 'color')) return
+  database.exec('ALTER TABLE bundles ADD COLUMN color TEXT')
+}
+
 export async function initDb(): Promise<void> {
   dbPath = getDbPath()
   mkdirSync(dirname(dbPath), { recursive: true })
@@ -145,6 +257,9 @@ export async function initDb(): Promise<void> {
   db.exec(SCHEMA)
   migrateDevicesToPorts(db)
   migrateAddSwitchColumns(db)
+  migrateCableLengthToBundle(db)
+  migrateCableChecklist(db)
+  migrateBundleColor(db)
   if (seedSignals) db.run("INSERT INTO network_signals (signal) VALUES ('LAN')")
   persist()
 }

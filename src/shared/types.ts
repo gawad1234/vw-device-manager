@@ -72,6 +72,59 @@ export interface SavePortResult {
   error?: string
 }
 
+// ---- Cable bundle manager -------------------------------------------------
+
+/** A managed cable-type catalog entry (Cat6, Fiber SM, XLR, …). */
+export interface CableType {
+  id: number
+  name: string
+  notes: string | null
+}
+
+export type CableTypeInput = Omit<CableType, 'id'>
+
+/** One end of a cable: a linked device (optionally a specific port), or free
+ *  text when the device isn't in the app. Prefer the link for display. */
+export interface CableEndpoint {
+  deviceId: number | null
+  portId: number | null
+  text: string | null
+}
+
+export interface Cable {
+  id: number
+  bundleId: number
+  name: string
+  cableTypeId: number | null
+  source: CableEndpoint
+  destination: CableEndpoint
+  /** install check sheet */
+  pulled: boolean
+  labeled: boolean
+  notes: string | null
+}
+
+/** Editable cable fields. bundleId is passed to create(). */
+export type CableInput = Omit<Cable, 'id' | 'bundleId'>
+
+/** A group of cables that physically travel together (conduit/tray/snake). */
+export interface Bundle {
+  id: number
+  name: string
+  /** hex color code for visual bundle coding (e.g. "#e0685f"); null = none */
+  color: string | null
+  fromLocation: string | null
+  toLocation: string | null
+  /** length of the run — shared by every cable in the bundle */
+  length: string | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+  cables: Cable[]
+}
+
+export type BundleInput = Omit<Bundle, 'id' | 'createdAt' | 'updatedAt' | 'cables'>
+
 export interface VwDeviceManagerApi {
   subnets: {
     list: () => Promise<Subnet[]>
@@ -96,5 +149,22 @@ export interface VwDeviceManagerApi {
     list: () => Promise<string[]>
     add: (signal: string) => Promise<string[]>
     remove: (signal: string) => Promise<string[]>
+  }
+  bundles: {
+    list: () => Promise<Bundle[]>
+    create: (input: BundleInput) => Promise<Bundle>
+    update: (id: number, input: BundleInput) => Promise<Bundle>
+    remove: (id: number) => Promise<void>
+  }
+  cables: {
+    create: (bundleId: number, input: CableInput) => Promise<Cable>
+    update: (id: number, input: CableInput) => Promise<Cable>
+    remove: (id: number) => Promise<void>
+  }
+  cableTypes: {
+    list: () => Promise<CableType[]>
+    create: (input: CableTypeInput) => Promise<CableType>
+    update: (id: number, input: CableTypeInput) => Promise<CableType>
+    remove: (id: number) => Promise<void>
   }
 }
