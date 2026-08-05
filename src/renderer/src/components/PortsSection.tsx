@@ -20,6 +20,7 @@ function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JS
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<DeviceWarning[]>([])
   const [saving, setSaving] = useState(false)
+  const [showTags, setShowTags] = useState(false)
 
   const fromVw = port.vwSocketKey != null
 
@@ -57,6 +58,10 @@ function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JS
 
   // A port can't tag its own untagged network; offer the rest as trunk VLANs.
   const taggableSubnets = subnets.filter((s) => s.id !== untagged)
+  const taggedNames = port.taggedSubnetIds
+    .map((id) => subnets.find((s) => s.id === id))
+    .filter((s): s is Subnet => Boolean(s))
+    .map(subnetLabel)
 
   return (
     <div className="port-row">
@@ -108,21 +113,30 @@ function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JS
         </div>
       </div>
       <div className="port-tagged">
-        <span className="muted">Tagged VLANs (trunk):</span>
-        {taggableSubnets.length === 0 ? (
-          <span className="muted"> none available</span>
-        ) : (
-          taggableSubnets.map((s) => (
-            <label key={s.id} className="chk">
-              <input
-                type="checkbox"
-                checked={port.taggedSubnetIds.includes(s.id)}
-                onChange={(e) => toggleTagged(s.id, e.target.checked)}
-              />
-              {subnetLabel(s)}
-            </label>
-          ))
+        <button type="button" className="tag-toggle" onClick={() => setShowTags((v) => !v)}>
+          <span className="caret">{showTags ? '▾' : '▸'}</span>
+          Tagged VLANs{port.taggedSubnetIds.length ? ` (${port.taggedSubnetIds.length})` : ''}
+        </button>
+        {!showTags && (
+          <span className="tag-summary muted">{taggedNames.length ? taggedNames.join(', ') : 'none'}</span>
         )}
+        {showTags &&
+          (taggableSubnets.length === 0 ? (
+            <span className="muted">none available</span>
+          ) : (
+            <div className="tag-options">
+              {taggableSubnets.map((s) => (
+                <label key={s.id} className="chk">
+                  <input
+                    type="checkbox"
+                    checked={port.taggedSubnetIds.includes(s.id)}
+                    onChange={(e) => toggleTagged(s.id, e.target.checked)}
+                  />
+                  {subnetLabel(s)}
+                </label>
+              ))}
+            </div>
+          ))}
       </div>
     </div>
   )

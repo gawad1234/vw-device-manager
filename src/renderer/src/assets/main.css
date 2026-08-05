@@ -1,5 +1,21 @@
 @import './base.css';
 
+/*
+ * Design notes: keep the surface calm. One near-black background, hairline
+ * dividers (not solid gray borders), generous whitespace, a centered content
+ * column, and a single accent. Secondary buttons are ghost so the many inline
+ * actions don't read as a wall of filled chips.
+ */
+
+:root {
+  --line: rgba(255, 255, 255, 0.09);
+  --line-soft: rgba(255, 255, 255, 0.055);
+  --hover: rgba(255, 255, 255, 0.04);
+  --accent: #3b6fe0;
+  --accent-hover: #4c7cea;
+  --danger: #e0685f;
+}
+
 body {
   overflow-y: auto;
   user-select: none;
@@ -7,12 +23,14 @@ body {
 
 code {
   font-weight: 600;
-  padding: 2px 5px;
-  border-radius: 4px;
-  background-color: var(--color-background-mute);
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 90%;
 }
+
+/* ---- App shell ------------------------------------------------------- */
 
 .app {
   display: flex;
@@ -24,58 +42,65 @@ code {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--ev-c-gray-3);
+  padding: 13px 28px;
+  border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
 }
 
 .app-header h1 {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   -webkit-app-region: no-drag;
 }
 
 .tab {
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   color: var(--ev-c-text-2);
-  padding: 6px 16px;
-  border-radius: 6px;
+  padding: 6px 14px;
+  border-radius: 7px;
   font-size: 14px;
   cursor: pointer;
 }
 
 .tab:hover {
-  background: var(--ev-c-gray-3);
+  background: var(--hover);
+  color: var(--ev-c-text-1);
 }
 
 .tab.active {
-  background: var(--ev-c-gray-2);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--ev-c-text-1);
   font-weight: 600;
 }
 
 .app-main {
   flex: 1;
-  padding: 24px;
+  padding: 32px 28px;
   overflow-y: auto;
+}
+
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
 }
 
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .page-header h2 {
-  font-size: 20px;
+  font-size: 19px;
+  font-weight: 600;
 }
 
 .page-header-actions {
@@ -84,94 +109,139 @@ code {
   align-items: center;
 }
 
-.search {
+/* ---- Form controls (unified across the whole app) -------------------- */
+
+input,
+select,
+textarea {
   background: var(--ev-c-black-soft);
-  border: 1px solid var(--ev-c-gray-3);
-  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
   color: var(--ev-c-text-1);
-  padding: 7px 10px;
+  padding: 8px 11px;
   font-size: 14px;
+  font-family: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ev-c-text-3);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+select {
+  cursor: pointer;
+}
+
+textarea {
+  resize: vertical;
+}
+
+/* Read-only fields (drawing-owned type/location) read as quiet static text. */
+input[readonly] {
+  background: transparent;
+  border-color: var(--line-soft);
+  color: var(--ev-c-text-2);
+}
+
+input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.search {
   min-width: 220px;
 }
 
+/* ---- Buttons --------------------------------------------------------- */
+
 .btn {
-  background: var(--ev-c-gray-3);
+  background: transparent;
   color: var(--ev-c-text-1);
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 7px 16px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 15px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
 .btn:hover {
-  background: var(--ev-c-gray-2);
+  background: var(--hover);
 }
 
 .btn-primary {
-  background: #3b6fe0;
+  background: var(--accent);
+  border-color: transparent;
+  font-weight: 600;
 }
 
 .btn-primary:hover {
-  background: #4c7cea;
+  background: var(--accent-hover);
 }
 
 .btn-small {
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 4px 11px;
+  font-size: 12.5px;
 }
 
 .btn-danger {
-  background: transparent;
-  border-color: var(--ev-c-gray-3);
-  color: #e0685f;
+  color: var(--danger);
 }
 
 .btn-danger:hover {
   background: rgba(224, 104, 95, 0.12);
 }
 
+/* ---- Panels / forms -------------------------------------------------- */
+
 .panel {
   background: var(--ev-c-black-soft);
-  border: 1px solid var(--ev-c-gray-3);
-  border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 22px;
+  margin-bottom: 22px;
+}
+
+.panel + .panel {
+  margin-top: 0;
+}
+
+.panel h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.panel > .muted {
+  margin-bottom: 4px;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px 20px;
+  gap: 16px 20px;
 }
 
 .form-grid label {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--ev-c-text-2);
 }
 
-.form-grid input,
-.form-grid select,
-.form-grid textarea {
-  background: var(--ev-c-black);
-  border: 1px solid var(--ev-c-gray-3);
-  border-radius: 6px;
-  color: var(--ev-c-text-1);
-  padding: 8px 10px;
-  font-size: 14px;
-  font-family: inherit;
-  resize: vertical;
-}
-
-.form-grid input:focus,
-.form-grid select:focus,
-.form-grid textarea:focus {
-  outline: none;
-  border-color: #3b6fe0;
+.form-grid label small {
+  font-weight: 400;
 }
 
 .span-2 {
@@ -181,26 +251,45 @@ code {
 .form-actions {
   display: flex;
   justify-content: flex-end;
+  margin-top: 4px;
 }
+
+/* Device "is a switch" checkbox row inside the two-column form. */
+.checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--ev-c-text-1);
+  cursor: pointer;
+}
+
+.checkbox-field small {
+  flex-basis: 100%;
+}
+
+/* ---- Banners --------------------------------------------------------- */
 
 .banner {
   padding: 10px 14px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
   grid-column: span 2;
 }
 
 .banner-error {
-  background: rgba(224, 104, 95, 0.15);
+  background: rgba(224, 104, 95, 0.14);
   color: #ff9a91;
-  border: 1px solid rgba(224, 104, 95, 0.3);
+  border: 1px solid rgba(224, 104, 95, 0.28);
 }
 
 .banner-warning {
-  background: rgba(224, 184, 95, 0.15);
+  background: rgba(224, 184, 95, 0.14);
   color: #ffcf8a;
-  border: 1px solid rgba(224, 184, 95, 0.3);
+  border: 1px solid rgba(224, 184, 95, 0.28);
 }
+
+/* ---- Tables ---------------------------------------------------------- */
 
 .table {
   width: 100%;
@@ -210,22 +299,27 @@ code {
 
 .table th {
   text-align: left;
-  color: var(--ev-c-text-2);
+  color: var(--ev-c-text-3);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--ev-c-gray-3);
+  letter-spacing: 0.05em;
+  padding: 0 14px 10px;
+  border-bottom: 1px solid var(--line);
 }
 
 .table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--ev-c-black-mute);
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
-.table tbody tr:hover {
-  background: var(--ev-c-black-soft);
+.table tbody tr:hover > td {
+  background: var(--hover);
+}
+
+/* the expanded editor row shouldn't light up on hover */
+.table tbody tr.ports-row:hover > td {
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .row-actions {
@@ -237,7 +331,7 @@ code {
 .empty-cell {
   text-align: center;
   color: var(--ev-c-text-3);
-  padding: 32px 12px;
+  padding: 36px 12px;
 }
 
 .muted {
@@ -247,56 +341,35 @@ code {
 .badge {
   display: inline-block;
   margin-left: 8px;
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   vertical-align: middle;
-  background: rgba(59, 111, 224, 0.18);
+  background: rgba(59, 111, 224, 0.16);
   color: #8fb0ff;
-  border: 1px solid rgba(59, 111, 224, 0.35);
+  border: 1px solid rgba(59, 111, 224, 0.3);
 }
 
-/* A checkbox row inside the two-column device form. */
-.checkbox-field {
-  flex-direction: row;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--ev-c-text-1);
-  cursor: pointer;
-}
+/* ---- Expanded editor (ports & cables share this) --------------------- */
 
-.checkbox-field input[type='checkbox'] {
-  width: 16px;
-  height: 16px;
-  min-width: auto;
-  padding: 0;
-}
-
-.checkbox-field small {
-  flex-basis: 100%;
-}
-
-/* ---- Ports / trunking ------------------------------------------------ */
-
-.ports-row td {
-  background: var(--ev-c-black-soft);
-  padding: 12px;
+.ports-row > td {
+  background: rgba(255, 255, 255, 0.02);
+  padding: 18px;
 }
 
 .ports-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .port-row {
-  border: 1px solid var(--ev-c-black-mute);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 14px;
   background: var(--ev-c-black);
 }
 
@@ -310,14 +383,14 @@ code {
 .port-fields label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 12.5px;
   color: var(--ev-c-text-2);
 }
 
 .port-fields input,
 .port-fields select {
-  min-width: 160px;
+  min-width: 130px;
 }
 
 .port-actions {
@@ -330,10 +403,44 @@ code {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--ev-c-black-mute);
+  border-top: 1px solid var(--line-soft);
+}
+
+/* Collapsed tagged-VLAN control: a one-line summary that expands to checkboxes
+   only when editing — keeps devices with many ports from getting very tall. */
+.tag-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--ev-c-text-2);
+  cursor: pointer;
+}
+
+.tag-toggle:hover {
+  color: var(--ev-c-text-1);
+}
+
+.tag-toggle .caret {
+  color: var(--ev-c-text-3);
+}
+
+.tag-summary {
+  font-size: 12.5px;
+}
+
+.tag-options {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 4px;
 }
 
 .chk {
@@ -341,28 +448,29 @@ code {
   align-items: center;
   gap: 6px;
   font-size: 13px;
+  color: var(--ev-c-text-1);
 }
 
 .chk input {
   min-width: auto;
 }
 
-/* ---- Cable bundles: source/destination endpoint editor --------------- */
+/* ---- Cable source/destination endpoint editor ------------------------ */
 
 .endpoint-row {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--ev-c-black-mute);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
 }
 
 .endpoint-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 12.5px;
   color: var(--ev-c-text-2);
   flex: 1 1 280px;
 }
@@ -376,19 +484,38 @@ code {
 .endpoint-inputs input {
   flex: 1;
   min-width: 0;
-  background: var(--ev-c-black);
-  border: 1px solid var(--ev-c-gray-3);
-  border-radius: 6px;
-  color: var(--ev-c-text-1);
-  padding: 8px 10px;
-  font-size: 14px;
-  font-family: inherit;
 }
 
-.endpoint-inputs select:focus,
-.endpoint-inputs input:focus {
-  outline: none;
-  border-color: #3b6fe0;
+/* ---- Settings lists (network signals, cable types) ------------------- */
+
+.signal-add {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+  flex-wrap: wrap;
+}
+
+.signal-add input {
+  max-width: 240px;
+}
+
+.signal-list {
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 440px;
+}
+
+.signal-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
 
 /* ---- Bundle color coding --------------------------------------------- */
@@ -419,7 +546,7 @@ code {
   background:
     linear-gradient(to top left, transparent calc(50% - 1px), #e0685f, transparent calc(50% + 1px)),
     var(--ev-c-black);
-  border: 1px solid var(--ev-c-gray-3);
+  border: 1px solid var(--line);
 }
 
 .bundle-dot {
@@ -431,34 +558,97 @@ code {
   vertical-align: middle;
 }
 
-/* ---- Settings: network signals --------------------------------------- */
+/* ---- Clickable list rows --------------------------------------------- */
 
-.signal-add {
+.table tbody tr.clickable {
+  cursor: pointer;
+}
+
+/* ---- Modal ----------------------------------------------------------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.55);
   display: flex;
-  gap: 8px;
-  margin: 12px 0;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 24px;
+  overflow-y: auto;
+  -webkit-app-region: no-drag;
 }
 
-.signal-add input {
-  max-width: 260px;
-}
-
-.signal-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.modal {
+  width: 100%;
+  max-width: 720px;
+  max-height: calc(100vh - 96px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-width: 360px;
+  background: var(--ev-c-black);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
 }
 
-.signal-list li {
+.modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 6px 10px;
-  border: 1px solid var(--ev-c-black-mute);
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.modal-header h2 {
+  display: flex;
+  align-items: center;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--ev-c-text-2);
+  font-size: 24px;
+  line-height: 1;
+  padding: 0 6px;
   border-radius: 6px;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: var(--hover);
+  color: var(--ev-c-text-1);
+}
+
+.modal-body {
+  padding: 22px;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.footer-spacer {
+  flex: 1;
+}
+
+.modal-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.modal-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
 }
