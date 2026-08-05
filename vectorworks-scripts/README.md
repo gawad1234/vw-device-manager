@@ -98,19 +98,44 @@ folder* — more setup; not done yet.
   is managed in the **app → Settings tab** (the scripts read it from the DB at
   run time); no need to edit the scripts. `DEFAULT_NETWORK_SIGNALS` in each
   script is only the fallback if that list is empty/unreadable.
-- Deleting a device in the app does not remove its records or unlink the
-  object — `sync_app_to_drawing.py` reports it as "orphaned" and skips it.
+- Deleting a device in the app (or wiping/re-adding, which renumbers ids) leaves
+  the drawing object pointing at a now-missing id. `sync_app_to_drawing.py`
+  reports it as "orphaned", skips its data, and overwrites its `vwdm_ports`
+  summary with `NOT LINKED IN APP — run Link Selected` so stale values don't
+  linger. Re-run **Link Selected** on the object to re-link it.
 - No automatic conflict resolution — this is a manual, run-it-yourself
   two-step, not a live/background sync.
 
+## Seeing per-port IPs in Vectorworks
+
+The per-jack `VWDM Port` records live on **socket sub-objects** inside the
+device. You generally can't select an individual socket, so the Object Info
+palette (which shows the *selected* object's records) won't show them — and the
+device-level `vwdm_ip` is intentionally blank now (IP moved to ports).
+
+**The fix: the device-level `vwdm_ports` summary.** Add a multi-line **Text**
+field named `vwdm_ports` to the `VWDM Sync` record (one-time). On each sync,
+every device's record gets a readable summary of all its jacks, e.g.:
+
+```
+LAN: 10.46.90.101 [KVM Net]
+1GB A: 10.46.20.102 [Mgmt] +Prod, Guest
+```
+
+Because this is on the **device** (which you *can* select), it shows in the
+**Object Info palette**, and a **Data Tag** placed on the device can display it
+right on the drawing. Format per line: `jack: IP [untagged VLAN] +tagged VLANs`.
+
+Setting up a Data Tag: create a Data Tag definition whose tag field is a
+**Record field → `VWDM Sync` → `vwdm_ports`**, then place it on a device.
+
+The per-socket `VWDM Port` records (`vwdm_ip`/`vwdm_untagged`/`vwdm_tagged`) are
+still written too — use them if you build a **worksheet** that reports on the
+socket sub-objects, or a Data Tag that can associate with an individual socket.
+
 ## Known issues
 
-- **Object Info palette shows the per-jack `VWDM Port` fields as blank even
-  after a successful sync.** This is a Vectorworks OIP *display refresh* quirk,
-  NOT data loss — the values really are written to the socket's record
-  (verified by reading them straight back with a script; see
-  `diagnose_port_write.py`). Deselect/reselect the socket sometimes refreshes
-  the panel; reopening the document reliably does. **To actually see/use
-  per-port data on the drawing, don't rely on the OIP — use a worksheet or a
-  Data Tag** referencing the `VWDM Port` fields (`vwdm_ip`, `vwdm_untagged`,
-  `vwdm_tagged`), which read the record directly regardless of the OIP.
+- **The OIP can still show a just-written field as stale** until you
+  deselect/reselect the device (reopening the document always refreshes). This
+  is a Vectorworks display-refresh quirk, not data loss — the value is really on
+  the record (verify by reading it back, e.g. `diagnose_port_write.py`).

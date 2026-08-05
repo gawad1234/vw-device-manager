@@ -23,6 +23,11 @@ Before running:
   - Optional (only if you track switches and want their IPs on the drawing):
     add two Text fields to the "VWDM Sync" record — vwdm_mgmt_ip, vwdm_oob_ip.
     Writing to them is best-effort, so leaving them off does no harm.
+  - Recommended for seeing per-port IPs: add a multi-line Text field named
+    vwdm_ports to the "VWDM Sync" record. The sync fills it with a summary of
+    every jack's IP + VLANs, so it shows in the Object Info palette when you
+    select the DEVICE (the per-socket VWDM Port records can't be shown there),
+    and a Data Tag on the device can display it. Also best-effort.
   - DB_PATH_CANDIDATES below auto-detects the Mac and Windows paths.
 """
 
@@ -53,6 +58,12 @@ FIELD_NOTES = "vwdm_notes"
 # Writes are best-effort so setups without these fields keep working.
 FIELD_MGMT_IP = "vwdm_mgmt_ip"
 FIELD_OOB_IP = "vwdm_oob_ip"
+# Human-readable summary of ALL this device's ports (jack: IP [untagged] +tagged),
+# written onto the DEVICE record so it shows in the Object Info palette (which
+# can't show the per-socket records) and can be surfaced by a Data Tag on the
+# device. OPTIONAL field — add a multi-line Text field named vwdm_ports to see
+# it; best-effort otherwise.
+FIELD_PORTS = "vwdm_ports"
 
 # Per-jack record (one-time setup in VW — see docstring).
 PORT_RECORD = "VWDM Port"
@@ -151,6 +162,48 @@ def network_jacks(h, net_signals):
                 jacks.append((name.strip(), child))
         child = vs.NextObj(child)
     return jacks
+
+
+def build_ports_summary(cur, device_id):
+    """One readable line per port for the device-level vwdm_ports field, e.g.:
+        1GB A: 10.46.20.102 [Mgmt] +Prod, Guest
+        1GB B: [Prod]
+    This is what the Object Info palette / a Data Tag on the device can show,
+    since the per-socket records aren't reachable there."""
+    cur.execute(
+        """
+        SELECT p.label, p.ip_address, s.name
+        FROM ports p
+        LEFT JOIN subnets s ON s.id = p.untagged_subnet_id
+        WHERE p.device_id = ?
+        ORDER BY p.label COLLATE NOCASE
+        """,
+        (device_id,),
+    )
+    lines = []
+    for label, ip_address, untagged_name in cur.fetchall():
+        cur.execute(
+            """
+            SELECT s.name FROM port_tagged_vlans t
+            JOIN subnets s ON s.id = t.subnet_id
+            WHERE t.port_id = (SELECT id FROM ports WHERE device_id = ? AND label = ?)
+            ORDER BY s.name COLLATE NOCASE
+            """,
+            (device_id, label),
+        )
+        tagged = ", ".join(r[0] for r in cur.fetchall())
+        parts = []
+        if ip_address:
+            parts.append(ip_address)
+        if untagged_name:
+            parts.append("[" + untagged_name + "]")
+        if tagged:
+            parts.append("+" + tagged)
+        if parts:
+            lines.append("{0}: {1}".format(label, " ".join(parts)))
+        else:
+            lines.append("{0}:".format(label))
+    return "\n".join(lines)
 
 
 def write_port_records(cur, device_id, h, net_signals):
@@ -258,6 +311,13 @@ def main():
             row = cur.fetchone()
             if row is None:
                 orphaned += 1
+                # This object's vwdm_id points to a device that no longer exists
+                # in the app (e.g. it was deleted/renumbered). Don't leave stale
+                # port data lingering — overwrite the summary so the drawing makes
+                # it obvious the object needs re-linking.
+                set_field_safe(
+                    h, RECORD_NAME, FIELD_PORTS, "NOT LINKED IN APP — run Link Selected"
+                )
                 continue
             device_type, mac_address, location, notes, mgmt_ip, oob_ip = row
 
@@ -271,9 +331,13 @@ def main():
             # Switch mgmt/OOB IPs — optional fields, best-effort (see constants).
             set_field_safe(h, RECORD_NAME, FIELD_MGMT_IP, mgmt_ip or "")
             set_field_safe(h, RECORD_NAME, FIELD_OOB_IP, oob_ip or "")
+            # Device-level summary of every port — this is what the OIP / a Data
+            # Tag on the device can actually show. Optional field, best-effort.
+            set_field_safe(h, RECORD_NAME, FIELD_PORTS, build_ports_summary(cur, device_id))
             synced += 1
 
-            # Per-jack records.
+            # Per-jack records (still written for worksheets/Data Tags that can
+            # reach socket sub-objects; harmless if only the summary is used).
             ports_written += write_port_records(cur, device_id, h, net_signals)
 
         conn.commit()  # persist the type/location pulled in from the drawing
