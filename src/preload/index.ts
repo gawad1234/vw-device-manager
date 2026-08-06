@@ -62,6 +62,11 @@ const api: VwDeviceManagerApi = {
     openRecent: (path: string) => ipcRenderer.invoke('project:openRecent', path),
     saveCopyAs: () => ipcRenderer.invoke('project:saveCopyAs'),
     reveal: () => ipcRenderer.invoke('project:reveal')
+  },
+  onDataChanged: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('data-changed', listener)
+    return () => ipcRenderer.removeListener('data-changed', listener)
   }
 }
 

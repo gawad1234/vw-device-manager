@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { openStartupProject } from './projects'
 import { ensureLibrary } from './library'
+import { getDataVersion } from './db'
 import { registerIpcHandlers } from './ipc'
 
 function createWindow(): void {
@@ -28,6 +29,28 @@ function createWindow(): void {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
+
+  // Auto-refresh: `PRAGMA data_version` bumps only when ANOTHER connection (a
+  // Vectorworks script) commits — never for our own writes — so this detects
+  // external edits without a self-refresh loop. Poll while focused, and re-check
+  // whenever the window regains focus (e.g. switching back from Vectorworks).
+  let lastDataVersion = -1
+  const checkExternalChanges = (): void => {
+    try {
+      const v = getDataVersion()
+      if (lastDataVersion !== -1 && v !== lastDataVersion && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('data-changed')
+      }
+      lastDataVersion = v
+    } catch {
+      /* db not ready or mid project-switch */
+    }
+  }
+  const poll = setInterval(() => {
+    if (mainWindow.isFocused()) checkExternalChanges()
+  }, 1500)
+  mainWindow.on('focus', checkExternalChanges)
+  mainWindow.on('closed', () => clearInterval(poll))
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.

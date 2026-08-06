@@ -67,25 +67,25 @@ folder* — more setup; not done yet.
 
 ## Workflow
 
-1. **Close the VW Device Manager app.** It keeps the database in memory
-   and overwrites the whole file on every change — running the app and a
-   sync script at the same time risks one side clobbering the other's
-   writes. (A "reload from disk" safeguard in the app is a good future
-   improvement; for now, treat app-open and script-run as mutually
-   exclusive.)
+1. **The app can stay open.** The database is a real SQLite file now, so the
+   app and these scripts can access it at the same time without clobbering —
+   SQLite coordinates the writes, and the app auto-refreshes to show what a
+   script just wrote. (Dropbox caveat: a project database that lives in an
+   actively-syncing Dropbox folder can still be reverted by Dropbox's own sync;
+   keep project files in a stable location while working.)
 2. Select the ConnectCAD devices you want tracked, run `link_selected.py`.
    For each device this creates/reuses its app row (named after the
-   device's ConnectCAD "Name" field, e.g. `SERV101`), captures the
+   device's ConnectCAD "Name" field, e.g. `SERV101`) — reusing an existing
+   device of the same name so re-running never makes duplicates — captures the
    drawing-owned type + location, stamps `vwdm_id`, and **discovers its
    network jacks** — every ConnectCAD socket whose signal is a network
    signal (see `NETWORK_SIGNALS`, default `LAN`) becomes an app **port**,
-   matched by the jack's name. Re-running is safe/idempotent: it repairs
-   invalid/stale `vwdm_id`s and refreshes ports.
-3. Reopen the app. Set the device MAC, and for each port set its IP,
-   untagged (native) network, and any tagged (trunked) VLANs.
-4. Close the app again, run `sync_app_to_drawing.py`. It writes device-level
-   fields onto each `VWDM Sync` record, and each port's IP + untagged/tagged
-   VLANs onto its jack via the `VWDM Port` record.
+   matched by the jack's name.
+3. In the app, set the device MAC, and for each port set its IP, untagged
+   (native) network, and any tagged (trunked) VLANs.
+4. Run `sync_app_to_drawing.py`. It writes device-level fields onto each
+   `VWDM Sync` record, and each port's IP + untagged/tagged VLANs onto its jack
+   via the `VWDM Port` record.
 
 ## Current limitations (by design)
 

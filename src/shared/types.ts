@@ -185,4 +185,7 @@ export interface VwDeviceManagerApi {
     saveCopyAs: () => Promise<ProjectInfo | null>
     reveal: () => Promise<void>
   }
+  /** Fires when another process (a Vectorworks script) writes to the open
+   *  project file, so the UI can auto-refresh. Returns an unsubscribe fn. */
+  onDataChanged: (cb: () => void) => () => void
 }

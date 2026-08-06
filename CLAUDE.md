@@ -9,11 +9,18 @@ workspace context and the cross-machine handoff log — check those first.
 ## Architecture
 
 - **Main process** (`src/main/`):
-  - `db.ts` — SQLite via `sql.js` (WASM, not a native binding). `openDb(path)`
-    loads a project file, applies the schema + all guarded `migrate*` steps, and
-    persists the whole file on every change; switching projects just calls
-    `openDb` again. This is why the app and a Vectorworks sync script must never
-    touch the same file concurrently — whichever writes last wins.
+  - `db.ts` — SQLite via **`node:sqlite`** (built into Electron's Node — no
+    native module, so it stays cross-platform with no compile step). `openDb(path)`
+    opens a project file (row-level writes straight to disk, no whole-file
+    persist), applies the schema + all guarded `migrate*` steps, sets
+    `busy_timeout`; switching projects just calls `openDb` again. Because it's a
+    real SQLite file with OS locking, **the app and a Vectorworks script can hold
+    the same file open at once without clobbering**; `getDataVersion()`
+    (`PRAGMA data_version`) lets the main process detect external writes and
+    auto-refresh the renderer. Repository/migrations go through the engine-agnostic
+    `dbExec`/`dbRun`/`dbAll`/`dbGet` helpers. (Dropbox caveat: a live DB in an
+    actively-syncing Dropbox folder can be reverted by Dropbox — keep projects in
+    a stable location while editing.)
   - `projects.ts` — the multi-project layer: tracks the current `*.vwdm` file,
     a recent list + last-project in `userData/settings.json` (per-machine, not
     Dropbox), and New/Open/Save-a-Copy-As via native dialogs. `paths.ts` is now

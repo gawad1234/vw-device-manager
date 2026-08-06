@@ -1,5 +1,5 @@
-import initSqlJs, { type Database, type SqlJsStatic } from 'sql.js'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { DatabaseSync } from 'node:sqlite'
+import { existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
 
 const SCHEMA = `
@@ -95,19 +95,26 @@ CREATE TABLE IF NOT EXISTS cables (
 );
 `
 
-let db: Database | null = null
+// A real embedded SQLite (Node's built-in node:sqlite — no native module) that
+// writes rows in place with OS file locking. This lets the app AND the VW
+// scripts hold the same .vwdm open at once without clobbering (see openDb's
+// busy_timeout), unlike the old sql.js whole-file rewrite.
+let db: DatabaseSync | null = null
 let dbPath: string | null = null
 
-function tableHasColumn(database: Database, table: string, column: string): boolean {
-  const res = database.exec(`PRAGMA table_info(${table})`)
-  if (res.length === 0) return false
-  const nameIdx = res[0].columns.indexOf('name')
-  return res[0].values.some((row) => row[nameIdx] === column)
+/** Bind values node:sqlite accepts for a positional `?` parameter. */
+type SqlParam = string | number | bigint | null | Uint8Array
+
+function tableHasColumn(database: DatabaseSync, table: string, column: string): boolean {
+  const rows = database.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+  return rows.some((r) => r.name === column)
 }
 
-function tableExists(database: Database, name: string): boolean {
-  const res = database.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${name}'`)
-  return res.length > 0 && res[0].values.length > 0
+function tableExists(database: DatabaseSync, name: string): boolean {
+  const row = database
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
+    .get(name)
+  return row !== undefined
 }
 
 /**
@@ -116,13 +123,13 @@ function tableExists(database: Database, name: string): boolean {
  * then rebuilds `devices` without those two columns. Gated on the old column
  * still existing, so it runs at most once and is a no-op on fresh DBs.
  */
-function migrateDevicesToPorts(database: Database): void {
+function migrateDevicesToPorts(database: DatabaseSync): void {
   if (!tableHasColumn(database, 'devices', 'ip_address')) return
 
   database.exec('BEGIN')
   try {
     // Backfill: one "Port 1" per device that actually had an IP or subnet.
-    database.run(
+    database.exec(
       `INSERT INTO ports (device_id, label, ip_address, untagged_subnet_id)
        SELECT id, 'Port 1', ip_address, subnet_id FROM devices
        WHERE ip_address IS NOT NULL OR subnet_id IS NOT NULL`
@@ -156,9 +163,9 @@ function migrateDevicesToPorts(database: Database): void {
  * Adds the switch-role columns (is_switch / management_ip / oob_ip) to an
  * existing `devices` table that predates them. Guarded on the column not yet
  * existing, so it's a no-op once applied and on fresh DBs (SCHEMA already
- * includes them). ALTER TABLE ADD COLUMN is well-supported by sql.js.
+ * includes them).
  */
-function migrateAddSwitchColumns(database: Database): void {
+function migrateAddSwitchColumns(database: DatabaseSync): void {
   if (!tableExists(database, 'devices')) return
   if (tableHasColumn(database, 'devices', 'is_switch')) return
   database.exec(`
@@ -174,7 +181,7 @@ function migrateAddSwitchColumns(database: Database): void {
  * per-cable lengths — length is now the bundle's). Guarded so it runs once and
  * is a no-op on fresh DBs (SCHEMA already has the final shape).
  */
-function migrateCableLengthToBundle(database: Database): void {
+function migrateCableLengthToBundle(database: DatabaseSync): void {
   if (tableExists(database, 'bundles') && !tableHasColumn(database, 'bundles', 'length')) {
     database.exec('ALTER TABLE bundles ADD COLUMN length TEXT')
   }
@@ -218,7 +225,7 @@ function migrateCableLengthToBundle(database: Database): void {
  * table. Guarded on the column not yet existing → no-op once applied and on
  * fresh DBs (SCHEMA already has them).
  */
-function migrateCableChecklist(database: Database): void {
+function migrateCableChecklist(database: DatabaseSync): void {
   if (!tableExists(database, 'cables')) return
   if (tableHasColumn(database, 'cables', 'pulled')) return
   database.exec(`
@@ -228,7 +235,7 @@ function migrateCableChecklist(database: Database): void {
 }
 
 /** Adds `bundles.color` (hex color code for the bundle). Guarded, additive. */
-function migrateBundleColor(database: Database): void {
+function migrateBundleColor(database: DatabaseSync): void {
   if (!tableExists(database, 'bundles')) return
   if (tableHasColumn(database, 'bundles', 'color')) return
   database.exec('ALTER TABLE bundles ADD COLUMN color TEXT')
@@ -240,7 +247,7 @@ function migrateBundleColor(database: Database): void {
  * `cable_type` TEXT column, resolving each old id to its name from the (still
  * present) `cable_types` table. Guarded on the old column existing.
  */
-function migrateCableTypeToName(database: Database): void {
+function migrateCableTypeToName(database: DatabaseSync): void {
   if (!tableExists(database, 'cables')) return
   if (!tableHasColumn(database, 'cables', 'cable_type_id')) return
 
@@ -281,17 +288,9 @@ function migrateCableTypeToName(database: Database): void {
   }
 }
 
-// The sql.js WASM module is loaded once and reused across project switches.
-let sqlModule: SqlJsStatic | null = null
-
-async function ensureSql(): Promise<SqlJsStatic> {
-  if (!sqlModule) sqlModule = await initSqlJs()
-  return sqlModule
-}
-
-/** Bring a freshly loaded DB up to date: schema + all migrations. Network
- *  signals / cable types are NOT here anymore — they live in the shared library. */
-function applySchemaAndMigrations(database: Database): void {
+/** Bring a freshly opened DB up to date: schema + all migrations. Network
+ *  signals / cable types are NOT here — they live in the shared library. */
+function applySchemaAndMigrations(database: DatabaseSync): void {
   database.exec(SCHEMA)
   migrateDevicesToPorts(database)
   migrateAddSwitchColumns(database)
@@ -303,20 +302,71 @@ function applySchemaAndMigrations(database: Database): void {
 
 /**
  * Open (or create) the project database at `path` and make it the active DB.
- * Loads the file if it exists (else starts empty), applies schema + migrations,
- * and persists. Switching projects is just calling this again with another path.
+ * node:sqlite writes rows straight to the file (no whole-file persist), and the
+ * busy_timeout lets the app coexist with a Vectorworks script holding the same
+ * file. Switching projects just calls this again with another path.
  */
 export async function openDb(path: string): Promise<void> {
-  const SQL = await ensureSql()
   mkdirSync(dirname(path), { recursive: true })
-  db = existsSync(path) ? new SQL.Database(readFileSync(path)) : new SQL.Database()
+  db?.close()
+  db = new DatabaseSync(path)
   dbPath = path
+  // Wait up to 5s for a lock instead of erroring, so a concurrent VW-script
+  // write doesn't fail the app (and vice versa).
+  db.exec('PRAGMA busy_timeout = 5000')
   applySchemaAndMigrations(db)
-  persist()
 }
 
 export function getCurrentDbPath(): string | null {
   return dbPath
+}
+
+export function getDb(): DatabaseSync {
+  if (!db) throw new Error('Database not initialized — call openDb() first')
+  return db
+}
+
+// ---- Engine-agnostic query helpers (used by repository + migrations) -----
+
+export function dbExec(sql: string): void {
+  getDb().exec(sql)
+}
+
+export function dbRun(
+  sql: string,
+  params: SqlParam[] = []
+): { lastInsertRowid: number; changes: number } {
+  const info = getDb()
+    .prepare(sql)
+    .run(...params)
+  return { lastInsertRowid: Number(info.lastInsertRowid), changes: Number(info.changes) }
+}
+
+export function dbAll(sql: string, params: SqlParam[] = []): Record<string, unknown>[] {
+  return getDb()
+    .prepare(sql)
+    .all(...params) as Record<string, unknown>[]
+}
+
+export function dbGet(sql: string, params: SqlParam[] = []): Record<string, unknown> | undefined {
+  return getDb()
+    .prepare(sql)
+    .get(...params) as Record<string, unknown> | undefined
+}
+
+export function lastInsertRowId(): number {
+  return (getDb().prepare('SELECT last_insert_rowid() AS id').get() as { id: number }).id
+}
+
+/**
+ * `PRAGMA data_version` — a token that bumps whenever ANOTHER connection commits
+ * to this file, but NOT for our own writes. The main process polls it to detect
+ * writes from the Vectorworks scripts and auto-refresh the UI (no self-refresh
+ * loop).
+ */
+export function getDataVersion(): number {
+  const row = getDb().prepare('PRAGMA data_version').get() as { data_version: number }
+  return row.data_version
 }
 
 /**
@@ -332,21 +382,24 @@ export async function readCatalogsFromFile(
     cableTypes: [] as { name: string; notes: string | null }[]
   }
   if (!existsSync(path)) return out
-  const SQL = await ensureSql()
-  const tmp = new SQL.Database(readFileSync(path))
+  const tmp = new DatabaseSync(path, { readOnly: true })
   try {
     try {
-      const res = tmp.exec('SELECT signal FROM network_signals ORDER BY signal COLLATE NOCASE')
-      out.networkSignals = res[0]?.values.map((r) => r[0] as string) ?? []
+      out.networkSignals = (
+        tmp.prepare('SELECT signal FROM network_signals ORDER BY signal COLLATE NOCASE').all() as {
+          signal: string
+        }[]
+      ).map((r) => r.signal)
     } catch {
       /* no network_signals table */
     }
     try {
-      const res = tmp.exec('SELECT name, notes FROM cable_types ORDER BY name COLLATE NOCASE')
-      out.cableTypes = (res[0]?.values ?? []).map((r) => ({
-        name: r[0] as string,
-        notes: (r[1] as string | null) ?? null
-      }))
+      out.cableTypes = (
+        tmp.prepare('SELECT name, notes FROM cable_types ORDER BY name COLLATE NOCASE').all() as {
+          name: string
+          notes: string | null
+        }[]
+      ).map((r) => ({ name: r.name, notes: r.notes ?? null }))
     } catch {
       /* no cable_types table */
     }
@@ -354,14 +407,4 @@ export async function readCatalogsFromFile(
     tmp.close()
   }
   return out
-}
-
-export function getDb(): Database {
-  if (!db) throw new Error('Database not initialized — call openDb() first')
-  return db
-}
-
-export function persist(): void {
-  if (!db || !dbPath) return
-  writeFileSync(dbPath, Buffer.from(db.export()))
 }

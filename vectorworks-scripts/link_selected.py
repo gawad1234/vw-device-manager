@@ -27,9 +27,9 @@ Before running:
      vwdm_id, vwdm_ip, vwdm_subnet, vwdm_type, vwdm_mac, vwdm_location,
      vwdm_notes. (Per-port IP/VLANs use a separate "VWDM Port" record written
      by sync_app_to_drawing.py — see that script.)
-  2. Close the VW Device Manager app (it holds the DB in memory and overwrites
-     the file on every change — running this while the app is open can clobber
-     whichever side wrote last).
+  2. The app can stay OPEN — the database engine (real SQLite) coordinates
+     concurrent access, so this script and the app no longer clobber each other,
+     and the app auto-refreshes to show what this script wrote.
   3. Save the drawing, and save its project database next to it with a matching
      name (Foo.vwx -> Foo.vwdm) via the app's project menu > Save a Copy As.
      The script finds the database from the drawing's own path automatically —

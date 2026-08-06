@@ -1,6 +1,5 @@
-import { getDb, persist } from './db'
+import { dbAll, dbGet, dbRun, lastInsertRowId } from './db'
 import { isValidIpv4, ipInCidr } from './ip-utils'
-import type { SqlValue } from 'sql.js'
 import type {
   Bundle,
   BundleInput,
@@ -18,6 +17,8 @@ import type {
 } from '../shared/types'
 
 type Row = Record<string, unknown>
+/** Bind values accepted for a positional `?` parameter (matches db.ts). */
+type SqlValue = string | number | bigint | null | Uint8Array
 
 function mapSubnet(row: Row): Subnet {
   return {
@@ -61,23 +62,11 @@ function mapDevice(row: Row, ports: Port[]): Device {
 }
 
 function queryAll(sql: string, params: SqlValue[] = []): Row[] {
-  const stmt = getDb().prepare(sql)
-  stmt.bind(params)
-  const rows: Row[] = []
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject())
-  }
-  stmt.free()
-  return rows
+  return dbAll(sql, params) as Row[]
 }
 
 function queryOne(sql: string, params: SqlValue[] = []): Row | null {
-  return queryAll(sql, params)[0] ?? null
-}
-
-function lastInsertRowId(): number {
-  const res = getDb().exec('SELECT last_insert_rowid() AS id')
-  return res[0].values[0][0] as number
+  return (dbGet(sql, params) as Row | undefined) ?? null
 }
 
 // ---- Subnets ----------------------------------------------------------
@@ -92,32 +81,28 @@ function getSubnetById(id: number): Subnet | null {
 }
 
 export function createSubnet(input: SubnetInput): Subnet {
-  getDb().run(
+  dbRun(
     `INSERT INTO subnets (name, cidr, vlan, gateway, notes) VALUES (?, ?, ?, ?, ?)`,
     [input.name, input.cidr, input.vlan, input.gateway, input.notes]
   )
   const id = lastInsertRowId()
-  persist()
   return getSubnetById(id) as Subnet
 }
 
 export function updateSubnet(id: number, input: SubnetInput): Subnet {
-  getDb().run(
+  dbRun(
     `UPDATE subnets SET name = ?, cidr = ?, vlan = ?, gateway = ?, notes = ? WHERE id = ?`,
     [input.name, input.cidr, input.vlan, input.gateway, input.notes, id]
   )
-  persist()
   return getSubnetById(id) as Subnet
 }
 
 export function deleteSubnet(id: number): void {
   // A deleted subnet is dereferenced everywhere it was used (untagged +
   // tagged), so ports don't point at a phantom network.
-  getDb().run('UPDATE ports SET untagged_subnet_id = NULL WHERE untagged_subnet_id = ?', [id])
-  getDb().run('DELETE FROM port_tagged_vlans WHERE subnet_id = ?', [id])
-  getDb().run('DELETE FROM subnets WHERE id = ?', [id])
-  persist()
-}
+  dbRun('UPDATE ports SET untagged_subnet_id = NULL WHERE untagged_subnet_id = ?', [id])
+  dbRun('DELETE FROM port_tagged_vlans WHERE subnet_id = ?', [id])
+  dbRun('DELETE FROM subnets WHERE id = ?', [id])}
 
 // ---- Ports --------------------------------------------------------------
 
@@ -204,12 +189,11 @@ export function createPort(deviceId: number, input: PortInput): SavePortResult {
   }
 
   const warnings = buildPortWarnings(input)
-  getDb().run(
+  dbRun(
     `INSERT INTO ports (device_id, label, ip_address, untagged_subnet_id) VALUES (?, ?, ?, ?)`,
     [deviceId, input.label, input.ipAddress, input.untaggedSubnetId]
   )
   const id = lastInsertRowId()
-  persist()
   return { port: getPortById(id), warnings }
 }
 
@@ -226,32 +210,27 @@ export function updatePort(id: number, input: PortInput): SavePortResult {
   }
 
   const warnings = buildPortWarnings(input)
-  getDb().run(
+  dbRun(
     `UPDATE ports SET label = ?, ip_address = ?, untagged_subnet_id = ?, updated_at = datetime('now')
      WHERE id = ?`,
     [input.label, input.ipAddress, input.untaggedSubnetId, id]
   )
-  persist()
   return { port: getPortById(id), warnings }
 }
 
 export function deletePort(id: number): void {
-  getDb().run('DELETE FROM port_tagged_vlans WHERE port_id = ?', [id])
-  getDb().run('DELETE FROM ports WHERE id = ?', [id])
-  persist()
-}
+  dbRun('DELETE FROM port_tagged_vlans WHERE port_id = ?', [id])
+  dbRun('DELETE FROM ports WHERE id = ?', [id])}
 
 /** Replace the port's tagged-VLAN set with exactly the given subnet ids. */
 export function setPortTaggedVlans(portId: number, subnetIds: number[]): void {
-  const db = getDb()
-  db.run('DELETE FROM port_tagged_vlans WHERE port_id = ?', [portId])
+  dbRun('DELETE FROM port_tagged_vlans WHERE port_id = ?', [portId])
   for (const subnetId of subnetIds) {
-    db.run('INSERT OR IGNORE INTO port_tagged_vlans (port_id, subnet_id) VALUES (?, ?)', [
+    dbRun('INSERT OR IGNORE INTO port_tagged_vlans (port_id, subnet_id) VALUES (?, ?)', [
       portId,
       subnetId
     ])
   }
-  persist()
 }
 
 // ---- Devices ------------------------------------------------------------
@@ -314,7 +293,7 @@ export function createDevice(input: DeviceInput): SaveDeviceResult {
   const check = checkSwitchIps(mgmt, oob, -1) // no id yet — nothing to exclude
   if (check.error) return { device: null, warnings: [], error: check.error }
 
-  getDb().run(
+  dbRun(
     `INSERT INTO devices (name, device_type, mac_address, location, notes, is_switch, management_ip, oob_ip)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -329,7 +308,6 @@ export function createDevice(input: DeviceInput): SaveDeviceResult {
     ]
   )
   const id = lastInsertRowId()
-  persist()
   return { device: getDeviceById(id), warnings: check.warnings }
 }
 
@@ -338,7 +316,7 @@ export function updateDevice(id: number, input: DeviceInput): SaveDeviceResult {
   const check = checkSwitchIps(mgmt, oob, id)
   if (check.error) return { device: null, warnings: [], error: check.error }
 
-  getDb().run(
+  dbRun(
     `UPDATE devices
      SET name = ?, device_type = ?, mac_address = ?, location = ?, notes = ?,
          is_switch = ?, management_ip = ?, oob_ip = ?,
@@ -356,19 +334,16 @@ export function updateDevice(id: number, input: DeviceInput): SaveDeviceResult {
       id
     ]
   )
-  persist()
   return { device: getDeviceById(id), warnings: check.warnings }
 }
 
 export function deleteDevice(id: number): void {
-  const db = getDb()
-  db.run(
+  dbRun(
     'DELETE FROM port_tagged_vlans WHERE port_id IN (SELECT id FROM ports WHERE device_id = ?)',
     [id]
   )
-  db.run('DELETE FROM ports WHERE device_id = ?', [id])
-  db.run('DELETE FROM devices WHERE id = ?', [id])
-  persist()
+  dbRun('DELETE FROM ports WHERE device_id = ?', [id])
+  dbRun('DELETE FROM devices WHERE id = ?', [id])
 }
 
 // Network signals + cable types are no longer per-project — they live in the
@@ -425,7 +400,7 @@ function cableColumnValues(input: CableInput): SqlValue[] {
 }
 
 export function createCable(bundleId: number, input: CableInput): Cable {
-  getDb().run(
+  dbRun(
     `INSERT INTO cables
        (bundle_id, name, cable_type,
         source_device_id, source_port_id, source_text,
@@ -434,12 +409,11 @@ export function createCable(bundleId: number, input: CableInput): Cable {
     [bundleId, ...cableColumnValues(input)]
   )
   const id = lastInsertRowId()
-  persist()
   return getCableById(id) as Cable
 }
 
 export function updateCable(id: number, input: CableInput): Cable {
-  getDb().run(
+  dbRun(
     `UPDATE cables SET
        name = ?, cable_type = ?,
        source_device_id = ?, source_port_id = ?, source_text = ?,
@@ -449,14 +423,11 @@ export function updateCable(id: number, input: CableInput): Cable {
      WHERE id = ?`,
     [...cableColumnValues(input), id]
   )
-  persist()
   return getCableById(id) as Cable
 }
 
 export function deleteCable(id: number): void {
-  getDb().run('DELETE FROM cables WHERE id = ?', [id])
-  persist()
-}
+  dbRun('DELETE FROM cables WHERE id = ?', [id])}
 
 // ---- Bundles ------------------------------------------------------------
 
@@ -487,30 +458,26 @@ function getBundleById(id: number): Bundle | null {
 }
 
 export function createBundle(input: BundleInput): Bundle {
-  getDb().run(
+  dbRun(
     `INSERT INTO bundles (name, color, from_location, to_location, length, notes)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [input.name, input.color, input.fromLocation, input.toLocation, input.length, input.notes]
   )
   const id = lastInsertRowId()
-  persist()
   return getBundleById(id) as Bundle
 }
 
 export function updateBundle(id: number, input: BundleInput): Bundle {
-  getDb().run(
+  dbRun(
     `UPDATE bundles
        SET name = ?, color = ?, from_location = ?, to_location = ?, length = ?, notes = ?,
            updated_at = datetime('now')
      WHERE id = ?`,
     [input.name, input.color, input.fromLocation, input.toLocation, input.length, input.notes, id]
   )
-  persist()
   return getBundleById(id) as Bundle
 }
 
 export function deleteBundle(id: number): void {
-  getDb().run('DELETE FROM cables WHERE bundle_id = ?', [id])
-  getDb().run('DELETE FROM bundles WHERE id = ?', [id])
-  persist()
-}
+  dbRun('DELETE FROM cables WHERE bundle_id = ?', [id])
+  dbRun('DELETE FROM bundles WHERE id = ?', [id])}

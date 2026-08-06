@@ -16,7 +16,8 @@ are drawing-owned and pulled INTO the app first each run: device *type* (from
 "Model") and *location* (Room/Rack/Rack U/Slot).
 
 Before running:
-  - Close the VW Device Manager app first (see link_selected.py for why).
+  - The app can stay open — the SQLite engine coordinates concurrent access
+    (no clobber) and the app auto-refreshes to show what this script wrote.
   - One-time: create a Record Format named exactly "VWDM Port" with three Text
     fields — vwdm_ip, vwdm_untagged, vwdm_tagged. (This is the per-jack
     counterpart to the device-level "VWDM Sync" record.)

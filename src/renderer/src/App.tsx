@@ -35,6 +35,9 @@ function App(): React.JSX.Element {
     refresh().finally(() => setLoading(false))
   }, [refresh])
 
+  // Auto-refresh when a Vectorworks script writes to the open project file.
+  useEffect(() => window.api.onDataChanged(() => void refresh()), [refresh])
+
   // Switching projects swaps the whole database — reload everything.
   const handleSwitch = useCallback(
     (info: ProjectInfo) => {

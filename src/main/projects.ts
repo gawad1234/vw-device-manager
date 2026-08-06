@@ -1,7 +1,7 @@
 import { app, dialog, shell } from 'electron'
 import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'fs'
 import { basename, dirname, extname, join } from 'path'
-import { openDb, getCurrentDbPath, persist } from './db'
+import { openDb, getCurrentDbPath } from './db'
 import { getDbPath } from './paths'
 import type { ProjectInfo } from '../shared/types'
 
@@ -123,7 +123,7 @@ export async function saveCopyAs(): Promise<ProjectInfo | null> {
   })
   if (res.canceled || !res.filePath) return null
   const path = ensureExt(res.filePath)
-  persist() // flush current in-memory state to disk before copying
+  // node:sqlite writes are already durable on disk, so the copy is up to date.
   copyFileSync(current, path)
   return switchTo(path) // continue working on the copy
 }
