@@ -2,7 +2,8 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { initDb } from './db'
+import { openStartupProject } from './projects'
+import { ensureLibrary } from './library'
 import { registerIpcHandlers } from './ipc'
 
 function createWindow(): void {
@@ -54,7 +55,8 @@ app.whenReady().then(async () => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  await initDb()
+  await openStartupProject()
+  await ensureLibrary() // create/seed the shared cable-type + signal library once
   registerIpcHandlers()
 
   createWindow()

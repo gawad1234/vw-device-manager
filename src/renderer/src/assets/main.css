@@ -80,6 +80,102 @@ code {
   font-weight: 600;
 }
 
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  -webkit-app-region: no-drag;
+}
+
+/* ---- Project menu ---------------------------------------------------- */
+
+.project-menu {
+  position: relative;
+}
+
+.project-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ev-c-text-1);
+  padding: 5px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.project-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.project-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.project-btn .caret {
+  color: var(--ev-c-text-3);
+  font-size: 10px;
+}
+
+.project-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 230px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--ev-c-black-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px;
+  z-index: 50;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--ev-c-text-1);
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: var(--hover);
+}
+
+.menu-recent {
+  color: var(--ev-c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 6px 4px;
+}
+
+.menu-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ev-c-text-3);
+  padding: 4px 10px 2px;
+}
+
 .app-main {
   flex: 1;
   padding: 32px 28px;

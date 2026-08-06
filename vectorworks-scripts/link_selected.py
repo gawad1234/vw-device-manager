@@ -30,21 +30,32 @@ Before running:
   2. Close the VW Device Manager app (it holds the DB in memory and overwrites
      the file on every change — running this while the app is open can clobber
      whichever side wrote last).
-  3. DB_PATH_CANDIDATES below auto-detects the Mac and Windows paths; add a
-     line there only if you run this on a third machine.
+  3. Save the drawing, and save its project database next to it with a matching
+     name (Foo.vwx -> Foo.vwdm) via the app's project menu > Save a Copy As.
+     The script finds the database from the drawing's own path automatically —
+     no hardcoded paths, works the same on Mac and Windows.
 """
 
+import json
 import os
 import sqlite3
 import vs
 
-# The database lives in the same Dropbox folder on every machine, but the
-# absolute path to that folder differs per OS/user. Rather than hand-edit
-# this on each machine, list every known path and use the first that exists.
-# Add a new line here if you set the project up on another machine.
-DB_PATH_CANDIDATES = [
+# Each project is a SQLite database that lives BESIDE its drawing with a
+# matching name (Foo.vwx -> Foo.vwdm). resolve_project_db() derives that path
+# from the active document, so the same script finds the right database on any
+# machine with NO hardcoded paths. LEGACY_DB_CANDIDATES is only a last-resort
+# fallback to the old single shared database during the transition.
+PROJECT_EXT = ".vwdm"
+LEGACY_DB_CANDIDATES = [
     r"C:\Users\Gabe\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\vw-device-manager.sqlite3",
     "/Users/gabe/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/vw-device-manager.sqlite3",
+]
+# The network-signal list is a SHARED library (universal across all projects),
+# so it's one fixed file, not per-project — a small candidates list is fine here.
+LIBRARY_CANDIDATES = [
+    r"C:\Users\Gabe\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\library.json",
+    "/Users/gabe/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/library.json",
 ]
 RECORD_NAME = "VWDM Sync"
 FIELD_ID = "vwdm_id"
@@ -72,8 +83,25 @@ SOCKET_FIELD_SIGNAL = "signal"
 DEFAULT_NETWORK_SIGNALS = {"LAN"}
 
 
-def resolve_db_path():
-    for path in DB_PATH_CANDIDATES:
+def active_doc_path():
+    """Full path of the active drawing, or '' if it's unsaved/unavailable."""
+    try:
+        p = vs.GetFPathName()
+    except Exception:
+        p = None
+    return (p or "").strip()
+
+
+def resolve_project_db():
+    """The project database for the current drawing: same folder + same base
+    name + .vwdm. Falls back to the legacy single-DB paths if there's no match
+    (e.g. an unsaved drawing during the transition). None if nothing is found."""
+    doc = active_doc_path()
+    if doc:
+        candidate = os.path.splitext(doc)[0] + PROJECT_EXT
+        if os.path.exists(candidate):
+            return candidate
+    for path in LEGACY_DB_CANDIDATES:
         if os.path.exists(path):
             return path
     return None
@@ -133,14 +161,21 @@ def get_device_name(h):
 
 
 def load_network_signals(conn):
-    """Signal names (uppercased) the app flags as network ports."""
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT signal FROM network_signals")
-        sigs = {r[0].strip().upper() for r in cur.fetchall() if r[0] and r[0].strip()}
-        return sigs or set(DEFAULT_NETWORK_SIGNALS)
-    except Exception:
-        return set(DEFAULT_NETWORK_SIGNALS)
+    """Signal names (uppercased) the app flags as network ports, read from the
+    SHARED library (data/library.json) — signals are universal across projects
+    now (see library.ts), not stored in the project database. `conn` is unused.
+    Falls back to DEFAULT_NETWORK_SIGNALS if the library can't be read."""
+    for path in LIBRARY_CANDIDATES:
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                sigs = {s.strip().upper() for s in data.get("networkSignals", []) if s and s.strip()}
+                if sigs:
+                    return sigs
+        except Exception:
+            pass
+    return set(DEFAULT_NETWORK_SIGNALS)
 
 
 def network_jacks(h, net_signals):
@@ -186,13 +221,16 @@ def upsert_ports(cur, device_id, h, net_signals):
 
 
 def main():
-    db_path = resolve_db_path()
+    db_path = resolve_project_db()
     if db_path is None:
+        doc = active_doc_path()
+        expected = os.path.splitext(doc)[0] + PROJECT_EXT if doc else "(save the drawing first)"
         vs.AlrtDialog(
-            "Could not find the database on this machine. Tried:\n\n"
-            + "\n".join(DB_PATH_CANDIDATES)
-            + "\n\nIf the project lives somewhere else here, add that path to "
-            "DB_PATH_CANDIDATES near the top of this script."
+            "No project database found for this drawing.\n\n"
+            "In the app, use the project menu > Save a Copy As to save your "
+            "project next to this drawing with a matching name:\n\n"
+            + expected
+            + "\n\nThen re-run. (If the drawing is untitled, save the .vwx first.)"
         )
         return
 
@@ -214,6 +252,7 @@ def main():
     relinked_invalid = 0
     relinked_orphaned = 0
     already_linked = 0
+    reused_by_name = 0
     ports_created = 0
     ports_refreshed = 0
     errors = []
@@ -247,21 +286,38 @@ def main():
                 already_linked += 1
             else:
                 name = get_device_name(h)
-                cur.execute(
-                    "INSERT INTO devices (name, device_type, location) VALUES (?, ?, ?)",
-                    (name, device_type, location),
-                )
-                device_id = cur.lastrowid
+                # Dedupe by name FIRST. A device name is a unique identifier in
+                # ConnectCAD, so if a row with this name already exists in the
+                # project, reuse it instead of inserting a duplicate. This makes
+                # re-running Link Selected idempotent and stops duplicates when an
+                # object's vwdm_id is blank/stale/from another project.
+                cur.execute("SELECT id FROM devices WHERE name = ? ORDER BY id LIMIT 1", (name,))
+                match = cur.fetchone()
+                if match:
+                    device_id = match[0]
+                    cur.execute(
+                        "UPDATE devices SET device_type = ?, location = ? WHERE id = ?",
+                        (device_type, location, device_id),
+                    )
+                    reused_by_name += 1
+                else:
+                    cur.execute(
+                        "INSERT INTO devices (name, device_type, location) VALUES (?, ?, ?)",
+                        (name, device_type, location),
+                    )
+                    device_id = cur.lastrowid
+                    if status == "unlinked":
+                        linked += 1
+                    elif status == "invalid":
+                        relinked_invalid += 1
+                    elif status == "orphaned":
+                        relinked_orphaned += 1
+
                 if existing_id is None:
-                    # record not attached yet
+                    # record not attached to the object yet
                     vs.SetRecord(h, RECORD_NAME)
+                # (Re)stamp the object with the resolved id — repairs blank/stale ids.
                 vs.SetRField(h, RECORD_NAME, FIELD_ID, str(device_id))
-                if status == "unlinked":
-                    linked += 1
-                elif status == "invalid":
-                    relinked_invalid += 1
-                elif status == "orphaned":
-                    relinked_orphaned += 1
 
             # Discover network jacks -> ports for every linked device.
             created, refreshed = upsert_ports(cur, device_id, h, net_signals)
@@ -276,6 +332,10 @@ def main():
         conn.close()
 
     msg = "Linked {0} new device(s).\n{1} already linked.".format(linked, already_linked)
+    if reused_by_name:
+        msg += "\n{0} object(s) matched an existing device by name (no duplicate created).".format(
+            reused_by_name
+        )
     if relinked_invalid:
         msg += "\n{0} object(s) had an invalid vwdm_id and were re-linked.".format(
             relinked_invalid

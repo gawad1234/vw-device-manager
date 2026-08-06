@@ -9,11 +9,20 @@ workspace context and the cross-machine handoff log — check those first.
 ## Architecture
 
 - **Main process** (`src/main/`):
-  - `db.ts` — SQLite via `sql.js` (WASM, not a native binding), persists the
-    whole DB to `data/vw-device-manager.sqlite3` on change (see `paths.ts`
-    for the resolved path). This is why the app and a Vectorworks sync
-    script must never touch the file concurrently — whichever writes last
-    wins.
+  - `db.ts` — SQLite via `sql.js` (WASM, not a native binding). `openDb(path)`
+    loads a project file, applies the schema + all guarded `migrate*` steps, and
+    persists the whole file on every change; switching projects just calls
+    `openDb` again. This is why the app and a Vectorworks sync script must never
+    touch the same file concurrently — whichever writes last wins.
+  - `projects.ts` — the multi-project layer: tracks the current `*.vwdm` file,
+    a recent list + last-project in `userData/settings.json` (per-machine, not
+    Dropbox), and New/Open/Save-a-Copy-As via native dialogs. `paths.ts` is now
+    just the legacy default location used on first launch.
+  - `library.ts` — the **universal library** (network signals + cable types),
+    shared across ALL projects: a single `data/library.json` (Dropbox-synced),
+    NOT stored per project. `ensureLibrary()` seeds it once from the legacy DB.
+    Cables reference their type by **name** (`cables.cable_type`), so nothing is
+    tied to a per-project id.
   - `repository.ts` — CRUD + validation for devices/subnets (IP conflict
     checks, IP-outside-subnet checks, etc. — see `DeviceWarning` types).
   - `ipc.ts` — wires repository methods to IPC handlers.

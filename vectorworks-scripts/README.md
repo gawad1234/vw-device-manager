@@ -34,10 +34,14 @@ field/socket names on a real device (not part of the normal workflow).
 3. Optional: add linked text referencing these fields if you want them
    visible on the schematic graphic itself, not just in the Object Info
    palette / worksheets.
-4. `DB_PATH_CANDIDATES` at the top of `link_selected.py` and
-   `sync_app_to_drawing.py` auto-detects the Mac and Windows paths to
-   `vw-device-manager/data/vw-device-manager.sqlite3` — add a line only if
-   you run on a third machine.
+4. **Project database location:** the app now uses per-project files. Save each
+   project's database **beside its drawing with a matching name** (`Foo.vwx` →
+   `Foo.vwdm`) via the app's **project menu → Save a Copy As**. The scripts
+   derive the database from the active drawing's own path (`resolve_project_db()`
+   → `<same dir>/<same base>.vwdm`), so there are no hardcoded paths and it works
+   the same on Mac and Windows. If no matching `.vwdm` is found they fall back to
+   the legacy single database (`LEGACY_DB_CANDIDATES`) during the transition,
+   then show a clear message telling you where to save it.
 
 ## Running a script
 

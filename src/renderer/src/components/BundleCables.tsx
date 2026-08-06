@@ -71,7 +71,7 @@ interface CableRowProps {
 
 function CableRow({ cable, devices, cableTypes, onChanged }: CableRowProps): React.JSX.Element {
   const [name, setName] = useState(cable.name)
-  const [typeId, setTypeId] = useState<number | null>(cable.cableTypeId)
+  const [cableType, setCableType] = useState(cable.cableType ?? '')
   const [source, setSource] = useState<CableEndpoint>(cable.source)
   const [destination, setDestination] = useState<CableEndpoint>(cable.destination)
   const [pulled, setPulled] = useState(cable.pulled)
@@ -84,7 +84,7 @@ function CableRow({ cable, devices, cableTypes, onChanged }: CableRowProps): Rea
     setSaving(true)
     await window.api.cables.update(cable.id, {
       name: name.trim() || cable.name,
-      cableTypeId: typeId,
+      cableType: cableType || null,
       source,
       destination,
       pulled: patch?.pulled ?? pulled,
@@ -120,13 +120,14 @@ function CableRow({ cable, devices, cableTypes, onChanged }: CableRowProps): Rea
         </label>
         <label>
           Type
-          <select
-            value={typeId ?? ''}
-            onChange={(e) => setTypeId(e.target.value ? Number(e.target.value) : null)}
-          >
+          <select value={cableType} onChange={(e) => setCableType(e.target.value)}>
             <option value="">— none —</option>
+            {/* keep showing a type that's since been removed from the library */}
+            {cableType && !cableTypes.some((t) => t.name === cableType) && (
+              <option value={cableType}>{cableType}</option>
+            )}
             {cableTypes.map((t) => (
-              <option key={t.id} value={t.id}>
+              <option key={t.name} value={t.name}>
                 {t.name}
               </option>
             ))}
@@ -181,7 +182,7 @@ function BundleCables({ bundle, devices, cableTypes, onChanged }: Props): React.
   async function addCable(): Promise<void> {
     await window.api.cables.create(bundle.id, {
       name: `Cable ${bundle.cables.length + 1}`,
-      cableTypeId: null,
+      cableType: null,
       source: { deviceId: null, portId: null, text: null },
       destination: { deviceId: null, portId: null, text: null },
       pulled: false,

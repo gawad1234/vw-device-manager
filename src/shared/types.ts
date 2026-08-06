@@ -74,14 +74,14 @@ export interface SavePortResult {
 
 // ---- Cable bundle manager -------------------------------------------------
 
-/** A managed cable-type catalog entry (Cat6, Fiber SM, XLR, …). */
+/** A cable-type catalog entry (Cat6, Fiber SM, XLR, …). Lives in the shared
+ *  library (universal across projects), keyed by name. */
 export interface CableType {
-  id: number
   name: string
   notes: string | null
 }
 
-export type CableTypeInput = Omit<CableType, 'id'>
+export type CableTypeInput = CableType
 
 /** One end of a cable: a linked device (optionally a specific port), or free
  *  text when the device isn't in the app. Prefer the link for display. */
@@ -95,7 +95,8 @@ export interface Cable {
   id: number
   bundleId: number
   name: string
-  cableTypeId: number | null
+  /** cable type by name, from the shared library (null = untyped) */
+  cableType: string | null
   source: CableEndpoint
   destination: CableEndpoint
   /** install check sheet */
@@ -124,6 +125,12 @@ export interface Bundle {
 }
 
 export type BundleInput = Omit<Bundle, 'id' | 'createdAt' | 'updatedAt' | 'cables'>
+
+/** An open-able project database. `name` is the file basename without extension. */
+export interface ProjectInfo {
+  path: string
+  name: string
+}
 
 export interface VwDeviceManagerApi {
   subnets: {
@@ -161,10 +168,21 @@ export interface VwDeviceManagerApi {
     update: (id: number, input: CableInput) => Promise<Cable>
     remove: (id: number) => Promise<void>
   }
+  /** Shared cable-type library (universal across projects). */
   cableTypes: {
     list: () => Promise<CableType[]>
-    create: (input: CableTypeInput) => Promise<CableType>
-    update: (id: number, input: CableTypeInput) => Promise<CableType>
-    remove: (id: number) => Promise<void>
+    add: (input: CableTypeInput) => Promise<CableType[]>
+    remove: (name: string) => Promise<CableType[]>
+  }
+  /** Project files: one project (database) is active at a time; these switch it.
+   *  A null result means the user cancelled the dialog. */
+  projects: {
+    current: () => Promise<ProjectInfo | null>
+    recent: () => Promise<ProjectInfo[]>
+    new: () => Promise<ProjectInfo | null>
+    open: () => Promise<ProjectInfo | null>
+    openRecent: (path: string) => Promise<ProjectInfo | null>
+    saveCopyAs: () => Promise<ProjectInfo | null>
+    reveal: () => Promise<void>
   }
 }

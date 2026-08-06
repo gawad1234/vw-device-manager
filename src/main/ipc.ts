@@ -1,5 +1,7 @@
 import { ipcMain } from 'electron'
 import * as repo from './repository'
+import * as projects from './projects'
+import * as library from './library'
 import type {
   BundleInput,
   CableInput,
@@ -33,9 +35,10 @@ export function registerIpcHandlers(): void {
     repo.setPortTaggedVlans(id, subnetIds)
   )
 
-  ipcMain.handle('signals:list', () => repo.listNetworkSignals())
-  ipcMain.handle('signals:add', (_e, signal: string) => repo.addNetworkSignal(signal))
-  ipcMain.handle('signals:remove', (_e, signal: string) => repo.removeNetworkSignal(signal))
+  // Network signals + cable types are the shared, cross-project library.
+  ipcMain.handle('signals:list', () => library.listNetworkSignals())
+  ipcMain.handle('signals:add', (_e, signal: string) => library.addNetworkSignal(signal))
+  ipcMain.handle('signals:remove', (_e, signal: string) => library.removeNetworkSignal(signal))
 
   ipcMain.handle('bundles:list', () => repo.listBundles())
   ipcMain.handle('bundles:create', (_e, input: BundleInput) => repo.createBundle(input))
@@ -52,10 +55,15 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle('cables:remove', (_e, id: number) => repo.deleteCable(id))
 
-  ipcMain.handle('cableTypes:list', () => repo.listCableTypes())
-  ipcMain.handle('cableTypes:create', (_e, input: CableTypeInput) => repo.createCableType(input))
-  ipcMain.handle('cableTypes:update', (_e, id: number, input: CableTypeInput) =>
-    repo.updateCableType(id, input)
-  )
-  ipcMain.handle('cableTypes:remove', (_e, id: number) => repo.deleteCableType(id))
+  ipcMain.handle('cableTypes:list', () => library.listCableTypes())
+  ipcMain.handle('cableTypes:add', (_e, input: CableTypeInput) => library.addCableType(input))
+  ipcMain.handle('cableTypes:remove', (_e, name: string) => library.removeCableType(name))
+
+  ipcMain.handle('project:current', () => projects.getCurrentProject())
+  ipcMain.handle('project:recent', () => projects.listRecent())
+  ipcMain.handle('project:new', () => projects.newProject())
+  ipcMain.handle('project:open', () => projects.openProject())
+  ipcMain.handle('project:openRecent', (_e, path: string) => projects.openProjectPath(path))
+  ipcMain.handle('project:saveCopyAs', () => projects.saveCopyAs())
+  ipcMain.handle('project:reveal', () => projects.revealCurrent())
 }

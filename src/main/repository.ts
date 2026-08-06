@@ -6,8 +6,6 @@ import type {
   BundleInput,
   Cable,
   CableInput,
-  CableType,
-  CableTypeInput,
   Device,
   DeviceInput,
   DeviceWarning,
@@ -373,74 +371,8 @@ export function deleteDevice(id: number): void {
   persist()
 }
 
-// ---- Network signals ----------------------------------------------------
-
-export function listNetworkSignals(): string[] {
-  return queryAll('SELECT signal FROM network_signals ORDER BY signal COLLATE NOCASE').map(
-    (r) => r.signal as string
-  )
-}
-
-export function addNetworkSignal(signal: string): string[] {
-  const s = signal.trim()
-  if (s) {
-    getDb().run('INSERT OR IGNORE INTO network_signals (signal) VALUES (?)', [s])
-    persist()
-  }
-  return listNetworkSignals()
-}
-
-export function removeNetworkSignal(signal: string): string[] {
-  getDb().run('DELETE FROM network_signals WHERE signal = ?', [signal])
-  persist()
-  return listNetworkSignals()
-}
-
-// ---- Cable types --------------------------------------------------------
-
-function mapCableType(row: Row): CableType {
-  return {
-    id: row.id as number,
-    name: row.name as string,
-    notes: (row.notes as string | null) ?? null
-  }
-}
-
-export function listCableTypes(): CableType[] {
-  return queryAll('SELECT * FROM cable_types ORDER BY name COLLATE NOCASE').map(mapCableType)
-}
-
-function getCableTypeById(id: number): CableType | null {
-  const row = queryOne('SELECT * FROM cable_types WHERE id = ?', [id])
-  return row ? mapCableType(row) : null
-}
-
-export function createCableType(input: CableTypeInput): CableType {
-  getDb().run('INSERT INTO cable_types (name, notes) VALUES (?, ?)', [
-    input.name.trim(),
-    input.notes
-  ])
-  const id = lastInsertRowId()
-  persist()
-  return getCableTypeById(id) as CableType
-}
-
-export function updateCableType(id: number, input: CableTypeInput): CableType {
-  getDb().run('UPDATE cable_types SET name = ?, notes = ? WHERE id = ?', [
-    input.name.trim(),
-    input.notes,
-    id
-  ])
-  persist()
-  return getCableTypeById(id) as CableType
-}
-
-export function deleteCableType(id: number): void {
-  // Cables referencing this type keep existing, just untyped.
-  getDb().run('UPDATE cables SET cable_type_id = NULL WHERE cable_type_id = ?', [id])
-  getDb().run('DELETE FROM cable_types WHERE id = ?', [id])
-  persist()
-}
+// Network signals + cable types are no longer per-project — they live in the
+// shared library (see library.ts) and are wired to IPC directly there.
 
 // ---- Cables -------------------------------------------------------------
 
@@ -449,7 +381,7 @@ function mapCable(row: Row): Cable {
     id: row.id as number,
     bundleId: row.bundle_id as number,
     name: row.name as string,
-    cableTypeId: (row.cable_type_id as number | null) ?? null,
+    cableType: (row.cable_type as string | null) ?? null,
     source: {
       deviceId: (row.source_device_id as number | null) ?? null,
       portId: (row.source_port_id as number | null) ?? null,
@@ -479,7 +411,7 @@ function getCableById(id: number): Cable | null {
 function cableColumnValues(input: CableInput): SqlValue[] {
   return [
     input.name,
-    input.cableTypeId,
+    input.cableType,
     input.source.deviceId,
     input.source.portId,
     input.source.text,
@@ -495,7 +427,7 @@ function cableColumnValues(input: CableInput): SqlValue[] {
 export function createCable(bundleId: number, input: CableInput): Cable {
   getDb().run(
     `INSERT INTO cables
-       (bundle_id, name, cable_type_id,
+       (bundle_id, name, cable_type,
         source_device_id, source_port_id, source_text,
         dest_device_id, dest_port_id, dest_text, pulled, labeled, notes)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -509,7 +441,7 @@ export function createCable(bundleId: number, input: CableInput): Cable {
 export function updateCable(id: number, input: CableInput): Cable {
   getDb().run(
     `UPDATE cables SET
-       name = ?, cable_type_id = ?,
+       name = ?, cable_type = ?,
        source_device_id = ?, source_port_id = ?, source_text = ?,
        dest_device_id = ?, dest_port_id = ?, dest_text = ?,
        pulled = ?, labeled = ?, notes = ?,

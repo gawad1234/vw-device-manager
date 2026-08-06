@@ -28,20 +28,31 @@ Before running:
     every jack's IP + VLANs, so it shows in the Object Info palette when you
     select the DEVICE (the per-socket VWDM Port records can't be shown there),
     and a Data Tag on the device can display it. Also best-effort.
-  - DB_PATH_CANDIDATES below auto-detects the Mac and Windows paths.
+  - The project database is found automatically from the drawing's own path
+    (Foo.vwx -> Foo.vwdm beside it); save it there via the app's project menu >
+    Save a Copy As. No hardcoded paths — works the same on Mac and Windows.
 """
 
+import json
 import os
 import sqlite3
 import vs
 
-# The database lives in the same Dropbox folder on every machine, but the
-# absolute path to that folder differs per OS/user. Rather than hand-edit
-# this on each machine, list every known path and use the first that exists.
-# Add a new line here if you set the project up on another machine.
-DB_PATH_CANDIDATES = [
+# Each project is a SQLite database that lives BESIDE its drawing with a
+# matching name (Foo.vwx -> Foo.vwdm). resolve_project_db() derives that path
+# from the active document, so the same script finds the right database on any
+# machine with NO hardcoded paths. LEGACY_DB_CANDIDATES is only a last-resort
+# fallback to the old single shared database during the transition.
+PROJECT_EXT = ".vwdm"
+LEGACY_DB_CANDIDATES = [
     r"C:\Users\Gabe\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\vw-device-manager.sqlite3",
     "/Users/gabe/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/vw-device-manager.sqlite3",
+]
+# The network-signal list is a SHARED library (universal across all projects),
+# so it's one fixed file, not per-project — a small candidates list is fine here.
+LIBRARY_CANDIDATES = [
+    r"C:\Users\Gabe\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\library.json",
+    "/Users/gabe/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/library.json",
 ]
 
 # Device-level record.
@@ -89,8 +100,25 @@ SOCKET_FIELD_SIGNAL = "signal"
 DEFAULT_NETWORK_SIGNALS = {"LAN"}
 
 
-def resolve_db_path():
-    for path in DB_PATH_CANDIDATES:
+def active_doc_path():
+    """Full path of the active drawing, or '' if it's unsaved/unavailable."""
+    try:
+        p = vs.GetFPathName()
+    except Exception:
+        p = None
+    return (p or "").strip()
+
+
+def resolve_project_db():
+    """The project database for the current drawing: same folder + same base
+    name + .vwdm. Falls back to the legacy single-DB paths if there's no match
+    (e.g. an unsaved drawing during the transition). None if nothing is found."""
+    doc = active_doc_path()
+    if doc:
+        candidate = os.path.splitext(doc)[0] + PROJECT_EXT
+        if os.path.exists(candidate):
+            return candidate
+    for path in LEGACY_DB_CANDIDATES:
         if os.path.exists(path):
             return path
     return None
@@ -139,14 +167,21 @@ def read_type_and_location(h):
 
 
 def load_network_signals(conn):
-    """Signal names (uppercased) the app flags as network ports."""
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT signal FROM network_signals")
-        sigs = {r[0].strip().upper() for r in cur.fetchall() if r[0] and r[0].strip()}
-        return sigs or set(DEFAULT_NETWORK_SIGNALS)
-    except Exception:
-        return set(DEFAULT_NETWORK_SIGNALS)
+    """Signal names (uppercased) the app flags as network ports, read from the
+    SHARED library (data/library.json) — signals are universal across projects
+    now (see library.ts), not stored in the project database. `conn` is unused.
+    Falls back to DEFAULT_NETWORK_SIGNALS if the library can't be read."""
+    for path in LIBRARY_CANDIDATES:
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                sigs = {s.strip().upper() for s in data.get("networkSignals", []) if s and s.strip()}
+                if sigs:
+                    return sigs
+        except Exception:
+            pass
+    return set(DEFAULT_NETWORK_SIGNALS)
 
 
 def network_jacks(h, net_signals):
@@ -247,13 +282,16 @@ def write_port_records(cur, device_id, h, net_signals):
 
 
 def main():
-    db_path = resolve_db_path()
+    db_path = resolve_project_db()
     if db_path is None:
+        doc = active_doc_path()
+        expected = os.path.splitext(doc)[0] + PROJECT_EXT if doc else "(save the drawing first)"
         vs.AlrtDialog(
-            "Could not find the database on this machine. Tried:\n\n"
-            + "\n".join(DB_PATH_CANDIDATES)
-            + "\n\nIf the project lives somewhere else here, add that path to "
-            "DB_PATH_CANDIDATES near the top of this script."
+            "No project database found for this drawing.\n\n"
+            "In the app, use the project menu > Save a Copy As to save your "
+            "project next to this drawing with a matching name:\n\n"
+            + expected
+            + "\n\nThen re-run. (If the drawing is untitled, save the .vwx first.)"
         )
         return
 

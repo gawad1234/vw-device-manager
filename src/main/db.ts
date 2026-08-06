@@ -1,7 +1,6 @@
-import initSqlJs, { type Database } from 'sql.js'
+import initSqlJs, { type Database, type SqlJsStatic } from 'sql.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname } from 'path'
-import { getDbPath } from './paths'
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS subnets (
@@ -51,22 +50,12 @@ CREATE TABLE IF NOT EXISTS port_tagged_vlans (
   UNIQUE(port_id, subnet_id)
 );
 
--- ConnectCAD socket "signal" values the sync scripts treat as network ports.
--- Managed in the app's Settings tab; the scripts read this list from here.
-CREATE TABLE IF NOT EXISTS network_signals (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  signal TEXT NOT NULL UNIQUE COLLATE NOCASE
-);
+-- Network signals and cable types are NOT per-project — they live in the shared
+-- library (data/library.json, see library.ts) so they're universal across every
+-- project. Older project files may still carry vestigial network_signals /
+-- cable_types tables; they're ignored (the library was seeded from them once).
 
 -- ---- Cable bundle manager -------------------------------------------------
--- Managed cable-type catalog (Cat6, Fiber SM, XLR, …). Managed in Settings.
--- outer_diameter (for conduit-fill %) is a deliberate future addition.
-CREATE TABLE IF NOT EXISTS cable_types (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  notes TEXT
-);
-
 -- A bundle is a group of cables that travel together (conduit/tray/snake).
 -- length is bundle-level: cables in a bundle share the same run.
 CREATE TABLE IF NOT EXISTS bundles (
@@ -89,7 +78,8 @@ CREATE TABLE IF NOT EXISTS cables (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   bundle_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  cable_type_id INTEGER REFERENCES cable_types(id) ON DELETE SET NULL,
+  -- cable type by NAME (from the shared library, not a per-project id).
+  cable_type TEXT,
   source_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
   source_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
   source_text TEXT,
@@ -244,28 +234,130 @@ function migrateBundleColor(database: Database): void {
   database.exec('ALTER TABLE bundles ADD COLUMN color TEXT')
 }
 
-export async function initDb(): Promise<void> {
-  dbPath = getDbPath()
-  mkdirSync(dirname(dbPath), { recursive: true })
+/**
+ * Cable types moved to the shared library (by name), so a cable now stores its
+ * type NAME instead of a per-project `cable_type_id`. Rebuilds `cables` with a
+ * `cable_type` TEXT column, resolving each old id to its name from the (still
+ * present) `cable_types` table. Guarded on the old column existing.
+ */
+function migrateCableTypeToName(database: Database): void {
+  if (!tableExists(database, 'cables')) return
+  if (!tableHasColumn(database, 'cables', 'cable_type_id')) return
 
-  const SQL = await initSqlJs()
-  db = existsSync(dbPath) ? new SQL.Database(readFileSync(dbPath)) : new SQL.Database()
+  database.exec('BEGIN')
+  try {
+    database.exec(`
+      CREATE TABLE cables_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bundle_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        cable_type TEXT,
+        source_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+        source_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
+        source_text TEXT,
+        dest_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+        dest_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
+        dest_text TEXT,
+        pulled INTEGER NOT NULL DEFAULT 0,
+        labeled INTEGER NOT NULL DEFAULT 0,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO cables_new
+        (id, bundle_id, name, cable_type, source_device_id, source_port_id, source_text,
+         dest_device_id, dest_port_id, dest_text, pulled, labeled, notes, created_at, updated_at)
+        SELECT c.id, c.bundle_id, c.name, ct.name, c.source_device_id, c.source_port_id,
+         c.source_text, c.dest_device_id, c.dest_port_id, c.dest_text, c.pulled, c.labeled,
+         c.notes, c.created_at, c.updated_at
+        FROM cables c LEFT JOIN cable_types ct ON ct.id = c.cable_type_id;
+      DROP TABLE cables;
+      ALTER TABLE cables_new RENAME TO cables;
+    `)
+    database.exec('COMMIT')
+  } catch (e) {
+    database.exec('ROLLBACK')
+    throw e
+  }
+}
 
-  // Seed the default network signal only the first time the table is created,
-  // so a user who deletes 'LAN' on purpose won't get it re-added on relaunch.
-  const seedSignals = !tableExists(db, 'network_signals')
-  db.exec(SCHEMA)
-  migrateDevicesToPorts(db)
-  migrateAddSwitchColumns(db)
-  migrateCableLengthToBundle(db)
-  migrateCableChecklist(db)
-  migrateBundleColor(db)
-  if (seedSignals) db.run("INSERT INTO network_signals (signal) VALUES ('LAN')")
+// The sql.js WASM module is loaded once and reused across project switches.
+let sqlModule: SqlJsStatic | null = null
+
+async function ensureSql(): Promise<SqlJsStatic> {
+  if (!sqlModule) sqlModule = await initSqlJs()
+  return sqlModule
+}
+
+/** Bring a freshly loaded DB up to date: schema + all migrations. Network
+ *  signals / cable types are NOT here anymore — they live in the shared library. */
+function applySchemaAndMigrations(database: Database): void {
+  database.exec(SCHEMA)
+  migrateDevicesToPorts(database)
+  migrateAddSwitchColumns(database)
+  migrateCableLengthToBundle(database)
+  migrateCableChecklist(database)
+  migrateBundleColor(database)
+  migrateCableTypeToName(database)
+}
+
+/**
+ * Open (or create) the project database at `path` and make it the active DB.
+ * Loads the file if it exists (else starts empty), applies schema + migrations,
+ * and persists. Switching projects is just calling this again with another path.
+ */
+export async function openDb(path: string): Promise<void> {
+  const SQL = await ensureSql()
+  mkdirSync(dirname(path), { recursive: true })
+  db = existsSync(path) ? new SQL.Database(readFileSync(path)) : new SQL.Database()
+  dbPath = path
+  applySchemaAndMigrations(db)
   persist()
 }
 
+export function getCurrentDbPath(): string | null {
+  return dbPath
+}
+
+/**
+ * Read only the network-signal + cable-type catalogs out of a database file,
+ * read-only, without disturbing the active project. Used once to seed the
+ * shared library from the pre-split legacy database. Missing tables → empty.
+ */
+export async function readCatalogsFromFile(
+  path: string
+): Promise<{ networkSignals: string[]; cableTypes: { name: string; notes: string | null }[] }> {
+  const out = {
+    networkSignals: [] as string[],
+    cableTypes: [] as { name: string; notes: string | null }[]
+  }
+  if (!existsSync(path)) return out
+  const SQL = await ensureSql()
+  const tmp = new SQL.Database(readFileSync(path))
+  try {
+    try {
+      const res = tmp.exec('SELECT signal FROM network_signals ORDER BY signal COLLATE NOCASE')
+      out.networkSignals = res[0]?.values.map((r) => r[0] as string) ?? []
+    } catch {
+      /* no network_signals table */
+    }
+    try {
+      const res = tmp.exec('SELECT name, notes FROM cable_types ORDER BY name COLLATE NOCASE')
+      out.cableTypes = (res[0]?.values ?? []).map((r) => ({
+        name: r[0] as string,
+        notes: (r[1] as string | null) ?? null
+      }))
+    } catch {
+      /* no cable_types table */
+    }
+  } finally {
+    tmp.close()
+  }
+  return out
+}
+
 export function getDb(): Database {
-  if (!db) throw new Error('Database not initialized — call initDb() first')
+  if (!db) throw new Error('Database not initialized — call openDb() first')
   return db
 }
 

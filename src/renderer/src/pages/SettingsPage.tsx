@@ -32,7 +32,7 @@ function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
     e.preventDefault()
     if (!typeName.trim()) return
     try {
-      await window.api.cableTypes.create({ name: typeName.trim(), notes: typeNotes.trim() || null })
+      await window.api.cableTypes.add({ name: typeName.trim(), notes: typeNotes.trim() || null })
       setTypeName('')
       setTypeNotes('')
       setTypeError(null)
@@ -43,8 +43,9 @@ function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
   }
 
   async function removeCableType(t: CableType): Promise<void> {
-    if (!window.confirm(`Remove cable type "${t.name}"? Cables using it become untyped.`)) return
-    await window.api.cableTypes.remove(t.id)
+    if (!window.confirm(`Remove cable type "${t.name}"? Cables already tagged with it keep the label.`))
+      return
+    await window.api.cableTypes.remove(t.name)
     onChanged()
   }
 
@@ -116,7 +117,7 @@ function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
         <ul className="signal-list">
           {cableTypes.length === 0 && <li className="muted">No cable types yet.</li>}
           {cableTypes.map((t) => (
-            <li key={t.id}>
+            <li key={t.name}>
               <span>
                 <code>{t.name}</code>
                 {t.notes && <span className="muted"> — {t.notes}</span>}

@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Bundle, CableType, Device, Subnet } from '../../shared/types'
+import type { Bundle, CableType, Device, ProjectInfo, Subnet } from '../../shared/types'
 import SubnetsPage from './pages/SubnetsPage'
 import DevicesPage from './pages/DevicesPage'
 import CablesPage from './pages/CablesPage'
 import SettingsPage from './pages/SettingsPage'
+import ProjectMenu from './components/ProjectMenu'
 
 type Tab = 'devices' | 'subnets' | 'cables' | 'settings'
 
 function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('devices')
+  const [project, setProject] = useState<ProjectInfo | null>(null)
   const [subnets, setSubnets] = useState<Subnet[]>([])
   const [devices, setDevices] = useState<Device[]>([])
   const [bundles, setBundles] = useState<Bundle[]>([])
@@ -29,13 +31,27 @@ function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    window.api.projects.current().then(setProject)
     refresh().finally(() => setLoading(false))
   }, [refresh])
+
+  // Switching projects swaps the whole database — reload everything.
+  const handleSwitch = useCallback(
+    (info: ProjectInfo) => {
+      setProject(info)
+      setLoading(true)
+      refresh().finally(() => setLoading(false))
+    },
+    [refresh]
+  )
 
   return (
     <div className="app">
       <header className="app-header">
-        <h1>ConnectCAD Device Manager</h1>
+        <div className="app-header-left">
+          <h1>ConnectCAD Device Manager</h1>
+          <ProjectMenu current={project} onSwitched={handleSwitch} />
+        </div>
         <nav className="tabs">
           <button
             className={`tab ${tab === 'devices' ? 'active' : ''}`}
