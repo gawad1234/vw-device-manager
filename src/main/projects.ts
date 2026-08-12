@@ -8,7 +8,7 @@ import type { ProjectInfo } from '../shared/types'
 // A project is a plain SQLite database; this friendly extension keeps it
 // distinct and lets the VW scripts find it beside the .vwx (Foo.vwx ↔ Foo.vwdm).
 const PROJECT_EXT = '.vwdm'
-const FILTERS = [{ name: 'VW Device Manager Project', extensions: ['vwdm'] }]
+const FILTERS = [{ name: 'Device Manager Project', extensions: ['vwdm'] }]
 const MAX_RECENT = 12
 
 interface Settings {

@@ -1,7 +1,10 @@
 appId: com.gawad.vwdevicemanager
-productName: vw-device-manager
+productName: Device Manager
 directories:
   buildResources: build
+# Ad-hoc sign the macOS app after packing (we ship unsigned; without a valid
+# seal an Apple-Silicon build launches as "damaged"). See build/after-pack.cjs.
+afterPack: build/after-pack.cjs
 files:
   - '!**/.vscode/*'
   - '!src/*'
@@ -27,6 +30,10 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  # Keep artifact FILE names space-free (GitHub rewrites spaces to dots on
+  # upload, which would break the latest-mac.yml auto-update URL). The app's
+  # display name is still "Device Manager" via productName.
+  artifactName: ${name}-${version}-${arch}-mac.${ext}
   target:
     - dmg
     - zip
