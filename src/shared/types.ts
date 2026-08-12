@@ -137,7 +137,7 @@ export interface ProjectInfo {
 export interface ExportOptions {
   scope: 'bundle' | 'all'
   bundleId?: number
-  doc: 'pullsheet' | 'schedule' | 'labels'
+  doc: 'pullsheet' | 'schedule' | 'labels' | 'ipschedule'
   format: 'pdf' | 'xlsx' | 'csv'
   labelStyle?: 'cards' | 'flag'
 }
@@ -207,5 +207,10 @@ export interface VwDeviceManagerApi {
   showLogo: {
     get: () => Promise<string | null>
     set: (dataUrl: string | null) => Promise<void>
+  }
+  /** Per-project (per-show) name, stamped onto paperwork headers/footers. */
+  showName: {
+    get: () => Promise<string | null>
+    set: (name: string | null) => Promise<void>
   }
 }

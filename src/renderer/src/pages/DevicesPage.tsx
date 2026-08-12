@@ -1,6 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Device, Subnet } from '../../../shared/types'
 import DeviceModal from '../components/DeviceModal'
+import ExportMenu, { type ExportSection } from '../components/ExportMenu'
+
+const IP_SECTIONS: ExportSection[] = [
+  {
+    label: 'IP schedule',
+    items: [
+      { label: 'PDF', doc: 'ipschedule', format: 'pdf' },
+      { label: 'Excel', doc: 'ipschedule', format: 'xlsx' },
+      { label: 'CSV', doc: 'ipschedule', format: 'csv' }
+    ]
+  }
+]
 
 interface Props {
   devices: Device[]
@@ -42,6 +54,9 @@ function DevicesPage({ devices, subnets, onChanged }: Props): React.JSX.Element 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {devices.length > 0 && (
+            <ExportMenu scope="all" label="Export IP schedule" sections={IP_SECTIONS} />
+          )}
           <button className="btn btn-primary" onClick={() => setOpenId('new')}>
             + Add device
           </button>

@@ -75,6 +75,10 @@ const api: VwDeviceManagerApi = {
   showLogo: {
     get: () => ipcRenderer.invoke('showLogo:get'),
     set: (dataUrl: string | null) => ipcRenderer.invoke('showLogo:set', dataUrl)
+  },
+  showName: {
+    get: () => ipcRenderer.invoke('showName:get'),
+    set: (name: string | null) => ipcRenderer.invoke('showName:set', name)
   }
 }
 

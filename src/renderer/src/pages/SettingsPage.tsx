@@ -40,11 +40,17 @@ function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
   const [typeNotes, setTypeNotes] = useState('')
   const [typeError, setTypeError] = useState<string | null>(null)
   const [logo, setLogo] = useState<string | null>(null)
+  const [showName, setShowName] = useState('')
 
   useEffect(() => {
     window.api.networkSignals.list().then(setSignals)
     window.api.showLogo.get().then(setLogo)
+    window.api.showName.get().then((n) => setShowName(n ?? ''))
   }, [])
+
+  async function saveShowName(): Promise<void> {
+    await window.api.showName.set(showName.trim() || null)
+  }
 
   async function onLogoFile(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = e.target.files?.[0]
@@ -99,11 +105,20 @@ function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
       </div>
 
       <div className="panel">
-        <h3>Show logo</h3>
+        <h3>Show branding</h3>
         <p className="muted">
-          Appears on this project&rsquo;s generated paperwork (pull sheets, schedules, labels).
-          PNG or JPG; it&rsquo;s stored inside this project file, so each show can have its own.
+          Stamped onto this project&rsquo;s generated paperwork (pull sheets, schedules, IP
+          schedule, labels). Stored inside this project file, so each show has its own.
         </p>
+        <label className="show-name-field">
+          Show name
+          <input
+            value={showName}
+            onChange={(e) => setShowName(e.target.value)}
+            onBlur={saveShowName}
+            placeholder="e.g. Sound Associates — Miami"
+          />
+        </label>
         <div className="logo-row">
           {logo && (
             <div className="logo-preview">

@@ -76,4 +76,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('showLogo:set', (_e, dataUrl: string | null) =>
     repo.setProjectMeta('logo', dataUrl)
   )
+  ipcMain.handle('showName:get', () => repo.getProjectMeta('showName'))
+  ipcMain.handle('showName:set', (_e, name: string | null) =>
+    repo.setProjectMeta('showName', name)
+  )
 }

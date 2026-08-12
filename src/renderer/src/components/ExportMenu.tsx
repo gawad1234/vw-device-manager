@@ -7,17 +7,23 @@ interface Props {
   label?: string
   /** open the dropdown upward (for use in a modal footer near the bottom) */
   dropUp?: boolean
+  /** override the menu contents (defaults to the cable export sections) */
+  sections?: ExportSection[]
 }
 
-interface Item {
+export interface ExportItem {
   label: string
   doc: ExportOptions['doc']
   format: ExportOptions['format']
   labelStyle?: ExportOptions['labelStyle']
 }
+export interface ExportSection {
+  label: string
+  items: ExportItem[]
+}
 
 // Sensible document → format offerings (labels are PDF-only, in two styles).
-const SECTIONS: { label: string; items: Item[] }[] = [
+const CABLE_SECTIONS: ExportSection[] = [
   {
     label: 'Pull sheet',
     items: [
@@ -43,7 +49,13 @@ const SECTIONS: { label: string; items: Item[] }[] = [
   }
 ]
 
-function ExportMenu({ scope, bundleId, label = 'Export', dropUp }: Props): React.JSX.Element {
+function ExportMenu({
+  scope,
+  bundleId,
+  label = 'Export',
+  dropUp,
+  sections = CABLE_SECTIONS
+}: Props): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -56,7 +68,7 @@ function ExportMenu({ scope, bundleId, label = 'Export', dropUp }: Props): React
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
-  async function run(item: Item): Promise<void> {
+  async function run(item: ExportItem): Promise<void> {
     setBusy(true)
     try {
       await window.api.exports.run({
@@ -79,7 +91,7 @@ function ExportMenu({ scope, bundleId, label = 'Export', dropUp }: Props): React
       </button>
       {open && (
         <div className={`project-dropdown export-dropdown${dropUp ? ' drop-up' : ''}`}>
-          {SECTIONS.map((s, i) => (
+          {sections.map((s, i) => (
             <div key={s.label}>
               {i > 0 && <div className="menu-sep" />}
               <div className="menu-label">{s.label}</div>

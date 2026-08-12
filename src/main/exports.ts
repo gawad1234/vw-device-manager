@@ -1,8 +1,13 @@
 import { BrowserWindow, dialog, shell } from 'electron'
 import { writeFileSync } from 'fs'
 import ExcelJS from 'exceljs'
-import { getProjectMeta, listBundles, listDevices } from './repository'
+import { getProjectMeta, listBundles, listDevices, listSubnets } from './repository'
 import type { Bundle, CableEndpoint, ExportOptions } from '../shared/types'
+
+// The show name for the export in progress — read once in exportDocument and
+// used by the shared page() header and printToPDF footer (avoids threading it
+// through every renderer).
+let docShowName: string | null = null
 
 // ---- Endpoint resolution -------------------------------------------------
 // A cable endpoint is a device (+ optional port) or free text. Resolve it to a
@@ -160,7 +165,10 @@ function esc(s: string): string {
 }
 
 function page(title: string, body: string, logo: string | null): string {
-  const header = `<header class="ph"><h1>${esc(title)}</h1>${
+  const titleBlock = docShowName
+    ? `<div class="show">${esc(docShowName)}</div><div class="doctitle">${esc(title)}</div>`
+    : `<div class="show">${esc(title)}</div>`
+  const header = `<header class="ph"><div class="ph-l">${titleBlock}</div>${
     logo ? `<img class="logo" src="${logo}" alt="logo">` : ''
   }</header>`
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
@@ -169,9 +177,16 @@ function page(title: string, body: string, logo: string | null): string {
            color: #1b1b1f; margin: 0; padding: 22px; font-size: 12px; }
     .ph { display: flex; align-items: center; justify-content: space-between; gap: 16px;
           border-bottom: 2px solid #dddddd; padding-bottom: 10px; margin-bottom: 16px; }
-    .ph h1 { margin: 0; }
-    .logo { max-height: 60px; max-width: 240px; object-fit: contain; }
+    .ph-l { display: flex; flex-direction: column; gap: 2px; }
+    .show { font-size: 18px; font-weight: 700; }
+    .doctitle { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
+    .logo { max-height: 62px; max-width: 260px; object-fit: contain; }
     h1 { font-size: 18px; margin: 0 0 14px; }
+    .sec { margin: 20px 0 6px; }
+    .dcell { font-weight: 600; vertical-align: middle; }
+    table.grouped td { vertical-align: middle; }
+    tr.g0 > td { background: #ffffff; }
+    tr.g1 > td { background: #eef2f7; }
     section { margin-bottom: 20px; page-break-inside: avoid; }
     h2 { font-size: 14px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
     .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid #0003; }
@@ -280,15 +295,200 @@ function flagLabelsHtml(bundles: Bundle[], idx: DeviceIndex, logo: string | null
   return page('Cable Labels (wrap flags)', `<div class="flags">${flags}</div>`, logo)
 }
 
+// ---- IP schedule (device-side) + generic table renderers ----------------
+interface Table {
+  headers: string[]
+  rows: string[][]
+}
+
+/** Numeric VLAN for sorting; non-numeric / blank sorts last. */
+function vlanSortKey(vlan: string): number {
+  const n = parseInt(vlan, 10)
+  return Number.isNaN(n) ? Number.MAX_SAFE_INTEGER : n
+}
+
+/** One row per port (blank IP shown if unassigned), plus a switch's
+ *  management / out-of-band IPs. Sorted by VLAN, then grouped by device. */
+function ipScheduleTable(): Table {
+  const subnets = new Map(listSubnets().map((s) => [s.id, s]))
+  const raw: {
+    device: string
+    port: string
+    ip: string
+    net: string
+    cidr: string
+    vlan: string
+    mac: string
+    type: string
+    location: string
+  }[] = []
+
+  for (const d of listDevices()) {
+    const base = {
+      device: d.name,
+      mac: d.macAddress ?? '',
+      type: d.deviceType ?? '',
+      location: d.location ?? ''
+    }
+    for (const p of d.ports) {
+      const s = p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId) : undefined
+      raw.push({
+        ...base,
+        port: p.label,
+        ip: p.ipAddress ?? '',
+        net: s?.name ?? '',
+        cidr: s?.cidr ?? '',
+        vlan: s?.vlan ?? ''
+      })
+    }
+    if (d.isSwitch) {
+      if (d.managementIp)
+        raw.push({ ...base, port: 'Management', ip: d.managementIp, net: '', cidr: '', vlan: '' })
+      if (d.oobIp)
+        raw.push({ ...base, port: 'Out-of-band', ip: d.oobIp, net: '', cidr: '', vlan: '' })
+    }
+  }
+
+  // Sort by VLAN, then group by device name, then port.
+  raw.sort(
+    (a, b) =>
+      vlanSortKey(a.vlan) - vlanSortKey(b.vlan) ||
+      a.device.localeCompare(b.device) ||
+      a.port.localeCompare(b.port)
+  )
+  return {
+    headers: ['Device', 'Port', 'IP Address', 'Network', 'CIDR', 'VLAN', 'MAC', 'Type', 'Location'],
+    rows: raw.map((r) => [r.device, r.port, r.ip, r.net, r.cidr, r.vlan, r.mac, r.type, r.location])
+  }
+}
+
+function tableCsv(t: Table): string {
+  return [t.headers, ...t.rows].map((r) => r.map((c) => csvCell(String(c))).join(',')).join('\r\n')
+}
+
+async function tableXlsx(t: Table, logo: string | null): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('IP Schedule')
+  ws.columns = t.headers.map((h) => ({
+    header: h,
+    key: h,
+    width: Math.max(10, Math.min(30, h.length + 8))
+  }))
+  const img = parseImageDataUrl(logo)
+  const headerRowNum = img ? 5 : 1
+  if (img) {
+    ws.spliceRows(1, 0, [], [], [], [])
+    const imgId = wb.addImage({ base64: img.base64, extension: img.extension })
+    ws.addImage(imgId, { tl: { col: 0, row: 0 }, ext: { width: 170, height: 60 } })
+  }
+  ws.getRow(headerRowNum).font = { bold: true }
+  ws.views = [{ state: 'frozen', ySplit: headerRowNum }]
+  for (const r of t.rows) ws.addRow(r)
+  return (await wb.xlsx.writeBuffer()) as unknown as Buffer
+}
+
+/**
+ * IP schedule PDF: two sections (switch port-config, then device IPs). Each
+ * device's device-level columns are one merged cell (rowspan) instead of
+ * repeating, and each device group alternates shade. Ports within a device are
+ * ordered by VLAN.
+ */
+function ipScheduleHtml(logo: string | null): string {
+  const subnets = new Map(listSubnets().map((s) => [s.id, s]))
+  const subLabel = (id: number | null): string => {
+    if (id == null) return ''
+    const s = subnets.get(id)
+    if (!s) return ''
+    return s.vlan ? `VLAN ${s.vlan}${s.name ? ` (${s.name})` : ''}` : s.name
+  }
+  const portVlan = (p: { untaggedSubnetId: number | null }): number =>
+    vlanSortKey(
+      (p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId)?.vlan : '') ?? ''
+    )
+
+  const devices = listDevices()
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const sortedPorts = <T extends { untaggedSubnetId: number | null; label: string }>(
+    ports: T[]
+  ): T[] => ports.slice().sort((a, b) => portVlan(a) - portVlan(b) || a.label.localeCompare(b.label))
+
+  // Build a grouped table: `lead(device)` = the merged device-level cells for a
+  // group's first row; `cells(port)` = the per-port cells. Empty devices get one
+  // blank row so they still appear.
+  function groupedTable(
+    heading: string,
+    headers: string[],
+    group: typeof devices,
+    lead: (d: (typeof devices)[number], span: number) => string,
+    cells: (d: (typeof devices)[number], p: (typeof devices)[number]['ports'][number] | null) => string
+  ): string {
+    if (!group.length) return ''
+    const rows = group
+      .map((d, gi) => {
+        const ports = sortedPorts(d.ports)
+        const list = ports.length ? ports : [null]
+        return list
+          .map((p, i) => `<tr class="g${gi % 2}">${i === 0 ? lead(d, list.length) : ''}${cells(d, p)}</tr>`)
+          .join('')
+      })
+      .join('')
+    const head = headers.map((h) => `<th>${esc(h)}</th>`).join('')
+    return `<h2 class="sec">${esc(heading)}</h2><table class="grouped"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`
+  }
+
+  const switchTable = groupedTable(
+    'Network switches — port config',
+    ['Switch', 'Mgmt IP', 'OOB IP', 'Port', 'Native VLAN', 'Tagged VLANs'],
+    devices.filter((d) => d.isSwitch),
+    (d, span) =>
+      `<td rowspan="${span}" class="dcell">${esc(d.name)}</td><td rowspan="${span}">${esc(
+        d.managementIp || '—'
+      )}</td><td rowspan="${span}">${esc(d.oobIp || '—')}</td>`,
+    (_d, p) =>
+      `<td>${p ? esc(p.label) : '—'}</td><td>${esc(p ? subLabel(p.untaggedSubnetId) : '')}</td><td>${esc(
+        p ? p.taggedSubnetIds.map((id) => subLabel(id)).filter(Boolean).join(', ') : ''
+      )}</td>`
+  )
+
+  const deviceTable = groupedTable(
+    'Devices',
+    ['Device', 'MAC', 'Type', 'Location', 'Port', 'IP Address', 'Network', 'VLAN'],
+    devices.filter((d) => !d.isSwitch),
+    (d, span) =>
+      `<td rowspan="${span}" class="dcell">${esc(d.name)}</td><td rowspan="${span}">${esc(
+        d.macAddress || ''
+      )}</td><td rowspan="${span}">${esc(d.deviceType || '')}</td><td rowspan="${span}">${esc(
+        d.location || ''
+      )}</td>`,
+    (_d, p) => {
+      const s = p && p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId) : undefined
+      return `<td>${p ? esc(p.label) : '—'}</td><td>${p && p.ipAddress ? esc(p.ipAddress) : ''}</td><td>${esc(
+        s?.name || ''
+      )}</td><td>${esc(s?.vlan || '')}</td>`
+    }
+  )
+
+  return page('IP Schedule', switchTable + deviceTable || '<p>No devices yet.</p>', logo)
+}
+
 async function htmlToPdf(html: string, landscape: boolean): Promise<Buffer> {
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: false } })
   try {
     await win.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+    // Running footer on every page: show name (left) + "Page X of Y" (right).
+    const footer =
+      '<div style="width:100%;font-size:8px;color:#888;padding:0 0.4in;display:flex;justify-content:space-between;">' +
+      `<span>${esc(docShowName || '')}</span>` +
+      '<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>'
     const pdf = await win.webContents.printToPDF({
       printBackground: true,
       landscape,
       pageSize: 'Letter',
-      margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 }
+      displayHeaderFooter: true,
+      headerTemplate: '<span></span>',
+      footerTemplate: footer,
+      margins: { top: 0.5, bottom: 0.6, left: 0.5, right: 0.5 }
     })
     return pdf
   } finally {
@@ -300,15 +500,35 @@ async function htmlToPdf(html: string, landscape: boolean): Promise<Buffer> {
 const DOC_LABEL: Record<ExportOptions['doc'], string> = {
   pullsheet: 'pull sheet',
   schedule: 'cable schedule',
-  labels: 'labels'
+  labels: 'labels',
+  ipschedule: 'IP schedule'
 }
 
 export async function exportDocument(opts: ExportOptions): Promise<string | null> {
+  const logo = getProjectMeta('logo') // per-show logo stamped onto paperwork
+  docShowName = getProjectMeta('showName') // used by page() header + pdf footer
+
+  // The IP schedule is project-wide device data — its own path (no bundles).
+  if (opts.doc === 'ipschedule') {
+    const res = await dialog.showSaveDialog({
+      defaultPath: `IP schedule.${opts.format}`,
+      filters: [{ name: opts.format.toUpperCase(), extensions: [opts.format] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    const outPath = res.filePath
+    // PDF gets the sectioned/merged layout; xlsx/csv stay flat (better for
+    // filtering) via the plain table.
+    if (opts.format === 'csv') writeFileSync(outPath, tableCsv(ipScheduleTable()), 'utf-8')
+    else if (opts.format === 'xlsx') writeFileSync(outPath, await tableXlsx(ipScheduleTable(), logo))
+    else writeFileSync(outPath, await htmlToPdf(ipScheduleHtml(logo), true))
+    shell.openPath(outPath)
+    return outPath
+  }
+
   const idx = buildDeviceIndex()
   const bundles = collectBundles(opts)
   const includeBundle = opts.scope === 'all'
   const rows = bundles.flatMap((b) => bundleToRows(b, idx))
-  const logo = getProjectMeta('logo') // per-show logo stamped onto paperwork
 
   const base = opts.scope === 'bundle' ? (bundles[0]?.name ?? 'Bundle') : 'All bundles'
   const defaultName = `${base} ${DOC_LABEL[opts.doc]}.${opts.format}`.replace(/[/\\:]/g, '-')
