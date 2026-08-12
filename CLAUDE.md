@@ -84,6 +84,12 @@ before changing anything that touches the sync contract (field names,
 
 ## Git
 
-Local-only repo, no remote — cross-machine sync happens via Dropbox, not
-git push/pull. `Launch App.bat` and `vectorworks-scripts/` are currently
-untracked (see `PROGRESS.md` for whether that's still true).
+**Public** GitHub repo — `git@github.com:gawad1234/vw-device-manager` (SSH),
+default branch `master`. Releases are published here (electron-builder +
+`gh release create`) and the app's auto-updater reads that Releases feed, so
+**code + installers go through GitHub**. Note the *data* still travels via
+Dropbox, not git: the `*.vwdm` project databases and `data/library.json` are
+gitignored and Dropbox-synced across machines. `Launch App.bat`,
+`Launch App.command`, and `vectorworks-scripts/` are tracked. Before publishing
+anything, remember the repo is public — no secrets, no client data (see the
+2026-08-12 `PROGRESS.md` entry for the pre-public scrub).
