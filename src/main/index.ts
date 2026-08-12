@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { openStartupProject } from './projects'
 import { ensureLibrary } from './library'
 import { getDataVersion } from './db'
+import { initUpdater } from './updater'
 import { registerIpcHandlers } from './ipc'
 
 function createWindow(): void {
@@ -51,6 +52,9 @@ function createWindow(): void {
   }, 1500)
   mainWindow.on('focus', checkExternalChanges)
   mainWindow.on('closed', () => clearInterval(poll))
+
+  // Check GitHub Releases for a newer version (packaged builds only).
+  initUpdater(mainWindow)
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.

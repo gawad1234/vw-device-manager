@@ -45,15 +45,17 @@ import vs
 # machine with NO hardcoded paths. LEGACY_DB_CANDIDATES is only a last-resort
 # fallback to the old single shared database during the transition.
 PROJECT_EXT = ".vwdm"
+# `~` expands to the current user's home on any machine — edit the folder part to
+# wherever your Dropbox/workspace actually lives (Windows first, then macOS).
 LEGACY_DB_CANDIDATES = [
-    r"C:\Users\Gabe\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\vw-device-manager.sqlite3",
-    "/Users/gabe/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/vw-device-manager.sqlite3",
+    os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\vw-device-manager.sqlite3"),
+    os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/vw-device-manager.sqlite3"),
 ]
 # The network-signal list is a SHARED library (universal across all projects),
 # so it's one fixed file, not per-project — a small candidates list is fine here.
 LIBRARY_CANDIDATES = [
-    r"C:\Users\Gabe\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\library.json",
-    "/Users/gabe/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/library.json",
+    os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\library.json"),
+    os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/library.json"),
 ]
 
 # Device-level record.
@@ -202,7 +204,7 @@ def network_jacks(h, net_signals):
 
 def build_ports_summary(cur, device_id):
     """One readable line per port for the device-level vwdm_ports field, e.g.:
-        1GB A: 10.46.20.102 [Mgmt] +Prod, Guest
+        1GB A: 10.0.20.102 [Mgmt] +Prod, Guest
         1GB B: [Prod]
     This is what the Object Info palette / a Data Tag on the device can show,
     since the per-socket records aren't reachable there."""

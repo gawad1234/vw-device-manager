@@ -11,9 +11,10 @@ Only touch this loader if the project folder ever moves (update the paths).
 import os
 
 # Same cross-machine idea as DB_PATH_CANDIDATES: first path that exists wins.
+# `~` expands to your home dir; edit the folder part to match where you keep this.
 TARGET_CANDIDATES = [
-    r"C:\Users\Gabe\Dropbox\Claude\Database Vectorworks\vw-device-manager\vectorworks-scripts\sync_app_to_drawing.py",
-    "/Users/gabe/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/vectorworks-scripts/sync_app_to_drawing.py",
+    os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\vectorworks-scripts\sync_app_to_drawing.py"),
+    os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/vectorworks-scripts/sync_app_to_drawing.py"),
 ]
 
 

@@ -122,8 +122,8 @@ field named `vwdm_ports` to the `VWDM Sync` record (one-time). On each sync,
 every device's record gets a readable summary of all its jacks, e.g.:
 
 ```
-LAN: 10.46.90.101 [KVM Net]
-1GB A: 10.46.20.102 [Mgmt] +Prod, Guest
+LAN: 10.0.10.101 [KVM Net]
+1GB A: 10.0.20.102 [Mgmt] +Prod, Guest
 ```
 
 Because this is on the **device** (which you *can* select), it shows in the

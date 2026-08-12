@@ -116,7 +116,7 @@ function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
             value={showName}
             onChange={(e) => setShowName(e.target.value)}
             onBlur={saveShowName}
-            placeholder="e.g. Sound Associates — Miami"
+            placeholder="e.g. Summer Tour — Chicago"
           />
         </label>
         <div className="logo-row">

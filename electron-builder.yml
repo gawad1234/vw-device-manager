@@ -1,4 +1,4 @@
-appId: com.electron.app
+appId: com.gawad.vwdevicemanager
 productName: vw-device-manager
 directories:
   buildResources: build
@@ -9,6 +9,14 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!data'
+  - '!dist'
+  - '!vectorworks-scripts'
+  - '!*.command'
+  - '!*.bat'
+  # Dropbox sync conflict artifacts (e.g. "node_modules 2") — never bundle them
+  - '!node_modules 2'
+  - '!**/*conflicted copy*'
 asarUnpack:
   - resources/**
 win:
@@ -19,6 +27,9 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  target:
+    - dmg
+    - zip
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
@@ -39,5 +50,6 @@ appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  owner: gawad1234
+  repo: vw-device-manager

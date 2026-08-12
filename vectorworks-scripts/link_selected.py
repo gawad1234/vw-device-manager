@@ -47,15 +47,17 @@ import vs
 # machine with NO hardcoded paths. LEGACY_DB_CANDIDATES is only a last-resort
 # fallback to the old single shared database during the transition.
 PROJECT_EXT = ".vwdm"
+# `~` expands to the current user's home on any machine — edit the folder part to
+# wherever your Dropbox/workspace actually lives (Windows first, then macOS).
 LEGACY_DB_CANDIDATES = [
-    r"C:\Users\Gabe\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\vw-device-manager.sqlite3",
-    "/Users/gabe/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/vw-device-manager.sqlite3",
+    os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\vw-device-manager.sqlite3"),
+    os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/vw-device-manager.sqlite3"),
 ]
 # The network-signal list is a SHARED library (universal across all projects),
 # so it's one fixed file, not per-project — a small candidates list is fine here.
 LIBRARY_CANDIDATES = [
-    r"C:\Users\Gabe\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\library.json",
-    "/Users/gabe/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/library.json",
+    os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\library.json"),
+    os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/library.json"),
 ]
 RECORD_NAME = "VWDM Sync"
 FIELD_ID = "vwdm_id"
