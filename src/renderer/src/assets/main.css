@@ -176,6 +176,49 @@ code {
   padding: 4px 10px 2px;
 }
 
+/* Export dropdown: narrower, right-aligned (buttons sit on the right / in a
+   modal footer); .drop-up opens above the button. */
+.export-dropdown {
+  min-width: 168px;
+  left: auto;
+  right: 0;
+}
+
+.export-dropdown.drop-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+/* ---- Show logo (Settings) -------------------------------------------- */
+
+.logo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.logo-preview {
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: inline-flex;
+}
+
+.logo-preview img {
+  max-height: 70px;
+  max-width: 240px;
+  display: block;
+}
+
+/* a <label> styled as a button, wrapping a hidden file input */
+.file-btn {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
 .app-main {
   flex: 1;
   padding: 32px 28px;

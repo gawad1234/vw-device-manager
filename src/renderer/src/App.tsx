@@ -98,7 +98,7 @@ function App(): React.JSX.Element {
             onChanged={refresh}
           />
         ) : (
-          <SettingsPage cableTypes={cableTypes} onChanged={refresh} />
+          <SettingsPage key={project?.path} cableTypes={cableTypes} onChanged={refresh} />
         )}
       </main>
     </div>

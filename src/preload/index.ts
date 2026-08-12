@@ -5,6 +5,7 @@ import type {
   CableInput,
   CableTypeInput,
   DeviceInput,
+  ExportOptions,
   PortInput,
   SubnetInput,
   VwDeviceManagerApi
@@ -67,6 +68,13 @@ const api: VwDeviceManagerApi = {
     const listener = (): void => cb()
     ipcRenderer.on('data-changed', listener)
     return () => ipcRenderer.removeListener('data-changed', listener)
+  },
+  exports: {
+    run: (opts: ExportOptions) => ipcRenderer.invoke('export:run', opts)
+  },
+  showLogo: {
+    get: () => ipcRenderer.invoke('showLogo:get'),
+    set: (dataUrl: string | null) => ipcRenderer.invoke('showLogo:set', dataUrl)
   }
 }
 

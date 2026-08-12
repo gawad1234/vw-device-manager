@@ -50,6 +50,13 @@ CREATE TABLE IF NOT EXISTS port_tagged_vlans (
   UNIQUE(port_id, subnet_id)
 );
 
+-- Per-project (per-show) key/value settings, e.g. the show logo (a data URL)
+-- stamped onto generated paperwork. Travels inside the .vwdm.
+CREATE TABLE IF NOT EXISTS project_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
 -- Network signals and cable types are NOT per-project — they live in the shared
 -- library (data/library.json, see library.ts) so they're universal across every
 -- project. Older project files may still carry vestigial network_signals /

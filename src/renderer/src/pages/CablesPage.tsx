@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Bundle, CableType, Device } from '../../../shared/types'
 import BundleModal from '../components/BundleModal'
+import ExportMenu from '../components/ExportMenu'
 
 interface Props {
   bundles: Bundle[]
@@ -42,6 +43,7 @@ function CablesPage({ bundles, devices, cableTypes, onChanged }: Props): React.J
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {bundles.length > 0 && <ExportMenu scope="all" label="Export all" />}
           <button className="btn btn-primary" onClick={() => setOpenId('new')}>
             + Add bundle
           </button>

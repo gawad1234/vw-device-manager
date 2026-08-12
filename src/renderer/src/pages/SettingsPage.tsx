@@ -6,16 +6,59 @@ interface Props {
   onChanged: () => void
 }
 
+/** Read an image File, downscale it to `maxW` px wide, return a PNG data URL —
+ *  keeps the logo small enough to store inside the project file. */
+function downscaleImage(file: File, maxW: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = reject
+    reader.onload = () => {
+      const img = new Image()
+      img.onerror = reject
+      img.onload = () => {
+        const scale = Math.min(1, maxW / img.width)
+        const w = Math.max(1, Math.round(img.width * scale))
+        const h = Math.max(1, Math.round(img.height * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return reject(new Error('no canvas context'))
+        ctx.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/png'))
+      }
+      img.src = reader.result as string
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
 function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
   const [signals, setSignals] = useState<string[]>([])
   const [signalInput, setSignalInput] = useState('')
   const [typeName, setTypeName] = useState('')
   const [typeNotes, setTypeNotes] = useState('')
   const [typeError, setTypeError] = useState<string | null>(null)
+  const [logo, setLogo] = useState<string | null>(null)
 
   useEffect(() => {
     window.api.networkSignals.list().then(setSignals)
+    window.api.showLogo.get().then(setLogo)
   }, [])
+
+  async function onLogoFile(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = e.target.files?.[0]
+    e.target.value = '' // let the same file be re-picked later
+    if (!file) return
+    const dataUrl = await downscaleImage(file, 500)
+    await window.api.showLogo.set(dataUrl)
+    setLogo(dataUrl)
+  }
+
+  async function removeLogo(): Promise<void> {
+    await window.api.showLogo.set(null)
+    setLogo(null)
+  }
 
   async function addSignal(e: React.FormEvent): Promise<void> {
     e.preventDefault()
@@ -53,6 +96,32 @@ function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
     <div className="page">
       <div className="page-header">
         <h2>Settings</h2>
+      </div>
+
+      <div className="panel">
+        <h3>Show logo</h3>
+        <p className="muted">
+          Appears on this project&rsquo;s generated paperwork (pull sheets, schedules, labels).
+          PNG or JPG; it&rsquo;s stored inside this project file, so each show can have its own.
+        </p>
+        <div className="logo-row">
+          {logo && (
+            <div className="logo-preview">
+              <img src={logo} alt="Show logo" />
+            </div>
+          )}
+          <div className="signal-add">
+            <label className="btn btn-small btn-primary file-btn">
+              {logo ? 'Replace…' : 'Choose image…'}
+              <input type="file" accept="image/png,image/jpeg" hidden onChange={onLogoFile} />
+            </label>
+            {logo && (
+              <button className="btn btn-small btn-danger" onClick={removeLogo}>
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="panel">

@@ -480,4 +480,23 @@ export function updateBundle(id: number, input: BundleInput): Bundle {
 
 export function deleteBundle(id: number): void {
   dbRun('DELETE FROM cables WHERE bundle_id = ?', [id])
-  dbRun('DELETE FROM bundles WHERE id = ?', [id])}
+  dbRun('DELETE FROM bundles WHERE id = ?', [id])
+}
+
+// ---- Project meta (per-show settings, e.g. logo) ------------------------
+
+export function getProjectMeta(key: string): string | null {
+  const row = queryOne('SELECT value FROM project_meta WHERE key = ?', [key])
+  return row ? ((row.value as string | null) ?? null) : null
+}
+
+export function setProjectMeta(key: string, value: string | null): void {
+  if (value == null) {
+    dbRun('DELETE FROM project_meta WHERE key = ?', [key])
+  } else {
+    dbRun(
+      'INSERT INTO project_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      [key, value]
+    )
+  }
+}

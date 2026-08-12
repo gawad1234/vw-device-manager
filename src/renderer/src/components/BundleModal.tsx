@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Bundle, BundleInput, CableType, Device } from '../../../shared/types'
 import Modal from './Modal'
 import BundleCables from './BundleCables'
+import ExportMenu from './ExportMenu'
 
 // Preset palette for color-coding bundles (readable on the dark theme).
 const BUNDLE_COLORS = [
@@ -93,9 +94,12 @@ function BundleModal({
   const footer = (
     <>
       {bundle && (
-        <button className="btn btn-danger" onClick={handleDelete}>
-          Delete
-        </button>
+        <>
+          <button className="btn btn-danger" onClick={handleDelete}>
+            Delete
+          </button>
+          <ExportMenu scope="bundle" bundleId={bundle.id} dropUp />
+        </>
       )}
       <span className="footer-spacer" />
       <button className="btn" onClick={onClose}>

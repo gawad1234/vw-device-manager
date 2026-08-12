@@ -2,11 +2,13 @@ import { ipcMain } from 'electron'
 import * as repo from './repository'
 import * as projects from './projects'
 import * as library from './library'
+import { exportDocument } from './exports'
 import type {
   BundleInput,
   CableInput,
   CableTypeInput,
   DeviceInput,
+  ExportOptions,
   PortInput,
   SubnetInput
 } from '../shared/types'
@@ -66,4 +68,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('project:openRecent', (_e, path: string) => projects.openProjectPath(path))
   ipcMain.handle('project:saveCopyAs', () => projects.saveCopyAs())
   ipcMain.handle('project:reveal', () => projects.revealCurrent())
+
+  ipcMain.handle('export:run', (_e, opts: ExportOptions) => exportDocument(opts))
+
+  // Per-show logo stamped onto generated paperwork.
+  ipcMain.handle('showLogo:get', () => repo.getProjectMeta('logo'))
+  ipcMain.handle('showLogo:set', (_e, dataUrl: string | null) =>
+    repo.setProjectMeta('logo', dataUrl)
+  )
 }

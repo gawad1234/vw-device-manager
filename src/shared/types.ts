@@ -132,6 +132,16 @@ export interface ProjectInfo {
   name: string
 }
 
+/** What to export and how. `bundleId` is required when `scope === 'bundle'`.
+ *  `labelStyle` only applies when `doc === 'labels'`. */
+export interface ExportOptions {
+  scope: 'bundle' | 'all'
+  bundleId?: number
+  doc: 'pullsheet' | 'schedule' | 'labels'
+  format: 'pdf' | 'xlsx' | 'csv'
+  labelStyle?: 'cards' | 'flag'
+}
+
 export interface VwDeviceManagerApi {
   subnets: {
     list: () => Promise<Subnet[]>
@@ -188,4 +198,14 @@ export interface VwDeviceManagerApi {
   /** Fires when another process (a Vectorworks script) writes to the open
    *  project file, so the UI can auto-refresh. Returns an unsubscribe fn. */
   onDataChanged: (cb: () => void) => () => void
+  /** Export bundles/cables to a file; returns the saved path (or null if the
+   *  user cancelled the save dialog). Opens the file after saving. */
+  exports: {
+    run: (opts: ExportOptions) => Promise<string | null>
+  }
+  /** Per-project (per-show) logo, a data URL stamped onto paperwork. */
+  showLogo: {
+    get: () => Promise<string | null>
+    set: (dataUrl: string | null) => Promise<void>
+  }
 }
