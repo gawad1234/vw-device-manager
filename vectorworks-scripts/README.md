@@ -142,4 +142,4 @@ socket sub-objects, or a Data Tag that can associate with an individual socket.
 - **The OIP can still show a just-written field as stale** until you
   deselect/reselect the device (reopening the document always refreshes). This
   is a Vectorworks display-refresh quirk, not data loss — the value is really on
-  the record (verify by reading it back, e.g. `diagnose_port_write.py`).
+  the record (you can verify by reading the field back with a short script).
