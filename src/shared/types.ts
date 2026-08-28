@@ -142,6 +142,44 @@ export interface ExportOptions {
   labelStyle?: 'cards' | 'flag'
 }
 
+// ---- App updates ----------------------------------------------------------
+
+/** Where the update flow currently is. Drives the Settings → Updates panel. */
+export type UpdatePhase =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+
+/** A release newer than the running app (from the GitHub Releases feed). */
+export interface UpdateInfo {
+  version: string
+  /** the GitHub release body as HTML (the patch notes); null if none supplied */
+  releaseNotes: string | null
+  /** ISO date string, if the feed provided one */
+  releaseDate: string | null
+}
+
+/** Full snapshot the renderer renders — pushed on every state change and
+ *  returned by updates.getState()/check(). */
+export interface UpdateStatus {
+  phase: UpdatePhase
+  /** the version the app is currently running */
+  currentVersion: string
+  /** the available/downloaded update when phase says there is one */
+  info: UpdateInfo | null
+  /** human-readable message when phase === 'error' */
+  error: string | null
+  /** download progress 0–100 (Windows self-install only) */
+  percent: number | null
+  /** true on Windows (can download + restart-to-install); false on unsigned
+   *  macOS (we open the download page instead) */
+  canSelfInstall: boolean
+}
+
 export interface VwDeviceManagerApi {
   subnets: {
     list: () => Promise<Subnet[]>
@@ -213,4 +251,19 @@ export interface VwDeviceManagerApi {
     get: () => Promise<string | null>
     set: (name: string | null) => Promise<void>
   }
+  /** App auto-update, surfaced in Settings → Updates. `check` triggers a check
+   *  and resolves with the resulting status; live changes also arrive via
+   *  onUpdateStatus. `download` self-downloads on Windows / opens the Releases
+   *  page on macOS; `install` restarts to apply (Windows only). autoCheck is a
+   *  per-machine preference (checks on launch when true). */
+  updates: {
+    getState: () => Promise<UpdateStatus>
+    check: () => Promise<UpdateStatus>
+    download: () => Promise<void>
+    install: () => Promise<void>
+    getAutoCheck: () => Promise<boolean>
+    setAutoCheck: (value: boolean) => Promise<boolean>
+  }
+  /** Fires whenever the update status changes. Returns an unsubscribe fn. */
+  onUpdateStatus: (cb: (status: UpdateStatus) => void) => () => void
 }

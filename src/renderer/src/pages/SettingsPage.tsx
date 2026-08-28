@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CableType } from '../../../shared/types'
+import UpdatesPanel from '../components/UpdatesPanel'
 
 interface Props {
   cableTypes: CableType[]
@@ -103,6 +104,8 @@ function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
       <div className="page-header">
         <h2>Settings</h2>
       </div>
+
+      <UpdatesPanel />
 
       <div className="panel">
         <h3>Show branding</h3>

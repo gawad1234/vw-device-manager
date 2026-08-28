@@ -14,6 +14,8 @@ const MAX_RECENT = 12
 interface Settings {
   lastProject?: string
   recentProjects?: string[]
+  /** check GitHub for a newer version on launch (default true) */
+  autoCheckUpdates?: boolean
 }
 
 // Settings live in this machine's userData (NOT the Dropbox folder), so Mac
@@ -47,7 +49,17 @@ function rememberProject(path: string): void {
   const s = readSettings()
   const recent = (s.recentProjects ?? []).filter((p) => p !== path)
   recent.unshift(path)
-  writeSettings({ lastProject: path, recentProjects: recent.slice(0, MAX_RECENT) })
+  // Spread `s` so other prefs (e.g. autoCheckUpdates) survive a project switch.
+  writeSettings({ ...s, lastProject: path, recentProjects: recent.slice(0, MAX_RECENT) })
+}
+
+/** Whether to check GitHub for updates on launch (per-machine; default true). */
+export function getAutoCheckUpdates(): boolean {
+  return readSettings().autoCheckUpdates ?? true
+}
+
+export function setAutoCheckUpdates(value: boolean): void {
+  writeSettings({ ...readSettings(), autoCheckUpdates: value })
 }
 
 /** Recent projects that still exist on THIS machine (paths differ per OS). */
@@ -102,7 +114,7 @@ export async function openProject(): Promise<ProjectInfo | null> {
   const res = await dialog.showOpenDialog({
     title: 'Open Project',
     properties: ['openFile'],
-    filters: [{ name: 'VW Device Manager Project', extensions: ['vwdm', 'sqlite3'] }]
+    filters: [{ name: 'Device Manager Project', extensions: ['vwdm', 'sqlite3'] }]
   })
   if (res.canceled || res.filePaths.length === 0) return null
   return switchTo(res.filePaths[0])

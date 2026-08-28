@@ -3,6 +3,7 @@ import * as repo from './repository'
 import * as projects from './projects'
 import * as library from './library'
 import { exportDocument } from './exports'
+import * as updater from './updater'
 import type {
   BundleInput,
   CableInput,
@@ -80,4 +81,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('showName:set', (_e, name: string | null) =>
     repo.setProjectMeta('showName', name)
   )
+
+  // App auto-update (Settings → Updates).
+  ipcMain.handle('updates:getState', () => updater.getUpdateStatus())
+  ipcMain.handle('updates:check', () => updater.checkForUpdates())
+  ipcMain.handle('updates:download', () => updater.downloadUpdate())
+  ipcMain.handle('updates:install', () => updater.quitAndInstall())
+  ipcMain.handle('updates:getAutoCheck', () => updater.getAutoCheck())
+  ipcMain.handle('updates:setAutoCheck', (_e, value: boolean) => updater.setAutoCheck(value))
 }

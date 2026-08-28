@@ -79,6 +79,19 @@ const api: VwDeviceManagerApi = {
   showName: {
     get: () => ipcRenderer.invoke('showName:get'),
     set: (name: string | null) => ipcRenderer.invoke('showName:set', name)
+  },
+  updates: {
+    getState: () => ipcRenderer.invoke('updates:getState'),
+    check: () => ipcRenderer.invoke('updates:check'),
+    download: () => ipcRenderer.invoke('updates:download'),
+    install: () => ipcRenderer.invoke('updates:install'),
+    getAutoCheck: () => ipcRenderer.invoke('updates:getAutoCheck'),
+    setAutoCheck: (value: boolean) => ipcRenderer.invoke('updates:setAutoCheck', value)
+  },
+  onUpdateStatus: (cb) => {
+    const listener = (_e: unknown, status: Parameters<typeof cb>[0]): void => cb(status)
+    ipcRenderer.on('update-status', listener)
+    return () => ipcRenderer.removeListener('update-status', listener)
   }
 }
 

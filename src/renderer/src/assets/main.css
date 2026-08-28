@@ -189,6 +189,110 @@ code {
   bottom: calc(100% + 6px);
 }
 
+/* ---- Updates panel (Settings) ---------------------------------------- */
+
+.update-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 0 4px;
+  flex-wrap: wrap;
+}
+
+.update-ok {
+  color: #7fce9a;
+  font-size: 13px;
+}
+
+.update-available {
+  margin: 14px 0 4px;
+  padding: 16px;
+  border: 1px solid rgba(59, 111, 224, 0.32);
+  background: rgba(59, 111, 224, 0.09);
+  border-radius: 10px;
+}
+
+.update-available-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.update-mac-note {
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+
+/* Rendered GitHub release body (patch notes). Selectable, scrolls if long. */
+.patch-notes {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ev-c-text-1);
+  user-select: text;
+}
+
+.patch-notes h1,
+.patch-notes h2,
+.patch-notes h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 14px 0 6px;
+}
+
+.patch-notes ul,
+.patch-notes ol {
+  margin: 6px 0 6px 20px;
+}
+
+.patch-notes li {
+  margin: 3px 0;
+}
+
+.patch-notes a {
+  color: var(--accent-hover);
+}
+
+.patch-notes p {
+  margin: 6px 0;
+}
+
+.toggle-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 18px;
+  font-size: 13.5px;
+  color: var(--ev-c-text-1);
+  cursor: pointer;
+  max-width: 520px;
+}
+
+.toggle-field input {
+  margin-top: 2px;
+}
+
+.toggle-field small {
+  font-weight: 400;
+}
+
+/* Little "update available" dot on the Settings tab. */
+.tab-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* ---- Show logo (Settings) -------------------------------------------- */
 
 .show-name-field {

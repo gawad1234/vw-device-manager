@@ -16,6 +16,7 @@ function App(): React.JSX.Element {
   const [bundles, setBundles] = useState<Bundle[]>([])
   const [cableTypes, setCableTypes] = useState<CableType[]>([])
   const [loading, setLoading] = useState(true)
+  const [updateReady, setUpdateReady] = useState(false)
 
   const refresh = useCallback(async () => {
     const [subnetList, deviceList, bundleList, cableTypeList] = await Promise.all([
@@ -38,6 +39,15 @@ function App(): React.JSX.Element {
   // Auto-refresh when a Vectorworks script writes to the open project file.
   useEffect(() => window.api.onDataChanged(() => void refresh()), [refresh])
 
+  // Flag the Settings tab when an update is ready, so it's noticed without
+  // opening Settings. Reflects the current state on mount, then live changes.
+  useEffect(() => {
+    const apply = (s: { phase: string }): void =>
+      setUpdateReady(s.phase === 'available' || s.phase === 'downloaded')
+    window.api.updates.getState().then(apply)
+    return window.api.onUpdateStatus(apply)
+  }, [])
+
   // Switching projects swaps the whole database — reload everything.
   const handleSwitch = useCallback(
     (info: ProjectInfo) => {
@@ -52,7 +62,7 @@ function App(): React.JSX.Element {
     <div className="app">
       <header className="app-header">
         <div className="app-header-left">
-          <h1>ConnectCAD Device Manager</h1>
+          <h1>Device Manager</h1>
           <ProjectMenu current={project} onSwitched={handleSwitch} />
         </div>
         <nav className="tabs">
@@ -79,6 +89,7 @@ function App(): React.JSX.Element {
             onClick={() => setTab('settings')}
           >
             Settings
+            {updateReady && <span className="tab-dot" title="An update is available" />}
           </button>
         </nav>
       </header>
