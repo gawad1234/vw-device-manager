@@ -366,6 +366,7 @@ function ipScheduleTable(): Table {
 interface DeviceEntry {
   name: string
   category: string // '' = uncategorized
+  type: string
   location: string
   vlan: string
   ip: string
@@ -413,6 +414,7 @@ function deviceListEntries(): DeviceEntry[] {
       return {
         name: d.name,
         category: d.category?.trim() || '',
+        type: d.deviceType ?? '',
         location: d.location ?? '',
         vlan: vlanFor(subnetId, ip),
         ip
@@ -428,10 +430,11 @@ function deviceListEntries(): DeviceEntry[] {
  *  category via the sort so filtering/pivoting is easy. */
 function deviceListTable(): Table {
   return {
-    headers: ['Device', 'Category', 'Location', 'Main VLAN', 'Main IP'],
+    headers: ['Device', 'Category', 'Type', 'Location', 'Main VLAN', 'Main IP'],
     rows: deviceListEntries().map((e) => [
       e.name,
       e.category || 'Uncategorized',
+      e.type,
       e.location,
       e.vlan,
       e.ip
@@ -458,12 +461,12 @@ function deviceListHtml(logo: string | null): string {
       const body = g.items
         .map(
           (e) =>
-            `<tr><td>${esc(e.name)}</td><td>${esc(e.location)}</td><td>${esc(e.vlan)}</td><td>${esc(
-              e.ip
-            )}</td></tr>`
+            `<tr><td>${esc(e.name)}</td><td>${esc(e.type)}</td><td>${esc(e.location)}</td><td>${esc(
+              e.vlan
+            )}</td><td>${esc(e.ip)}</td></tr>`
         )
         .join('')
-      return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table><thead><tr><th>Device</th><th>Location</th><th>Main VLAN</th><th>Main IP</th></tr></thead><tbody>${body}</tbody></table></section>`
+      return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table><thead><tr><th>Device</th><th>Type</th><th>Location</th><th>Main VLAN</th><th>Main IP</th></tr></thead><tbody>${body}</tbody></table></section>`
     })
     .join('')
   return page('Device List', sections, logo)
