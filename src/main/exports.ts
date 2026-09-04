@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, shell } from 'electron'
 import { writeFileSync } from 'fs'
 import ExcelJS from 'exceljs'
 import { getProjectMeta, listBundles, listDevices, listSubnets } from './repository'
+import { ipInCidr } from './ip-utils'
 import type { Bundle, CableEndpoint, ExportOptions } from '../shared/types'
 
 // The show name for the export in progress — read once in exportDocument and
@@ -362,13 +363,64 @@ function ipScheduleTable(): Table {
   }
 }
 
+/** One row per device: name, location, and its "main" VLAN + IP. The main IP is
+ *  a switch's management IP (else its OOB, else its first port with an IP), or a
+ *  regular device's first port that has an IP. The main VLAN is that IP's VLAN —
+ *  from the port's untagged subnet when set, otherwise matched by CIDR. Sorted
+ *  by device name. */
+function deviceListTable(): Table {
+  const subnets = listSubnets()
+  const byId = new Map(subnets.map((s) => [s.id, s]))
+  const vlanFor = (subnetId: number | null, ip: string): string => {
+    if (subnetId != null) {
+      const s = byId.get(subnetId)
+      if (s) return s.vlan ?? '' // the port's assigned network is authoritative
+    }
+    if (ip) {
+      // No assigned subnet (e.g. a switch mgmt IP) — find the network it lives in.
+      const hit = subnets.find((s) => s.cidr && ipInCidr(ip, s.cidr) === true)
+      if (hit) return hit.vlan ?? ''
+    }
+    return ''
+  }
+
+  const rows = listDevices()
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((d) => {
+      let ip = ''
+      let subnetId: number | null = null
+      if (d.isSwitch && (d.managementIp || d.oobIp)) {
+        ip = d.managementIp || d.oobIp || '' // switch IPs aren't tied to a port subnet
+      } else {
+        const p = d.ports.find((x) => x.ipAddress) ?? d.ports[0]
+        if (p) {
+          ip = p.ipAddress ?? ''
+          subnetId = p.untaggedSubnetId
+        }
+      }
+      return [d.name, d.location ?? '', vlanFor(subnetId, ip), ip]
+    })
+
+  return { headers: ['Device', 'Location', 'Main VLAN', 'Main IP'], rows }
+}
+
+/** Render a Table as a plain PDF page (alternating row shading via page() CSS). */
+function simpleTableHtml(title: string, t: Table, logo: string | null): string {
+  const head = t.headers.map((h) => `<th>${esc(h)}</th>`).join('')
+  const body = t.rows.length
+    ? t.rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')
+    : `<tr><td colspan="${t.headers.length}">No devices yet.</td></tr>`
+  return page(title, `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`, logo)
+}
+
 function tableCsv(t: Table): string {
   return [t.headers, ...t.rows].map((r) => r.map((c) => csvCell(String(c))).join(',')).join('\r\n')
 }
 
-async function tableXlsx(t: Table, logo: string | null): Promise<Buffer> {
+async function tableXlsx(t: Table, logo: string | null, sheetName = 'Sheet1'): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet('IP Schedule')
+  const ws = wb.addWorksheet(sheetName)
   ws.columns = t.headers.map((h) => ({
     header: h,
     key: h,
@@ -501,26 +553,35 @@ const DOC_LABEL: Record<ExportOptions['doc'], string> = {
   pullsheet: 'pull sheet',
   schedule: 'cable schedule',
   labels: 'labels',
-  ipschedule: 'IP schedule'
+  ipschedule: 'IP schedule',
+  devicelist: 'device list'
 }
 
 export async function exportDocument(opts: ExportOptions): Promise<string | null> {
   const logo = getProjectMeta('logo') // per-show logo stamped onto paperwork
   docShowName = getProjectMeta('showName') // used by page() header + pdf footer
 
-  // The IP schedule is project-wide device data — its own path (no bundles).
-  if (opts.doc === 'ipschedule') {
+  // Project-wide device exports (no bundles): the IP schedule and the device list.
+  if (opts.doc === 'ipschedule' || opts.doc === 'devicelist') {
+    const isDeviceList = opts.doc === 'devicelist'
+    const label = isDeviceList ? 'Device list' : 'IP schedule'
     const res = await dialog.showSaveDialog({
-      defaultPath: `IP schedule.${opts.format}`,
+      defaultPath: `${label}.${opts.format}`,
       filters: [{ name: opts.format.toUpperCase(), extensions: [opts.format] }]
     })
     if (res.canceled || !res.filePath) return null
     const outPath = res.filePath
-    // PDF gets the sectioned/merged layout; xlsx/csv stay flat (better for
-    // filtering) via the plain table.
-    if (opts.format === 'csv') writeFileSync(outPath, tableCsv(ipScheduleTable()), 'utf-8')
-    else if (opts.format === 'xlsx') writeFileSync(outPath, await tableXlsx(ipScheduleTable(), logo))
-    else writeFileSync(outPath, await htmlToPdf(ipScheduleHtml(logo), true))
+    const table = isDeviceList ? deviceListTable() : ipScheduleTable()
+    if (opts.format === 'csv') {
+      writeFileSync(outPath, tableCsv(table), 'utf-8')
+    } else if (opts.format === 'xlsx') {
+      writeFileSync(outPath, await tableXlsx(table, logo, isDeviceList ? 'Devices' : 'IP Schedule'))
+    } else {
+      // Device list is a simple 4-column table (portrait); the IP schedule PDF
+      // gets its bespoke sectioned/merged layout (landscape).
+      const html = isDeviceList ? simpleTableHtml('Device List', table, logo) : ipScheduleHtml(logo)
+      writeFileSync(outPath, await htmlToPdf(html, !isDeviceList))
+    }
     shell.openPath(outPath)
     return outPath
   }

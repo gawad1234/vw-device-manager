@@ -137,7 +137,7 @@ export interface ProjectInfo {
 export interface ExportOptions {
   scope: 'bundle' | 'all'
   bundleId?: number
-  doc: 'pullsheet' | 'schedule' | 'labels' | 'ipschedule'
+  doc: 'pullsheet' | 'schedule' | 'labels' | 'ipschedule' | 'devicelist'
   format: 'pdf' | 'xlsx' | 'csv'
   labelStyle?: 'cards' | 'flag'
 }

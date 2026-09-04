@@ -3,9 +3,17 @@ import type { Device, Subnet } from '../../../shared/types'
 import DeviceModal from '../components/DeviceModal'
 import ExportMenu, { type ExportSection } from '../components/ExportMenu'
 
-const IP_SECTIONS: ExportSection[] = [
+const EXPORT_SECTIONS: ExportSection[] = [
   {
-    label: 'IP schedule',
+    label: 'Device list (name · location · VLAN · IP)',
+    items: [
+      { label: 'PDF', doc: 'devicelist', format: 'pdf' },
+      { label: 'Excel', doc: 'devicelist', format: 'xlsx' },
+      { label: 'CSV', doc: 'devicelist', format: 'csv' }
+    ]
+  },
+  {
+    label: 'IP schedule (every port)',
     items: [
       { label: 'PDF', doc: 'ipschedule', format: 'pdf' },
       { label: 'Excel', doc: 'ipschedule', format: 'xlsx' },
@@ -55,7 +63,7 @@ function DevicesPage({ devices, subnets, onChanged }: Props): React.JSX.Element 
             onChange={(e) => setSearch(e.target.value)}
           />
           {devices.length > 0 && (
-            <ExportMenu scope="all" label="Export IP schedule" sections={IP_SECTIONS} />
+            <ExportMenu scope="all" label="Export" sections={EXPORT_SECTIONS} />
           )}
           <button className="btn btn-primary" onClick={() => setOpenId('new')}>
             + Add device
