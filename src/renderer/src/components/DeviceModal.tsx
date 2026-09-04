@@ -70,7 +70,14 @@ function DeviceModal({ device, subnets, onClose, onChanged, onCreated }: Props):
     setError(null)
     setWarnings(result.warnings)
     onChanged()
-    if (!device && result.device) onCreated(result.device.id)
+    if (!device && result.device) {
+      // New device: reopen in edit mode so ports can be added.
+      onCreated(result.device.id)
+    } else if (device && result.warnings.length === 0) {
+      // Editing an existing device saved cleanly — close the window. (If there
+      // are advisory warnings, stay open so they're seen.)
+      onClose()
+    }
   }
 
   async function handleDelete(): Promise<void> {

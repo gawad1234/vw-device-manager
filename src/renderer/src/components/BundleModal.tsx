@@ -72,7 +72,9 @@ function BundleModal({
       : await window.api.bundles.create(form)
     setError(null)
     onChanged()
+    // New bundle: reopen in edit mode to add cables. Existing: close on save.
     if (!bundle) onCreated(result.id)
+    else onClose()
   }
 
   async function handleDelete(): Promise<void> {
