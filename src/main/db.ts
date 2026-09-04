@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS ports (
   ip_address TEXT,
   untagged_subnet_id INTEGER REFERENCES subnets(id) ON DELETE SET NULL,
   vw_socket_key TEXT,
+  -- at most one port per device flagged the device's "main" access route
+  is_primary INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -295,6 +297,13 @@ function migrateCableTypeToName(database: DatabaseSync): void {
   }
 }
 
+/** Adds `ports.is_primary` (marks a device's main access-route port). Guarded, additive. */
+function migrateAddPortPrimary(database: DatabaseSync): void {
+  if (!tableExists(database, 'ports')) return
+  if (tableHasColumn(database, 'ports', 'is_primary')) return
+  database.exec('ALTER TABLE ports ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0')
+}
+
 /** Bring a freshly opened DB up to date: schema + all migrations. Network
  *  signals / cable types are NOT here — they live in the shared library. */
 function applySchemaAndMigrations(database: DatabaseSync): void {
@@ -305,6 +314,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateCableChecklist(database)
   migrateBundleColor(database)
   migrateCableTypeToName(database)
+  migrateAddPortPrimary(database)
 }
 
 /**

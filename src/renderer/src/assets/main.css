@@ -447,6 +447,14 @@ input[type='checkbox'] {
   font-size: 12.5px;
 }
 
+/* "Main port" toggle: quiet when off, accent-filled when it's the chosen route. */
+.primary-toggle.is-on {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
 .btn-danger {
   color: var(--danger);
 }

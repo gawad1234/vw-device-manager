@@ -31,7 +31,9 @@ const api: VwDeviceManagerApi = {
     update: (id: number, input: PortInput) => ipcRenderer.invoke('ports:update', id, input),
     remove: (id: number) => ipcRenderer.invoke('ports:remove', id),
     setTaggedVlans: (id: number, subnetIds: number[]) =>
-      ipcRenderer.invoke('ports:setTaggedVlans', id, subnetIds)
+      ipcRenderer.invoke('ports:setTaggedVlans', id, subnetIds),
+    setPrimary: (id: number, isPrimary: boolean) =>
+      ipcRenderer.invoke('ports:setPrimary', id, isPrimary)
   },
   networkSignals: {
     list: () => ipcRenderer.invoke('signals:list'),

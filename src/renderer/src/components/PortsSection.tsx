@@ -48,6 +48,11 @@ function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JS
     onChanged()
   }
 
+  async function togglePrimary(): Promise<void> {
+    await window.api.ports.setPrimary(port.id, !port.isPrimary)
+    onChanged()
+  }
+
   async function toggleTagged(subnetId: number, checked: boolean): Promise<void> {
     const next = checked
       ? [...port.taggedSubnetIds, subnetId]
@@ -102,6 +107,16 @@ function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JS
           </select>
         </label>
         <div className="port-actions">
+          {!isSwitch && (
+            <button
+              type="button"
+              className={`btn btn-small primary-toggle${port.isPrimary ? ' is-on' : ''}`}
+              title="Use this port's IP + VLAN as the device's main access route (shown in the Device list export)"
+              onClick={togglePrimary}
+            >
+              {port.isPrimary ? '★ Main' : '☆ Main'}
+            </button>
+          )}
           <button className="btn btn-small btn-primary" onClick={save} disabled={saving}>
             Save
           </button>

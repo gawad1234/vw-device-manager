@@ -390,9 +390,14 @@ function deviceListTable(): Table {
     .map((d) => {
       let ip = ''
       let subnetId: number | null = null
-      if (d.isSwitch && (d.managementIp || d.oobIp)) {
+      const chosen = d.ports.find((x) => x.isPrimary) // user-designated main port
+      if (chosen) {
+        ip = chosen.ipAddress ?? ''
+        subnetId = chosen.untaggedSubnetId
+      } else if (d.isSwitch && (d.managementIp || d.oobIp)) {
         ip = d.managementIp || d.oobIp || '' // switch IPs aren't tied to a port subnet
       } else {
+        // Auto-pick: first port that has an IP (else the first port).
         const p = d.ports.find((x) => x.ipAddress) ?? d.ports[0]
         if (p) {
           ip = p.ipAddress ?? ''

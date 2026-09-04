@@ -37,6 +37,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('ports:setTaggedVlans', (_e, id: number, subnetIds: number[]) =>
     repo.setPortTaggedVlans(id, subnetIds)
   )
+  ipcMain.handle('ports:setPrimary', (_e, id: number, isPrimary: boolean) =>
+    repo.setPrimaryPort(id, isPrimary)
+  )
 
   // Network signals + cable types are the shared, cross-project library.
   ipcMain.handle('signals:list', () => library.listNetworkSignals())

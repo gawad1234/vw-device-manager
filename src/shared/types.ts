@@ -22,6 +22,9 @@ export interface Port {
   taggedSubnetIds: number[]
   /** ties this port to its ConnectCAD jack; null = added by hand in the app */
   vwSocketKey: string | null
+  /** the device's designated "main" access route (at most one per device) —
+   *  used as the device's main IP/VLAN in the Device list export */
+  isPrimary: boolean
 }
 
 /** Editable port fields. deviceId is passed to create(); tagged VLANs are set
@@ -198,6 +201,8 @@ export interface VwDeviceManagerApi {
     update: (id: number, input: PortInput) => Promise<SavePortResult>
     remove: (id: number) => Promise<void>
     setTaggedVlans: (id: number, subnetIds: number[]) => Promise<void>
+    /** mark this port the device's main access route (or clear it) */
+    setPrimary: (id: number, isPrimary: boolean) => Promise<void>
   }
   /** ConnectCAD socket "signal" values the sync scripts treat as network ports. */
   networkSignals: {

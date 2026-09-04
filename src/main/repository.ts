@@ -40,7 +40,8 @@ function mapPort(row: Row, taggedSubnetIds: number[]): Port {
     ipAddress: (row.ip_address as string | null) ?? null,
     untaggedSubnetId: (row.untagged_subnet_id as number | null) ?? null,
     taggedSubnetIds,
-    vwSocketKey: (row.vw_socket_key as string | null) ?? null
+    vwSocketKey: (row.vw_socket_key as string | null) ?? null,
+    isPrimary: Boolean(row.is_primary)
   }
 }
 
@@ -221,6 +222,16 @@ export function updatePort(id: number, input: PortInput): SavePortResult {
 export function deletePort(id: number): void {
   dbRun('DELETE FROM port_tagged_vlans WHERE port_id = ?', [id])
   dbRun('DELETE FROM ports WHERE id = ?', [id])}
+
+/** Mark this port as its device's "main" access route (or clear it). At most one
+ *  port per device is primary, so the others are cleared first. Used by the
+ *  Device list export to pick the device's main IP + VLAN. */
+export function setPrimaryPort(portId: number, isPrimary: boolean): void {
+  const row = queryOne('SELECT device_id FROM ports WHERE id = ?', [portId])
+  if (!row) return
+  dbRun('UPDATE ports SET is_primary = 0 WHERE device_id = ?', [row.device_id as number])
+  if (isPrimary) dbRun('UPDATE ports SET is_primary = 1 WHERE id = ?', [portId])
+}
 
 /** Replace the port's tagged-VLAN set with exactly the given subnet ids. */
 export function setPortTaggedVlans(portId: number, subnetIds: number[]): void {
