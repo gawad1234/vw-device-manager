@@ -4,6 +4,7 @@ import UpdatesPanel from '../components/UpdatesPanel'
 
 interface Props {
   cableTypes: CableType[]
+  categories: string[]
   onChanged: () => void
 }
 
@@ -34,12 +35,13 @@ function downscaleImage(file: File, maxW: number): Promise<string> {
   })
 }
 
-function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
+function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.Element {
   const [signals, setSignals] = useState<string[]>([])
   const [signalInput, setSignalInput] = useState('')
   const [typeName, setTypeName] = useState('')
   const [typeNotes, setTypeNotes] = useState('')
   const [typeError, setTypeError] = useState<string | null>(null)
+  const [categoryInput, setCategoryInput] = useState('')
   const [logo, setLogo] = useState<string | null>(null)
   const [showName, setShowName] = useState('')
 
@@ -96,6 +98,20 @@ function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
     if (!window.confirm(`Remove cable type "${t.name}"? Cables already tagged with it keep the label.`))
       return
     await window.api.cableTypes.remove(t.name)
+    onChanged()
+  }
+
+  async function addCategory(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    if (!categoryInput.trim()) return
+    await window.api.deviceCategories.add(categoryInput.trim())
+    setCategoryInput('')
+    onChanged()
+  }
+
+  async function removeCategory(name: string): Promise<void> {
+    if (!window.confirm(`Remove category "${name}"? Devices in it become uncategorized.`)) return
+    await window.api.deviceCategories.remove(name)
     onChanged()
   }
 
@@ -210,6 +226,38 @@ function SettingsPage({ cableTypes, onChanged }: Props): React.JSX.Element {
                 {t.notes && <span className="muted"> — {t.notes}</span>}
               </span>
               <button className="btn btn-small btn-danger" onClick={() => removeCableType(t)}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="panel">
+        <h3>Device categories</h3>
+        <p className="muted">
+          Groupings you can assign to devices (e.g. Cameras, Displays, Network, Servers). The
+          Devices tab groups and filters by these, and they section the Device list export. Shared
+          across all projects; case-insensitive and unique.
+        </p>
+
+        <form onSubmit={addCategory} className="signal-add">
+          <input
+            value={categoryInput}
+            onChange={(e) => setCategoryInput(e.target.value)}
+            placeholder="e.g. Cameras"
+          />
+          <button className="btn btn-primary" type="submit">
+            Add
+          </button>
+        </form>
+
+        <ul className="signal-list">
+          {categories.length === 0 && <li className="muted">No categories yet.</li>}
+          {categories.map((c) => (
+            <li key={c}>
+              <code>{c}</code>
+              <button className="btn btn-small btn-danger" onClick={() => removeCategory(c)}>
                 Remove
               </button>
             </li>

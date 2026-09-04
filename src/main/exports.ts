@@ -363,12 +363,20 @@ function ipScheduleTable(): Table {
   }
 }
 
-/** One row per device: name, location, and its "main" VLAN + IP. The main IP is
- *  a switch's management IP (else its OOB, else its first port with an IP), or a
- *  regular device's first port that has an IP. The main VLAN is that IP's VLAN —
- *  from the port's untagged subnet when set, otherwise matched by CIDR. Sorted
- *  by device name. */
-function deviceListTable(): Table {
+interface DeviceEntry {
+  name: string
+  category: string // '' = uncategorized
+  location: string
+  vlan: string
+  ip: string
+}
+
+/** One entry per device: name, category, location, and its "main" VLAN + IP.
+ *  The main IP is the user-designated primary port if set, else a switch's
+ *  management IP (else OOB), else the first port with an IP. The main VLAN is
+ *  that IP's VLAN — the port's untagged subnet when set, otherwise matched by
+ *  CIDR. Sorted by category (uncategorized last), then device name. */
+function deviceListEntries(): DeviceEntry[] {
   const subnets = listSubnets()
   const byId = new Map(subnets.map((s) => [s.id, s]))
   const vlanFor = (subnetId: number | null, ip: string): string => {
@@ -377,16 +385,15 @@ function deviceListTable(): Table {
       if (s) return s.vlan ?? '' // the port's assigned network is authoritative
     }
     if (ip) {
-      // No assigned subnet (e.g. a switch mgmt IP) — find the network it lives in.
       const hit = subnets.find((s) => s.cidr && ipInCidr(ip, s.cidr) === true)
       if (hit) return hit.vlan ?? ''
     }
     return ''
   }
 
-  const rows = listDevices()
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const catSortKey = (c: string): string => (c ? c.toLowerCase() : '￿') // uncategorized last
+
+  return listDevices()
     .map((d) => {
       let ip = ''
       let subnetId: number | null = null
@@ -397,26 +404,69 @@ function deviceListTable(): Table {
       } else if (d.isSwitch && (d.managementIp || d.oobIp)) {
         ip = d.managementIp || d.oobIp || '' // switch IPs aren't tied to a port subnet
       } else {
-        // Auto-pick: first port that has an IP (else the first port).
         const p = d.ports.find((x) => x.ipAddress) ?? d.ports[0]
         if (p) {
           ip = p.ipAddress ?? ''
           subnetId = p.untaggedSubnetId
         }
       }
-      return [d.name, d.location ?? '', vlanFor(subnetId, ip), ip]
+      return {
+        name: d.name,
+        category: d.category?.trim() || '',
+        location: d.location ?? '',
+        vlan: vlanFor(subnetId, ip),
+        ip
+      }
     })
-
-  return { headers: ['Device', 'Location', 'Main VLAN', 'Main IP'], rows }
+    .sort(
+      (a, b) =>
+        catSortKey(a.category).localeCompare(catSortKey(b.category)) || a.name.localeCompare(b.name)
+    )
 }
 
-/** Render a Table as a plain PDF page (alternating row shading via page() CSS). */
-function simpleTableHtml(title: string, t: Table, logo: string | null): string {
-  const head = t.headers.map((h) => `<th>${esc(h)}</th>`).join('')
-  const body = t.rows.length
-    ? t.rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')
-    : `<tr><td colspan="${t.headers.length}">No devices yet.</td></tr>`
-  return page(title, `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`, logo)
+/** Flat device-list table (for CSV/XLSX): a Category column, rows grouped by
+ *  category via the sort so filtering/pivoting is easy. */
+function deviceListTable(): Table {
+  return {
+    headers: ['Device', 'Category', 'Location', 'Main VLAN', 'Main IP'],
+    rows: deviceListEntries().map((e) => [
+      e.name,
+      e.category || 'Uncategorized',
+      e.location,
+      e.vlan,
+      e.ip
+    ])
+  }
+}
+
+/** Device-list PDF: a section per category (heading + table). */
+function deviceListHtml(logo: string | null): string {
+  const entries = deviceListEntries()
+  if (!entries.length) return page('Device List', '<p>No devices yet.</p>', logo)
+
+  // Group consecutive entries (they're already sorted by category).
+  const groups: { cat: string; items: DeviceEntry[] }[] = []
+  for (const e of entries) {
+    const label = e.category || 'Uncategorized'
+    const last = groups[groups.length - 1]
+    if (last && last.cat === label) last.items.push(e)
+    else groups.push({ cat: label, items: [e] })
+  }
+
+  const sections = groups
+    .map((g) => {
+      const body = g.items
+        .map(
+          (e) =>
+            `<tr><td>${esc(e.name)}</td><td>${esc(e.location)}</td><td>${esc(e.vlan)}</td><td>${esc(
+              e.ip
+            )}</td></tr>`
+        )
+        .join('')
+      return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table><thead><tr><th>Device</th><th>Location</th><th>Main VLAN</th><th>Main IP</th></tr></thead><tbody>${body}</tbody></table></section>`
+    })
+    .join('')
+  return page('Device List', sections, logo)
 }
 
 function tableCsv(t: Table): string {
@@ -582,9 +632,9 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     } else if (opts.format === 'xlsx') {
       writeFileSync(outPath, await tableXlsx(table, logo, isDeviceList ? 'Devices' : 'IP Schedule'))
     } else {
-      // Device list is a simple 4-column table (portrait); the IP schedule PDF
-      // gets its bespoke sectioned/merged layout (landscape).
-      const html = isDeviceList ? simpleTableHtml('Device List', table, logo) : ipScheduleHtml(logo)
+      // Device list is a category-sectioned table (portrait); the IP schedule
+      // PDF gets its bespoke sectioned/merged layout (landscape).
+      const html = isDeviceList ? deviceListHtml(logo) : ipScheduleHtml(logo)
       writeFileSync(outPath, await htmlToPdf(html, !isDeviceList))
     }
     shell.openPath(outPath)

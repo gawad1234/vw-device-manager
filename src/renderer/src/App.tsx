@@ -15,20 +15,23 @@ function App(): React.JSX.Element {
   const [devices, setDevices] = useState<Device[]>([])
   const [bundles, setBundles] = useState<Bundle[]>([])
   const [cableTypes, setCableTypes] = useState<CableType[]>([])
+  const [categories, setCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [updateReady, setUpdateReady] = useState(false)
 
   const refresh = useCallback(async () => {
-    const [subnetList, deviceList, bundleList, cableTypeList] = await Promise.all([
+    const [subnetList, deviceList, bundleList, cableTypeList, categoryList] = await Promise.all([
       window.api.subnets.list(),
       window.api.devices.list(),
       window.api.bundles.list(),
-      window.api.cableTypes.list()
+      window.api.cableTypes.list(),
+      window.api.deviceCategories.list()
     ])
     setSubnets(subnetList)
     setDevices(deviceList)
     setBundles(bundleList)
     setCableTypes(cableTypeList)
+    setCategories(categoryList)
   }, [])
 
   useEffect(() => {
@@ -98,7 +101,12 @@ function App(): React.JSX.Element {
         {loading ? (
           <p className="muted">Loading…</p>
         ) : tab === 'devices' ? (
-          <DevicesPage devices={devices} subnets={subnets} onChanged={refresh} />
+          <DevicesPage
+            devices={devices}
+            subnets={subnets}
+            categories={categories}
+            onChanged={refresh}
+          />
         ) : tab === 'subnets' ? (
           <SubnetsPage subnets={subnets} onChanged={refresh} />
         ) : tab === 'cables' ? (
@@ -109,7 +117,12 @@ function App(): React.JSX.Element {
             onChanged={refresh}
           />
         ) : (
-          <SettingsPage key={project?.path} cableTypes={cableTypes} onChanged={refresh} />
+          <SettingsPage
+            key={project?.path}
+            cableTypes={cableTypes}
+            categories={categories}
+            onChanged={refresh}
+          />
         )}
       </main>
     </div>

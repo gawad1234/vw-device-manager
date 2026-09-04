@@ -19,14 +19,19 @@ function libraryPath(): string {
 interface Library {
   networkSignals: string[]
   cableTypes: CableType[]
+  deviceCategories: string[]
 }
 
 function readLibrary(): Library {
   try {
     const raw = JSON.parse(readFileSync(libraryPath(), 'utf-8')) as Partial<Library>
-    return { networkSignals: raw.networkSignals ?? [], cableTypes: raw.cableTypes ?? [] }
+    return {
+      networkSignals: raw.networkSignals ?? [],
+      cableTypes: raw.cableTypes ?? [],
+      deviceCategories: raw.deviceCategories ?? []
+    }
   } catch {
-    return { networkSignals: [], cableTypes: [] }
+    return { networkSignals: [], cableTypes: [], deviceCategories: [] }
   }
 }
 
@@ -47,7 +52,8 @@ export async function ensureLibrary(): Promise<void> {
   const seed = await readCatalogsFromFile(getDbPath())
   writeLibrary({
     networkSignals: seed.networkSignals.length ? seed.networkSignals : ['LAN'],
-    cableTypes: seed.cableTypes
+    cableTypes: seed.cableTypes,
+    deviceCategories: []
   })
 }
 
@@ -100,4 +106,29 @@ export function removeCableType(name: string): CableType[] {
   lib.cableTypes = lib.cableTypes.filter((t) => t.name !== name)
   writeLibrary(lib)
   return lib.cableTypes
+}
+
+// ---- Device categories --------------------------------------------------
+
+export function listDeviceCategories(): string[] {
+  return readLibrary().deviceCategories
+}
+
+export function addDeviceCategory(name: string): string[] {
+  const c = name.trim()
+  if (!c) return listDeviceCategories()
+  const lib = readLibrary()
+  if (!lib.deviceCategories.some((x) => x.toLowerCase() === c.toLowerCase())) {
+    lib.deviceCategories.push(c)
+    lib.deviceCategories.sort((a, b) => a.localeCompare(b))
+    writeLibrary(lib)
+  }
+  return lib.deviceCategories
+}
+
+export function removeDeviceCategory(name: string): string[] {
+  const lib = readLibrary()
+  lib.deviceCategories = lib.deviceCategories.filter((x) => x !== name)
+  writeLibrary(lib)
+  return lib.deviceCategories
 }

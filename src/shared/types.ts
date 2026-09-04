@@ -42,6 +42,8 @@ export interface Device {
   macAddress: string | null
   location: string | null
   notes: string | null
+  /** user-assigned grouping (from the shared category list); null = uncategorized */
+  category: string | null
   /** Network switch? Switches have no per-port IP; they use the two IPs below
    *  and their ports are VLAN-only (untagged + optional tagged/trunk). */
   isSwitch: boolean
@@ -226,6 +228,12 @@ export interface VwDeviceManagerApi {
     list: () => Promise<CableType[]>
     add: (input: CableTypeInput) => Promise<CableType[]>
     remove: (name: string) => Promise<CableType[]>
+  }
+  /** Shared device-category list (universal across projects) for grouping devices. */
+  deviceCategories: {
+    list: () => Promise<string[]>
+    add: (name: string) => Promise<string[]>
+    remove: (name: string) => Promise<string[]>
   }
   /** Project files: one project (database) is active at a time; these switch it.
    *  A null result means the user cancelled the dialog. */

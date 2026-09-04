@@ -65,6 +65,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('cableTypes:add', (_e, input: CableTypeInput) => library.addCableType(input))
   ipcMain.handle('cableTypes:remove', (_e, name: string) => library.removeCableType(name))
 
+  ipcMain.handle('deviceCategories:list', () => library.listDeviceCategories())
+  ipcMain.handle('deviceCategories:add', (_e, name: string) => library.addDeviceCategory(name))
+  ipcMain.handle('deviceCategories:remove', (_e, name: string) => library.removeDeviceCategory(name))
+
   ipcMain.handle('project:current', () => projects.getCurrentProject())
   ipcMain.handle('project:recent', () => projects.listRecent())
   ipcMain.handle('project:new', () => projects.newProject())

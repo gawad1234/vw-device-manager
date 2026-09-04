@@ -53,6 +53,7 @@ function mapDevice(row: Row, ports: Port[]): Device {
     macAddress: (row.mac_address as string | null) ?? null,
     location: (row.location as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
+    category: (row.category as string | null) ?? null,
     isSwitch: Boolean(row.is_switch),
     managementIp: (row.management_ip as string | null) ?? null,
     oobIp: (row.oob_ip as string | null) ?? null,
@@ -305,14 +306,15 @@ export function createDevice(input: DeviceInput): SaveDeviceResult {
   if (check.error) return { device: null, warnings: [], error: check.error }
 
   dbRun(
-    `INSERT INTO devices (name, device_type, mac_address, location, notes, is_switch, management_ip, oob_ip)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO devices (name, device_type, mac_address, location, notes, category, is_switch, management_ip, oob_ip)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.name,
       input.deviceType,
       input.macAddress,
       input.location,
       input.notes,
+      input.category?.trim() || null,
       input.isSwitch ? 1 : 0,
       mgmt,
       oob
@@ -329,7 +331,7 @@ export function updateDevice(id: number, input: DeviceInput): SaveDeviceResult {
 
   dbRun(
     `UPDATE devices
-     SET name = ?, device_type = ?, mac_address = ?, location = ?, notes = ?,
+     SET name = ?, device_type = ?, mac_address = ?, location = ?, notes = ?, category = ?,
          is_switch = ?, management_ip = ?, oob_ip = ?,
          updated_at = datetime('now')
      WHERE id = ?`,
@@ -339,6 +341,7 @@ export function updateDevice(id: number, input: DeviceInput): SaveDeviceResult {
       input.macAddress,
       input.location,
       input.notes,
+      input.category?.trim() || null,
       input.isSwitch ? 1 : 0,
       mgmt,
       oob,

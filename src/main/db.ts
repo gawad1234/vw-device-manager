@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS devices (
   mac_address TEXT,
   location TEXT,
   notes TEXT,
+  -- User-assigned grouping (from the shared category list); NULL = uncategorized.
+  category TEXT,
   -- A switch has no per-port IP; instead it carries a device-level management
   -- IP + an out-of-band (OOB) IP, and its ports are VLAN-only (see ports).
   is_switch INTEGER NOT NULL DEFAULT 0,
@@ -304,6 +306,13 @@ function migrateAddPortPrimary(database: DatabaseSync): void {
   database.exec('ALTER TABLE ports ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0')
 }
 
+/** Adds `devices.category` (user-assigned grouping). Guarded, additive. */
+function migrateAddDeviceCategory(database: DatabaseSync): void {
+  if (!tableExists(database, 'devices')) return
+  if (tableHasColumn(database, 'devices', 'category')) return
+  database.exec('ALTER TABLE devices ADD COLUMN category TEXT')
+}
+
 /** Bring a freshly opened DB up to date: schema + all migrations. Network
  *  signals / cable types are NOT here — they live in the shared library. */
 function applySchemaAndMigrations(database: DatabaseSync): void {
@@ -315,6 +324,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateBundleColor(database)
   migrateCableTypeToName(database)
   migrateAddPortPrimary(database)
+  migrateAddDeviceCategory(database)
 }
 
 /**

@@ -57,6 +57,11 @@ const api: VwDeviceManagerApi = {
     add: (input: CableTypeInput) => ipcRenderer.invoke('cableTypes:add', input),
     remove: (name: string) => ipcRenderer.invoke('cableTypes:remove', name)
   },
+  deviceCategories: {
+    list: () => ipcRenderer.invoke('deviceCategories:list'),
+    add: (name: string) => ipcRenderer.invoke('deviceCategories:add', name),
+    remove: (name: string) => ipcRenderer.invoke('deviceCategories:remove', name)
+  },
   projects: {
     current: () => ipcRenderer.invoke('project:current'),
     recent: () => ipcRenderer.invoke('project:recent'),

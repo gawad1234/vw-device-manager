@@ -9,6 +9,7 @@ const EMPTY_FORM: DeviceInput = {
   macAddress: null,
   location: null,
   notes: null,
+  category: null,
   isSwitch: false,
   managementIp: null,
   oobIp: null
@@ -21,6 +22,7 @@ function toForm(d: Device): DeviceInput {
     macAddress: d.macAddress,
     location: d.location,
     notes: d.notes,
+    category: d.category,
     isSwitch: d.isSwitch,
     managementIp: d.managementIp,
     oobIp: d.oobIp
@@ -31,13 +33,22 @@ interface Props {
   /** the device being edited, or null to create a new one */
   device: Device | null
   subnets: Subnet[]
+  /** shared device-category names for the Category dropdown */
+  categories: string[]
   onClose: () => void
   onChanged: () => void
   /** after a create, hand the new id back so the parent re-opens it in edit mode */
   onCreated: (id: number) => void
 }
 
-function DeviceModal({ device, subnets, onClose, onChanged, onCreated }: Props): React.JSX.Element {
+function DeviceModal({
+  device,
+  subnets,
+  categories,
+  onClose,
+  onChanged,
+  onCreated
+}: Props): React.JSX.Element {
   const [form, setForm] = useState<DeviceInput>(device ? toForm(device) : EMPTY_FORM)
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<DeviceWarning[]>([])
@@ -157,6 +168,24 @@ function DeviceModal({ device, subnets, onClose, onChanged, onCreated }: Props):
             title="Synced from the drawing (Room / Rack / Rack U / Slot) — edit it in Vectorworks."
           />
           <small className="muted">Synced from Vectorworks (Room / Rack / Rack U / Slot)</small>
+        </label>
+        <label>
+          Category
+          <select
+            value={form.category ?? ''}
+            onChange={(e) => setForm({ ...form, category: e.target.value || null })}
+          >
+            <option value="">— none —</option>
+            {form.category && !categories.includes(form.category) && (
+              <option value={form.category}>{form.category}</option>
+            )}
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <small className="muted">Manage the list in Settings → Device categories.</small>
         </label>
         <label className="checkbox-field span-2">
           <input
