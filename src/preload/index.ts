@@ -33,7 +33,9 @@ const api: VwDeviceManagerApi = {
     setTaggedVlans: (id: number, subnetIds: number[]) =>
       ipcRenderer.invoke('ports:setTaggedVlans', id, subnetIds),
     setPrimary: (id: number, isPrimary: boolean) =>
-      ipcRenderer.invoke('ports:setPrimary', id, isPrimary)
+      ipcRenderer.invoke('ports:setPrimary', id, isPrimary),
+    setUnused: (id: number, isUnused: boolean) =>
+      ipcRenderer.invoke('ports:setUnused', id, isUnused)
   },
   networkSignals: {
     list: () => ipcRenderer.invoke('signals:list'),
@@ -44,7 +46,8 @@ const api: VwDeviceManagerApi = {
     list: () => ipcRenderer.invoke('bundles:list'),
     create: (input: BundleInput) => ipcRenderer.invoke('bundles:create', input),
     update: (id: number, input: BundleInput) => ipcRenderer.invoke('bundles:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('bundles:remove', id)
+    remove: (id: number) => ipcRenderer.invoke('bundles:remove', id),
+    duplicate: (id: number) => ipcRenderer.invoke('bundles:duplicate', id)
   },
   cables: {
     create: (bundleId: number, input: CableInput) =>

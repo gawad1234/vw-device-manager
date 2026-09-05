@@ -332,6 +332,7 @@ function ipScheduleTable(): Table {
       location: d.location ?? ''
     }
     for (const p of d.ports) {
+      if (p.isUnused) continue // jacks flagged "not needed" don't appear in schedules
       const s = p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId) : undefined
       raw.push({
         ...base,
@@ -398,14 +399,16 @@ function deviceListEntries(): DeviceEntry[] {
     .map((d) => {
       let ip = ''
       let subnetId: number | null = null
-      const chosen = d.ports.find((x) => x.isPrimary) // user-designated main port
+      const chosen = d.ports.find((x) => x.isPrimary && !x.isUnused) // user-designated main port
       if (chosen) {
         ip = chosen.ipAddress ?? ''
         subnetId = chosen.untaggedSubnetId
       } else if (d.isSwitch && (d.managementIp || d.oobIp)) {
         ip = d.managementIp || d.oobIp || '' // switch IPs aren't tied to a port subnet
       } else {
-        const p = d.ports.find((x) => x.ipAddress) ?? d.ports[0]
+        // Auto-pick among jacks that are actually in use.
+        const usable = d.ports.filter((x) => !x.isUnused)
+        const p = usable.find((x) => x.ipAddress) ?? usable[0]
         if (p) {
           ip = p.ipAddress ?? ''
           subnetId = p.untaggedSubnetId
@@ -536,7 +539,7 @@ function ipScheduleHtml(logo: string | null): string {
     if (!group.length) return ''
     const rows = group
       .map((d, gi) => {
-        const ports = sortedPorts(d.ports)
+        const ports = sortedPorts(d.ports.filter((p) => !p.isUnused))
         const list = ports.length ? ports : [null]
         return list
           .map((p, i) => `<tr class="g${gi % 2}">${i === 0 ? lead(d, list.length) : ''}${cells(d, p)}</tr>`)

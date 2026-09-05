@@ -664,6 +664,20 @@ input[type='checkbox'] {
   background: var(--ev-c-black);
 }
 
+/* A jack flagged "not needed" — dimmed, and collapsed into its own section. */
+.port-unused {
+  opacity: 0.6;
+}
+
+.unused-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
 .port-fields {
   display: flex;
   flex-wrap: wrap;

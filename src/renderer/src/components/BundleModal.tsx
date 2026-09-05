@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import type { Bundle, BundleInput, CableType, Device } from '../../../shared/types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Bundle, BundleInput, CableType, Device, RowSaver } from '../../../shared/types'
 import Modal from './Modal'
 import BundleCables from './BundleCables'
 import ExportMenu from './ExportMenu'
@@ -56,6 +56,15 @@ function BundleModal({
   const [form, setForm] = useState<BundleInput>(bundle ? toForm(bundle) : EMPTY_FORM)
   const [error, setError] = useState<string | null>(null)
 
+  // Cable rows register their save so "Save changes" flushes them too.
+  const saversRef = useRef(new Set<RowSaver>())
+  const registerSaver = useCallback((fn: RowSaver) => {
+    saversRef.current.add(fn)
+    return () => {
+      saversRef.current.delete(fn)
+    }
+  }, [])
+
   useEffect(() => {
     setForm(bundle ? toForm(bundle) : EMPTY_FORM)
     setError(null)
@@ -70,11 +79,20 @@ function BundleModal({
     const result = bundle
       ? await window.api.bundles.update(bundle.id, form)
       : await window.api.bundles.create(form)
+    // Flush the cables sub-section so "Save changes" saves everything.
+    for (const saver of saversRef.current) await saver()
     setError(null)
     onChanged()
     // New bundle: reopen in edit mode to add cables. Existing: close on save.
     if (!bundle) onCreated(result.id)
     else onClose()
+  }
+
+  async function handleDuplicate(): Promise<void> {
+    if (!bundle) return
+    const copy = await window.api.bundles.duplicate(bundle.id)
+    onChanged()
+    if (copy) onCreated(copy.id) // switch to editing the new copy
   }
 
   async function handleDelete(): Promise<void> {
@@ -99,6 +117,9 @@ function BundleModal({
         <>
           <button className="btn btn-danger" onClick={handleDelete}>
             Delete
+          </button>
+          <button className="btn" onClick={handleDuplicate}>
+            Duplicate
           </button>
           <ExportMenu scope="bundle" bundleId={bundle.id} dropUp />
         </>
@@ -190,6 +211,7 @@ function BundleModal({
             devices={devices}
             cableTypes={cableTypes}
             onChanged={onChanged}
+            registerSaver={registerSaver}
           />
         </div>
       ) : (

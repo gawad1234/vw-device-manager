@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import type { Device, DeviceInput, DeviceWarning, Subnet } from '../../../shared/types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Device, DeviceInput, DeviceWarning, RowSaver, Subnet } from '../../../shared/types'
 import Modal from './Modal'
 import PortsSection from './PortsSection'
 
@@ -54,6 +54,15 @@ function DeviceModal({
   const [warnings, setWarnings] = useState<DeviceWarning[]>([])
   const [saving, setSaving] = useState(false)
 
+  // Port rows register their save here so "Save changes" flushes them too.
+  const saversRef = useRef(new Set<RowSaver>())
+  const registerSaver = useCallback((fn: RowSaver) => {
+    saversRef.current.add(fn)
+    return () => {
+      saversRef.current.delete(fn)
+    }
+  }, [])
+
   // Re-seed the form only when a different device is opened — NOT on every
   // ports refresh (which re-renders with the same id and would wipe edits).
   useEffect(() => {
@@ -72,21 +81,29 @@ function DeviceModal({
     const result = device
       ? await window.api.devices.update(device.id, form)
       : await window.api.devices.create(form)
-    setSaving(false)
     if (result.error) {
+      setSaving(false)
       setError(result.error)
       setWarnings([])
       return
     }
-    setError(null)
+    // Flush the ports sub-section so "Save changes" saves everything, not just
+    // the device fields. Keep the first port error (if any) to surface it.
+    let childError: string | undefined
+    for (const saver of saversRef.current) {
+      const r = await saver()
+      if (!r.ok && !childError) childError = r.error
+    }
+    setSaving(false)
+    setError(childError ?? null)
     setWarnings(result.warnings)
     onChanged()
     if (!device && result.device) {
       // New device: reopen in edit mode so ports can be added.
       onCreated(result.device.id)
-    } else if (device && result.warnings.length === 0) {
-      // Editing an existing device saved cleanly — close the window. (If there
-      // are advisory warnings, stay open so they're seen.)
+    } else if (device && !childError && result.warnings.length === 0) {
+      // Editing an existing device saved cleanly — close the window. (If a port
+      // failed or there are advisory warnings, stay open so they're seen.)
       onClose()
     }
   }
@@ -231,7 +248,12 @@ function DeviceModal({
       {device ? (
         <div className="modal-section">
           <h3>Ports</h3>
-          <PortsSection device={device} subnets={subnets} onChanged={onChanged} />
+          <PortsSection
+            device={device}
+            subnets={subnets}
+            onChanged={onChanged}
+            registerSaver={registerSaver}
+          />
         </div>
       ) : (
         <p className="muted modal-section">Create the device first, then add its ports here.</p>

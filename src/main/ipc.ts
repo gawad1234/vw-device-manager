@@ -40,6 +40,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('ports:setPrimary', (_e, id: number, isPrimary: boolean) =>
     repo.setPrimaryPort(id, isPrimary)
   )
+  ipcMain.handle('ports:setUnused', (_e, id: number, isUnused: boolean) =>
+    repo.setPortUnused(id, isUnused)
+  )
 
   // Network signals + cable types are the shared, cross-project library.
   ipcMain.handle('signals:list', () => library.listNetworkSignals())
@@ -52,6 +55,7 @@ export function registerIpcHandlers(): void {
     repo.updateBundle(id, input)
   )
   ipcMain.handle('bundles:remove', (_e, id: number) => repo.deleteBundle(id))
+  ipcMain.handle('bundles:duplicate', (_e, id: number) => repo.duplicateBundle(id))
 
   ipcMain.handle('cables:create', (_e, bundleId: number, input: CableInput) =>
     repo.createCable(bundleId, input)

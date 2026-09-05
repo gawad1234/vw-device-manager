@@ -41,7 +41,8 @@ function mapPort(row: Row, taggedSubnetIds: number[]): Port {
     untaggedSubnetId: (row.untagged_subnet_id as number | null) ?? null,
     taggedSubnetIds,
     vwSocketKey: (row.vw_socket_key as string | null) ?? null,
-    isPrimary: Boolean(row.is_primary)
+    isPrimary: Boolean(row.is_primary),
+    isUnused: Boolean(row.is_unused)
   }
 }
 
@@ -231,7 +232,14 @@ export function setPrimaryPort(portId: number, isPrimary: boolean): void {
   const row = queryOne('SELECT device_id FROM ports WHERE id = ?', [portId])
   if (!row) return
   dbRun('UPDATE ports SET is_primary = 0 WHERE device_id = ?', [row.device_id as number])
-  if (isPrimary) dbRun('UPDATE ports SET is_primary = 1 WHERE id = ?', [portId])
+  if (isPrimary) dbRun('UPDATE ports SET is_primary = 1, is_unused = 0 WHERE id = ?', [portId])
+}
+
+/** Flag a jack as not used for the network (hidden from schedules/labels/sync),
+ *  or restore it. Marking a port unused also clears its "main" flag. */
+export function setPortUnused(portId: number, isUnused: boolean): void {
+  if (isUnused) dbRun('UPDATE ports SET is_unused = 1, is_primary = 0 WHERE id = ?', [portId])
+  else dbRun('UPDATE ports SET is_unused = 0 WHERE id = ?', [portId])
 }
 
 /** Replace the port's tagged-VLAN set with exactly the given subnet ids. */
@@ -495,6 +503,32 @@ export function updateBundle(id: number, input: BundleInput): Bundle {
 export function deleteBundle(id: number): void {
   dbRun('DELETE FROM cables WHERE bundle_id = ?', [id])
   dbRun('DELETE FROM bundles WHERE id = ?', [id])
+}
+
+/** Copy a bundle and all its cables into a new "(copy)" bundle. The copy's
+ *  cables start with a fresh checklist (pulled/labeled reset). Returns the new
+ *  bundle, or null if the source is gone. */
+export function duplicateBundle(id: number): Bundle | null {
+  const src = getBundleById(id)
+  if (!src) return null
+  dbRun(
+    `INSERT INTO bundles (name, color, from_location, to_location, length, notes)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [`${src.name} (copy)`, src.color, src.fromLocation, src.toLocation, src.length, src.notes]
+  )
+  const newId = lastInsertRowId()
+  for (const c of src.cables) {
+    createCable(newId, {
+      name: c.name,
+      cableType: c.cableType,
+      source: c.source,
+      destination: c.destination,
+      pulled: false,
+      labeled: false,
+      notes: c.notes
+    })
+  }
+  return getBundleById(newId)
 }
 
 // ---- Project meta (per-show settings, e.g. logo) ------------------------

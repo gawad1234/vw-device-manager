@@ -25,6 +25,8 @@ export interface Port {
   /** the device's designated "main" access route (at most one per device) —
    *  used as the device's main IP/VLAN in the Device list export */
   isPrimary: boolean
+  /** a jack not used for the network — hidden from schedules/labels/VW sync */
+  isUnused: boolean
 }
 
 /** Editable port fields. deviceId is passed to create(); tagged VLANs are set
@@ -185,6 +187,10 @@ export interface UpdateStatus {
   canSelfInstall: boolean
 }
 
+/** A sub-editor row's save, called by a modal's "Save changes" so it flushes
+ *  every child row (ports/cables), not just the top-level fields. */
+export type RowSaver = () => Promise<{ ok: boolean; error?: string }>
+
 export interface VwDeviceManagerApi {
   subnets: {
     list: () => Promise<Subnet[]>
@@ -205,6 +211,8 @@ export interface VwDeviceManagerApi {
     setTaggedVlans: (id: number, subnetIds: number[]) => Promise<void>
     /** mark this port the device's main access route (or clear it) */
     setPrimary: (id: number, isPrimary: boolean) => Promise<void>
+    /** flag this jack as not used for the network (or restore it) */
+    setUnused: (id: number, isUnused: boolean) => Promise<void>
   }
   /** ConnectCAD socket "signal" values the sync scripts treat as network ports. */
   networkSignals: {
@@ -217,6 +225,8 @@ export interface VwDeviceManagerApi {
     create: (input: BundleInput) => Promise<Bundle>
     update: (id: number, input: BundleInput) => Promise<Bundle>
     remove: (id: number) => Promise<void>
+    /** copy a bundle + its cables into a new "(copy)" bundle */
+    duplicate: (id: number) => Promise<Bundle | null>
   }
   cables: {
     create: (bundleId: number, input: CableInput) => Promise<Cable>

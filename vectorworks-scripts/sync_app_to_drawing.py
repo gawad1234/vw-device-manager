@@ -202,20 +202,35 @@ def network_jacks(h, net_signals):
     return jacks
 
 
+# Extra WHERE clause that hides jacks flagged "not needed" in the app. Set in
+# main() only when the ports.is_unused column exists (older DBs won't have it),
+# so the scripts keep working against a database that hasn't been migrated yet.
+UNUSED_WHERE = ""
+
+
+def _has_unused_column(cur):
+    try:
+        cur.execute("PRAGMA table_info(ports)")
+        return any(row[1] == "is_unused" for row in cur.fetchall())
+    except Exception:
+        return False
+
+
 def build_ports_summary(cur, device_id):
     """One readable line per port for the device-level vwdm_ports field, e.g.:
         1GB A: 10.0.20.102 [Mgmt] +Prod, Guest
         1GB B: [Prod]
     This is what the Object Info palette / a Data Tag on the device can show,
-    since the per-socket records aren't reachable there."""
+    since the per-socket records aren't reachable there. Jacks marked "not
+    needed" in the app are skipped."""
     cur.execute(
         """
         SELECT p.label, p.ip_address, s.name
         FROM ports p
         LEFT JOIN subnets s ON s.id = p.untagged_subnet_id
-        WHERE p.device_id = ?
+        WHERE p.device_id = ?{0}
         ORDER BY p.label COLLATE NOCASE
-        """,
+        """.format(UNUSED_WHERE),
         (device_id,),
     )
     lines = []
@@ -255,13 +270,13 @@ def write_port_records(cur, device_id, h, net_signals):
             SELECT p.id, p.ip_address, s.name
             FROM ports p
             LEFT JOIN subnets s ON s.id = p.untagged_subnet_id
-            WHERE p.device_id = ? AND p.vw_socket_key = ?
-            """,
+            WHERE p.device_id = ? AND p.vw_socket_key = ?{0}
+            """.format(UNUSED_WHERE),
             (device_id, jack_name),
         )
         prow = cur.fetchone()
         if prow is None:
-            continue  # jack not linked to a port yet — run link_selected.py
+            continue  # jack not linked yet, or marked "not needed" in the app
         port_id, ip_address, untagged_name = prow
 
         cur.execute(
@@ -323,6 +338,8 @@ def main():
 
     try:
         cur = conn.cursor()
+        global UNUSED_WHERE
+        UNUSED_WHERE = " AND p.is_unused = 0" if _has_unused_column(cur) else ""
         net_signals = load_network_signals(conn)
         for h in handles:
             id_str = vs.GetRField(h, RECORD_NAME, FIELD_ID)

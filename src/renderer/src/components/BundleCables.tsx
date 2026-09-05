@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { Bundle, Cable, CableEndpoint, CableType, Device } from '../../../shared/types'
+import { useEffect, useRef, useState } from 'react'
+import type { Bundle, Cable, CableEndpoint, CableType, Device, RowSaver } from '../../../shared/types'
 
 /** Source/destination editor: pick a device (and optionally a specific port),
  *  or fall back to free text when the device isn't in the app. */
@@ -67,9 +67,17 @@ interface CableRowProps {
   devices: Device[]
   cableTypes: CableType[]
   onChanged: () => void
+  /** register this row's save so the bundle editor's "Save changes" flushes it */
+  registerSaver?: (fn: RowSaver) => () => void
 }
 
-function CableRow({ cable, devices, cableTypes, onChanged }: CableRowProps): React.JSX.Element {
+function CableRow({
+  cable,
+  devices,
+  cableTypes,
+  onChanged,
+  registerSaver
+}: CableRowProps): React.JSX.Element {
   const [name, setName] = useState(cable.name)
   const [cableType, setCableType] = useState(cable.cableType ?? '')
   const [source, setSource] = useState<CableEndpoint>(cable.source)
@@ -80,7 +88,7 @@ function CableRow({ cable, devices, cableTypes, onChanged }: CableRowProps): Rea
 
   // `patch` lets the check sheet persist a single toggle immediately while still
   // carrying along any edits in progress in this row.
-  async function save(patch?: { pulled?: boolean; labeled?: boolean }): Promise<void> {
+  async function persist(patch?: { pulled?: boolean; labeled?: boolean }): Promise<{ ok: boolean }> {
     setSaving(true)
     await window.api.cables.update(cable.id, {
       name: name.trim() || cable.name,
@@ -92,8 +100,21 @@ function CableRow({ cable, devices, cableTypes, onChanged }: CableRowProps): Rea
       notes: cable.notes
     })
     setSaving(false)
+    return { ok: true }
+  }
+
+  async function save(patch?: { pulled?: boolean; labeled?: boolean }): Promise<void> {
+    await persist(patch)
     onChanged()
   }
+
+  // Keep a ref to the latest persist so the bulk flush runs current state.
+  const persistRef = useRef<RowSaver>(() => persist())
+  persistRef.current = () => persist()
+  useEffect(() => {
+    if (!registerSaver) return
+    return registerSaver(() => persistRef.current())
+  }, [registerSaver])
 
   function togglePulled(value: boolean): void {
     setPulled(value)
@@ -176,9 +197,16 @@ interface Props {
   devices: Device[]
   cableTypes: CableType[]
   onChanged: () => void
+  registerSaver?: (fn: RowSaver) => () => void
 }
 
-function BundleCables({ bundle, devices, cableTypes, onChanged }: Props): React.JSX.Element {
+function BundleCables({
+  bundle,
+  devices,
+  cableTypes,
+  onChanged,
+  registerSaver
+}: Props): React.JSX.Element {
   async function addCable(): Promise<void> {
     await window.api.cables.create(bundle.id, {
       name: `Cable ${bundle.cables.length + 1}`,
@@ -211,6 +239,7 @@ function BundleCables({ bundle, devices, cableTypes, onChanged }: Props): React.
           devices={devices}
           cableTypes={cableTypes}
           onChanged={onChanged}
+          registerSaver={registerSaver}
         />
       ))}
       <button className="btn btn-small" onClick={addCable}>

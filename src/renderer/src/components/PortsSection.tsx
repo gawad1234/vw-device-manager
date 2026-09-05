@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { Device, DeviceWarning, Port, Subnet } from '../../../shared/types'
+import { useEffect, useRef, useState } from 'react'
+import type { Device, DeviceWarning, Port, RowSaver, Subnet } from '../../../shared/types'
 
 function subnetLabel(s: Subnet): string {
   return s.vlan ? `${s.name} (VLAN ${s.vlan})` : s.name
@@ -11,9 +11,11 @@ interface PortRowProps {
   /** Switch ports are VLAN-only — no per-port IP (that lives on the device). */
   isSwitch: boolean
   onChanged: () => void
+  /** register this row's save so the modal's "Save changes" flushes it too */
+  registerSaver?: (fn: RowSaver) => () => void
 }
 
-function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JSX.Element {
+function PortRow({ port, subnets, isSwitch, onChanged, registerSaver }: PortRowProps): React.JSX.Element {
   const [label, setLabel] = useState(port.label)
   const [ip, setIp] = useState(port.ipAddress ?? '')
   const [untagged, setUntagged] = useState<number | null>(port.untaggedSubnetId)
@@ -24,7 +26,8 @@ function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JS
 
   const fromVw = port.vwSocketKey != null
 
-  async function save(): Promise<void> {
+  // Persist this row's fields; returns whether it saved (for the bulk flush).
+  async function persist(): Promise<{ ok: boolean; error?: string }> {
     setSaving(true)
     const result = await window.api.ports.update(port.id, {
       label: label.trim() || port.label,
@@ -35,11 +38,24 @@ function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JS
     if (result.error) {
       setError(result.error)
       setWarnings([])
-      return
+      return { ok: false, error: result.error }
     }
     setError(null)
     setWarnings(result.warnings)
-    onChanged()
+    return { ok: true }
+  }
+
+  // Keep a ref to the latest persist so the registered saver always runs current state.
+  const persistRef = useRef<RowSaver>(persist)
+  persistRef.current = persist
+  useEffect(() => {
+    if (!registerSaver) return
+    return registerSaver(() => persistRef.current())
+  }, [registerSaver])
+
+  async function save(): Promise<void> {
+    const r = await persist()
+    if (r.ok) onChanged()
   }
 
   async function remove(): Promise<void> {
@@ -50,6 +66,11 @@ function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JS
 
   async function togglePrimary(): Promise<void> {
     await window.api.ports.setPrimary(port.id, !port.isPrimary)
+    onChanged()
+  }
+
+  async function toggleUnused(): Promise<void> {
+    await window.api.ports.setUnused(port.id, !port.isUnused)
     onChanged()
   }
 
@@ -69,7 +90,7 @@ function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JS
     .map(subnetLabel)
 
   return (
-    <div className="port-row">
+    <div className={`port-row${port.isUnused ? ' port-unused' : ''}`}>
       {error && <div className="banner banner-error">{error}</div>}
       {warnings.map((w, i) => (
         <div className="banner banner-warning" key={i}>
@@ -107,7 +128,19 @@ function PortRow({ port, subnets, isSwitch, onChanged }: PortRowProps): React.JS
           </select>
         </label>
         <div className="port-actions">
-          {!isSwitch && (
+          <button
+            type="button"
+            className="btn btn-small"
+            title={
+              port.isUnused
+                ? 'Use this jack for the network again'
+                : "Mark this jack as not used for the network — it's hidden from schedules, labels and the drawing sync"
+            }
+            onClick={toggleUnused}
+          >
+            {port.isUnused ? 'Use jack' : 'Not needed'}
+          </button>
+          {!isSwitch && !port.isUnused && (
             <button
               type="button"
               className={`btn btn-small primary-toggle${port.isPrimary ? ' is-on' : ''}`}
@@ -161,9 +194,16 @@ interface Props {
   device: Device
   subnets: Subnet[]
   onChanged: () => void
+  /** register child saves so the device editor's "Save changes" flushes ports */
+  registerSaver?: (fn: RowSaver) => () => void
 }
 
-function PortsSection({ device, subnets, onChanged }: Props): React.JSX.Element {
+function PortsSection({ device, subnets, onChanged, registerSaver }: Props): React.JSX.Element {
+  const [showUnused, setShowUnused] = useState(false)
+
+  const active = device.ports.filter((p) => !p.isUnused)
+  const unused = device.ports.filter((p) => p.isUnused)
+
   async function addPort(): Promise<void> {
     await window.api.ports.create(device.id, {
       label: `Port ${device.ports.length + 1}`,
@@ -179,18 +219,39 @@ function PortsSection({ device, subnets, onChanged }: Props): React.JSX.Element 
         <p className="muted">Switch ports are VLAN-only — set the untagged network and any tagged (trunk) VLANs.</p>
       )}
       {device.ports.length === 0 && <p className="muted">No ports yet.</p>}
-      {device.ports.map((p) => (
+      {active.map((p) => (
         <PortRow
           key={p.id}
           port={p}
           subnets={subnets}
           isSwitch={device.isSwitch}
           onChanged={onChanged}
+          registerSaver={registerSaver}
         />
       ))}
       <button className="btn btn-small" onClick={addPort}>
         + Add port
       </button>
+
+      {unused.length > 0 && (
+        <div className="unused-section">
+          <button type="button" className="tag-toggle" onClick={() => setShowUnused((v) => !v)}>
+            <span className="caret">{showUnused ? '▾' : '▸'}</span>
+            Not needed ({unused.length}) — hidden from schedules, labels &amp; sync
+          </button>
+          {showUnused &&
+            unused.map((p) => (
+              <PortRow
+                key={p.id}
+                port={p}
+                subnets={subnets}
+                isSwitch={device.isSwitch}
+                onChanged={onChanged}
+                registerSaver={registerSaver}
+              />
+            ))}
+        </div>
+      )}
     </div>
   )
 }
