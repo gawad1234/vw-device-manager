@@ -187,6 +187,35 @@ export interface UpdateStatus {
   canSelfInstall: boolean
 }
 
+// ---- Host VLAN config generator -------------------------------------------
+
+/** One network on a host NIC config (mirrors the PowerShell $DefaultVlans entry). */
+export interface VlanEntry {
+  name: string
+  vlanId: number
+  /** false for the ONE untagged/native network; true for tagged VLANs */
+  tagged: boolean
+  /** use DHCP (the IP fields are ignored when true) */
+  dhcp: boolean
+  ipAddress: string | null
+  prefixLength: number
+  gateway: string | null
+  dnsServers: string[]
+}
+
+/** A saved host configuration → a generated PowerShell VLAN-trunk script. */
+export interface HostConfig {
+  id: number
+  name: string
+  /** the Hyper-V external switch name (script default) */
+  switchName: string
+  vlans: VlanEntry[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type HostConfigInput = Omit<HostConfig, 'id' | 'createdAt' | 'updatedAt'>
+
 /** A sub-editor row's save, called by a modal's "Save changes" so it flushes
  *  every child row (ports/cables), not just the top-level fields. */
 export type RowSaver = () => Promise<{ ok: boolean; error?: string }>
@@ -289,4 +318,13 @@ export interface VwDeviceManagerApi {
   }
   /** Fires whenever the update status changes. Returns an unsubscribe fn. */
   onUpdateStatus: (cb: (status: UpdateStatus) => void) => () => void
+  /** Saved host VLAN configs + generating their PowerShell scripts. */
+  configs: {
+    list: () => Promise<HostConfig[]>
+    create: (input: HostConfigInput) => Promise<HostConfig>
+    update: (id: number, input: HostConfigInput) => Promise<HostConfig>
+    remove: (id: number) => Promise<void>
+    /** generate the .ps1 for this config and save it (returns path, or null if cancelled) */
+    generate: (id: number) => Promise<string | null>
+  }
 }

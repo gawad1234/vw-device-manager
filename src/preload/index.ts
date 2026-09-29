@@ -6,6 +6,7 @@ import type {
   CableTypeInput,
   DeviceInput,
   ExportOptions,
+  HostConfigInput,
   PortInput,
   SubnetInput,
   VwDeviceManagerApi
@@ -102,6 +103,13 @@ const api: VwDeviceManagerApi = {
     const listener = (_e: unknown, status: Parameters<typeof cb>[0]): void => cb(status)
     ipcRenderer.on('update-status', listener)
     return () => ipcRenderer.removeListener('update-status', listener)
+  },
+  configs: {
+    list: () => ipcRenderer.invoke('configs:list'),
+    create: (input: HostConfigInput) => ipcRenderer.invoke('configs:create', input),
+    update: (id: number, input: HostConfigInput) => ipcRenderer.invoke('configs:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('configs:remove', id),
+    generate: (id: number) => ipcRenderer.invoke('configs:generate', id)
   }
 }
 

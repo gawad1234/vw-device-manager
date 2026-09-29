@@ -8,12 +8,15 @@ import type {
   Device,
   DeviceInput,
   DeviceWarning,
+  HostConfig,
+  HostConfigInput,
   Port,
   PortInput,
   SaveDeviceResult,
   SavePortResult,
   Subnet,
-  SubnetInput
+  SubnetInput,
+  VlanEntry
 } from '../shared/types'
 
 type Row = Record<string, unknown>
@@ -532,6 +535,56 @@ export function duplicateBundle(id: number): Bundle | null {
 }
 
 // ---- Project meta (per-show settings, e.g. logo) ------------------------
+
+// ---- Host VLAN configs --------------------------------------------------
+
+function mapHostConfig(row: Row): HostConfig {
+  let vlans: VlanEntry[] = []
+  try {
+    vlans = JSON.parse((row.vlans_json as string) || '[]') as VlanEntry[]
+  } catch {
+    vlans = []
+  }
+  return {
+    id: row.id as number,
+    name: row.name as string,
+    switchName: (row.switch_name as string) || 'VLAN-Trunk',
+    vlans,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string
+  }
+}
+
+export function listHostConfigs(): HostConfig[] {
+  return queryAll('SELECT * FROM host_configs ORDER BY name COLLATE NOCASE').map(mapHostConfig)
+}
+
+export function getHostConfigById(id: number): HostConfig | null {
+  const row = queryOne('SELECT * FROM host_configs WHERE id = ?', [id])
+  return row ? mapHostConfig(row) : null
+}
+
+export function createHostConfig(input: HostConfigInput): HostConfig {
+  dbRun('INSERT INTO host_configs (name, switch_name, vlans_json) VALUES (?, ?, ?)', [
+    input.name,
+    input.switchName,
+    JSON.stringify(input.vlans)
+  ])
+  return getHostConfigById(lastInsertRowId()) as HostConfig
+}
+
+export function updateHostConfig(id: number, input: HostConfigInput): HostConfig {
+  dbRun(
+    `UPDATE host_configs SET name = ?, switch_name = ?, vlans_json = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+    [input.name, input.switchName, JSON.stringify(input.vlans), id]
+  )
+  return getHostConfigById(id) as HostConfig
+}
+
+export function deleteHostConfig(id: number): void {
+  dbRun('DELETE FROM host_configs WHERE id = ?', [id])
+}
 
 export function getProjectMeta(key: string): string | null {
   const row = queryOne('SELECT value FROM project_meta WHERE key = ?', [key])

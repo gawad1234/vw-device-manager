@@ -3,10 +3,11 @@ import type { Bundle, CableType, Device, ProjectInfo, Subnet } from '../../share
 import SubnetsPage from './pages/SubnetsPage'
 import DevicesPage from './pages/DevicesPage'
 import CablesPage from './pages/CablesPage'
+import ConfigsPage from './pages/ConfigsPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjectMenu from './components/ProjectMenu'
 
-type Tab = 'devices' | 'subnets' | 'cables' | 'settings'
+type Tab = 'devices' | 'subnets' | 'cables' | 'configs' | 'settings'
 
 function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('devices')
@@ -88,6 +89,12 @@ function App(): React.JSX.Element {
             Cables
           </button>
           <button
+            className={`tab ${tab === 'configs' ? 'active' : ''}`}
+            onClick={() => setTab('configs')}
+          >
+            Configs
+          </button>
+          <button
             className={`tab ${tab === 'settings' ? 'active' : ''}`}
             onClick={() => setTab('settings')}
           >
@@ -116,6 +123,8 @@ function App(): React.JSX.Element {
             cableTypes={cableTypes}
             onChanged={refresh}
           />
+        ) : tab === 'configs' ? (
+          <ConfigsPage subnets={subnets} />
         ) : (
           <SettingsPage
             key={project?.path}

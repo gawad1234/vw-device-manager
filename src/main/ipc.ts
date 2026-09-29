@@ -1,8 +1,10 @@
-import { ipcMain } from 'electron'
+import { ipcMain, dialog, shell } from 'electron'
+import { writeFileSync } from 'fs'
 import * as repo from './repository'
 import * as projects from './projects'
 import * as library from './library'
 import { exportDocument } from './exports'
+import { generateVlanScript } from './vlan-script'
 import * as updater from './updater'
 import type {
   BundleInput,
@@ -10,6 +12,7 @@ import type {
   CableTypeInput,
   DeviceInput,
   ExportOptions,
+  HostConfigInput,
   PortInput,
   SubnetInput
 } from '../shared/types'
@@ -92,6 +95,28 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('showName:set', (_e, name: string | null) =>
     repo.setProjectMeta('showName', name)
   )
+
+  // Host VLAN configs → PowerShell script generation (Configs tab).
+  ipcMain.handle('configs:list', () => repo.listHostConfigs())
+  ipcMain.handle('configs:create', (_e, input: HostConfigInput) => repo.createHostConfig(input))
+  ipcMain.handle('configs:update', (_e, id: number, input: HostConfigInput) =>
+    repo.updateHostConfig(id, input)
+  )
+  ipcMain.handle('configs:remove', (_e, id: number) => repo.deleteHostConfig(id))
+  ipcMain.handle('configs:generate', async (_e, id: number) => {
+    const config = repo.getHostConfigById(id)
+    if (!config) return null
+    const script = generateVlanScript(config)
+    const safe = (config.name || 'host-config').replace(/[/\\:*?"<>|]/g, '-')
+    const res = await dialog.showSaveDialog({
+      defaultPath: `${safe}.ps1`,
+      filters: [{ name: 'PowerShell script', extensions: ['ps1'] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    writeFileSync(res.filePath, script, 'utf-8')
+    shell.showItemInFolder(res.filePath) // reveal (don't execute) the .ps1
+    return res.filePath
+  })
 
   // App auto-update (Settings → Updates).
   ipcMain.handle('updates:getState', () => updater.getUpdateStatus())

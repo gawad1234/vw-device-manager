@@ -106,6 +106,17 @@ CREATE TABLE IF NOT EXISTS cables (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Saved host VLAN configurations (for generating PowerShell config scripts).
+-- The VLAN list is stored as a JSON array in vlans_json.
+CREATE TABLE IF NOT EXISTS host_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  switch_name TEXT NOT NULL DEFAULT 'VLAN-Trunk',
+  vlans_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `
 
 // A real embedded SQLite (Node's built-in node:sqlite — no native module) that
