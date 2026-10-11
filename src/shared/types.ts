@@ -222,6 +222,8 @@ export type HostConfigInput = Omit<HostConfig, 'id' | 'createdAt' | 'updatedAt'>
  *  how many have arrived. Outstanding = quantity - received. */
 export interface OrderItem {
   name: string
+  manufacturer: string | null
+  modelNumber: string | null
   quantity: number
   received: number
   notes: string | null

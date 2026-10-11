@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react'
 import type { OrderItem, ShopOrder, ShopOrderInput } from '../../../shared/types'
 import Modal from './Modal'
 
-const BLANK: OrderItem = { name: '', quantity: 1, received: 0, notes: null }
+const BLANK: OrderItem = {
+  name: '',
+  manufacturer: null,
+  modelNumber: null,
+  quantity: 1,
+  received: 0,
+  notes: null
+}
 
 interface Props {
   order: ShopOrder | null
@@ -40,16 +47,27 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
       setImportNote('No devices in this project yet — link them from Vectorworks first.')
       return
     }
-    const counts = new Map<string, number>()
+    const counts = new Map<string, { count: number; fromModel: boolean }>()
     for (const d of devices) {
-      const key = (d.deviceType?.trim() || d.name?.trim() || 'Unknown').trim()
-      counts.set(key, (counts.get(key) ?? 0) + 1)
+      const model = d.deviceType?.trim()
+      const key = (model || d.name?.trim() || 'Unknown').trim()
+      const e = counts.get(key)
+      if (e) e.count++
+      else counts.set(key, { count: 1, fromModel: Boolean(model) })
     }
     const existing = new Set(items.map((i) => i.name.trim().toLowerCase()))
     const additions: OrderItem[] = [...counts.entries()]
-      .filter(([name]) => !existing.has(name.toLowerCase()))
+      .filter(([key]) => !existing.has(key.toLowerCase()))
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([name, quantity]) => ({ name, quantity, received: 0, notes: null }))
+      .map(([key, { count, fromModel }]) => ({
+        name: key,
+        manufacturer: null,
+        // a device's Model (deviceType) is its model number
+        modelNumber: fromModel ? key : null,
+        quantity: count,
+        received: 0,
+        notes: null
+      }))
     if (additions.length === 0) {
       setImportNote('Nothing new to import — every drawing item is already on this order.')
       return
@@ -84,6 +102,8 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
       notes: notes.trim() || null,
       items: items.map((it) => ({
         name: it.name,
+        manufacturer: it.manufacturer?.trim() || null,
+        modelNumber: it.modelNumber?.trim() || null,
         quantity: Math.max(0, Math.trunc(Number(it.quantity) || 0)),
         received: Math.max(0, Math.trunc(Number(it.received) || 0)),
         notes: it.notes
@@ -243,7 +263,23 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
                 </div>
               </div>
               <div className="endpoint-row">
-                <label className="endpoint-field" style={{ flex: '1 1 100%' }}>
+                <label className="endpoint-field" style={{ flex: '1 1 160px' }}>
+                  Manufacturer
+                  <input
+                    value={it.manufacturer ?? ''}
+                    onChange={(e) => patchItem(i, { manufacturer: e.target.value || null })}
+                    placeholder="e.g. Netgear"
+                  />
+                </label>
+                <label className="endpoint-field" style={{ flex: '1 1 160px' }}>
+                  Model number
+                  <input
+                    value={it.modelNumber ?? ''}
+                    onChange={(e) => patchItem(i, { modelNumber: e.target.value || null })}
+                    placeholder="e.g. M4250-10G2F"
+                  />
+                </label>
+                <label className="endpoint-field" style={{ flex: '2 1 200px' }}>
                   Notes
                   <input
                     value={it.notes ?? ''}
