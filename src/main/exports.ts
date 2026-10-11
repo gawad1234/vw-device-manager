@@ -1,9 +1,15 @@
 import { BrowserWindow, dialog, shell } from 'electron'
 import { writeFileSync } from 'fs'
 import ExcelJS from 'exceljs'
-import { getProjectMeta, listBundles, listDevices, listSubnets } from './repository'
+import {
+  getProjectMeta,
+  getShopOrderById,
+  listBundles,
+  listDevices,
+  listSubnets
+} from './repository'
 import { ipInCidr } from './ip-utils'
-import type { Bundle, CableEndpoint, ExportOptions } from '../shared/types'
+import type { Bundle, CableEndpoint, ExportOptions, ShopOrder } from '../shared/types'
 
 // The show name for the export in progress — read once in exportDocument and
 // used by the shared page() header and printToPDF footer (avoids threading it
@@ -585,6 +591,71 @@ function ipScheduleHtml(logo: string | null): string {
   return page('IP Schedule', switchTable + deviceTable || '<p>No devices yet.</p>', logo)
 }
 
+// ---- Shop order / receiving checklist ------------------------------------
+function orderItemsSorted(order: ShopOrder): ShopOrder['items'] {
+  return order.items
+    .slice()
+    .sort(
+      (a, b) =>
+        (a.category || '￿').localeCompare(b.category || '￿') ||
+        a.name.localeCompare(b.name)
+    )
+}
+
+/** Flat table for CSV/XLSX. `receiving` adds ordered/received/outstanding. */
+function shopOrderTable(order: ShopOrder, receiving: boolean): Table {
+  const rows = orderItemsSorted(order).map((it) => {
+    const qty = Number(it.quantity) || 0
+    const recv = Number(it.received) || 0
+    const base = [it.category || '', it.name || '', it.manufacturer || '', it.modelNumber || '']
+    return receiving
+      ? [...base, String(qty), String(recv), String(Math.max(0, qty - recv)), it.notes || '']
+      : [...base, String(qty), it.notes || '']
+  })
+  const headers = receiving
+    ? ['Category', 'Item', 'Manufacturer', 'Model', 'Ordered', 'Received', 'Outstanding', 'Notes']
+    : ['Category', 'Item', 'Manufacturer', 'Model', 'Qty', 'Notes']
+  return { headers, rows }
+}
+
+/** PDF: order meta header + a section per category. Receiving adds a ☐ column. */
+function shopOrderHtml(order: ShopOrder, receiving: boolean, logo: string | null): string {
+  const items = orderItemsSorted(order)
+  const groups: { cat: string; items: ShopOrder['items'] }[] = []
+  for (const it of items) {
+    const label = it.category?.trim() || 'Uncategorized'
+    const last = groups[groups.length - 1]
+    if (last && last.cat === label) last.items.push(it)
+    else groups.push({ cat: label, items: [it] })
+  }
+  const head = receiving
+    ? '<th class="chk">✓</th><th>Item</th><th>Manufacturer</th><th>Model</th><th class="chk">Ord</th><th class="chk">Recv</th><th>Notes</th>'
+    : '<th>Item</th><th>Manufacturer</th><th>Model</th><th class="chk">Qty</th><th>Notes</th>'
+  const sections = groups.length
+    ? groups
+        .map((g) => {
+          const body = g.items
+            .map((it) => {
+              const qty = Number(it.quantity) || 0
+              const recv = Number(it.received) || 0
+              const cells = `<td>${esc(it.name)}</td><td>${esc(it.manufacturer || '')}</td><td>${esc(
+                it.modelNumber || ''
+              )}</td>`
+              return receiving
+                ? `<tr><td class="chk">☐</td>${cells}<td class="chk">${qty}</td><td class="chk">${recv}</td><td>${esc(it.notes || '')}</td></tr>`
+                : `<tr>${cells}<td class="chk">${qty}</td><td>${esc(it.notes || '')}</td></tr>`
+            })
+            .join('')
+          return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
+        })
+        .join('')
+    : '<p>No items on this order.</p>'
+  const meta = [order.vendor, order.orderDate].filter(Boolean).map((x) => esc(x as string)).join(' · ')
+  const metaBlock = meta ? `<div class="meta">${meta}</div>` : ''
+  const title = (receiving ? 'Receiving Checklist — ' : 'Shop Order — ') + order.name
+  return page(title, metaBlock + sections, logo)
+}
+
 async function htmlToPdf(html: string, landscape: boolean): Promise<Buffer> {
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: false } })
   try {
@@ -615,12 +686,35 @@ const DOC_LABEL: Record<ExportOptions['doc'], string> = {
   schedule: 'cable schedule',
   labels: 'labels',
   ipschedule: 'IP schedule',
-  devicelist: 'device list'
+  devicelist: 'device list',
+  order: 'pull order',
+  receiving: 'receiving checklist'
 }
 
 export async function exportDocument(opts: ExportOptions): Promise<string | null> {
   const logo = getProjectMeta('logo') // per-show logo stamped onto paperwork
   docShowName = getProjectMeta('showName') // used by page() header + pdf footer
+
+  // Shop order: a pull order (for the shop) or a receiving checklist (for the team).
+  if (opts.doc === 'order' || opts.doc === 'receiving') {
+    const order = opts.orderId != null ? getShopOrderById(opts.orderId) : null
+    if (!order) return null
+    const receiving = opts.doc === 'receiving'
+    const label = receiving ? 'receiving checklist' : 'pull order'
+    const res = await dialog.showSaveDialog({
+      defaultPath: `${order.name} ${label}.${opts.format}`.replace(/[/\\:]/g, '-'),
+      filters: [{ name: opts.format.toUpperCase(), extensions: [opts.format] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    const outPath = res.filePath
+    const table = shopOrderTable(order, receiving)
+    if (opts.format === 'csv') writeFileSync(outPath, tableCsv(table), 'utf-8')
+    else if (opts.format === 'xlsx')
+      writeFileSync(outPath, await tableXlsx(table, logo, receiving ? 'Receiving' : 'Order'))
+    else writeFileSync(outPath, await htmlToPdf(shopOrderHtml(order, receiving, logo), false))
+    shell.openPath(outPath)
+    return outPath
+  }
 
   // Project-wide device exports (no bundles): the IP schedule and the device list.
   if (opts.doc === 'ipschedule' || opts.doc === 'devicelist') {

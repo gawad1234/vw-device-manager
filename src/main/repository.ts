@@ -614,7 +614,7 @@ export function listShopOrders(): ShopOrder[] {
   return queryAll('SELECT * FROM shop_orders ORDER BY created_at DESC').map(mapShopOrder)
 }
 
-function getShopOrderById(id: number): ShopOrder | null {
+export function getShopOrderById(id: number): ShopOrder | null {
   const row = queryOne('SELECT * FROM shop_orders WHERE id = ?', [id])
   return row ? mapShopOrder(row) : null
 }

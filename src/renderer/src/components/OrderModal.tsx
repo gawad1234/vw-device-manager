@@ -1,6 +1,26 @@
 import { useEffect, useState } from 'react'
 import type { OrderItem, ShopOrder, ShopOrderInput } from '../../../shared/types'
 import Modal from './Modal'
+import ExportMenu, { type ExportSection } from './ExportMenu'
+
+const ORDER_SECTIONS: ExportSection[] = [
+  {
+    label: 'Pull order (for the shop)',
+    items: [
+      { label: 'PDF', doc: 'order', format: 'pdf' },
+      { label: 'Excel', doc: 'order', format: 'xlsx' },
+      { label: 'CSV', doc: 'order', format: 'csv' }
+    ]
+  },
+  {
+    label: 'Receiving checklist (for the team)',
+    items: [
+      { label: 'PDF', doc: 'receiving', format: 'pdf' },
+      { label: 'Excel', doc: 'receiving', format: 'xlsx' },
+      { label: 'CSV', doc: 'receiving', format: 'csv' }
+    ]
+  }
+]
 
 const BLANK: OrderItem = {
   name: '',
@@ -183,6 +203,13 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     onClose()
   }
 
+  // Persist current edits before an export so the generated file is up to date.
+  async function saveCurrent(): Promise<void> {
+    if (!order) return
+    await window.api.orders.update(order.id, currentInput())
+    onChanged()
+  }
+
   const totalQty = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0)
   const recvQty = items.reduce(
     (s, i) => s + Math.min(Number(i.received) || 0, Number(i.quantity) || 0),
@@ -192,9 +219,18 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   const footer = (
     <>
       {order && (
-        <button className="btn btn-danger" onClick={handleDelete}>
-          Delete
-        </button>
+        <>
+          <button className="btn btn-danger" onClick={handleDelete}>
+            Delete
+          </button>
+          <ExportMenu
+            scope="all"
+            orderId={order.id}
+            sections={ORDER_SECTIONS}
+            onBeforeRun={saveCurrent}
+            dropUp
+          />
+        </>
       )}
       <span className="footer-spacer" />
       <button className="btn" type="button" onClick={onClose}>

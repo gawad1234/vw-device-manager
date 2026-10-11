@@ -144,7 +144,9 @@ export interface ProjectInfo {
 export interface ExportOptions {
   scope: 'bundle' | 'all'
   bundleId?: number
-  doc: 'pullsheet' | 'schedule' | 'labels' | 'ipschedule' | 'devicelist'
+  /** required for `order` / `receiving` docs */
+  orderId?: number
+  doc: 'pullsheet' | 'schedule' | 'labels' | 'ipschedule' | 'devicelist' | 'order' | 'receiving'
   format: 'pdf' | 'xlsx' | 'csv'
   labelStyle?: 'cards' | 'flag'
 }

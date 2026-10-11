@@ -4,6 +4,10 @@ import type { ExportOptions } from '../../../shared/types'
 interface Props {
   scope: 'bundle' | 'all'
   bundleId?: number
+  /** for order/receiving docs */
+  orderId?: number
+  /** run before exporting (e.g. persist unsaved edits so the file is current) */
+  onBeforeRun?: () => Promise<void>
   label?: string
   /** open the dropdown upward (for use in a modal footer near the bottom) */
   dropUp?: boolean
@@ -52,6 +56,8 @@ const CABLE_SECTIONS: ExportSection[] = [
 function ExportMenu({
   scope,
   bundleId,
+  orderId,
+  onBeforeRun,
   label = 'Export',
   dropUp,
   sections = CABLE_SECTIONS
@@ -71,9 +77,11 @@ function ExportMenu({
   async function run(item: ExportItem): Promise<void> {
     setBusy(true)
     try {
+      if (onBeforeRun) await onBeforeRun()
       await window.api.exports.run({
         scope,
         bundleId,
+        orderId,
         doc: item.doc,
         format: item.format,
         labelStyle: item.labelStyle
