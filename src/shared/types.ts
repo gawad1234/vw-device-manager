@@ -216,6 +216,33 @@ export interface HostConfig {
 
 export type HostConfigInput = Omit<HostConfig, 'id' | 'createdAt' | 'updatedAt'>
 
+// ---- Shop orders (equipment purchasing / receiving) -----------------------
+
+/** One line on a shop order: a piece of equipment, how many were ordered, and
+ *  how many have arrived. Outstanding = quantity - received. */
+export interface OrderItem {
+  name: string
+  quantity: number
+  received: number
+  notes: string | null
+}
+
+export interface ShopOrder {
+  id: number
+  /** order name or number */
+  name: string
+  /** supplier / where it's coming from */
+  vendor: string | null
+  /** free-form order date */
+  orderDate: string | null
+  notes: string | null
+  items: OrderItem[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type ShopOrderInput = Omit<ShopOrder, 'id' | 'createdAt' | 'updatedAt'>
+
 /** A sub-editor row's save, called by a modal's "Save changes" so it flushes
  *  every child row (ports/cables), not just the top-level fields. */
 export type RowSaver = () => Promise<{ ok: boolean; error?: string }>
@@ -326,5 +353,12 @@ export interface VwDeviceManagerApi {
     remove: (id: number) => Promise<void>
     /** generate the .ps1 for this config and save it (returns path, or null if cancelled) */
     generate: (id: number) => Promise<string | null>
+  }
+  /** Shop orders: equipment purchasing + receiving tracking. */
+  orders: {
+    list: () => Promise<ShopOrder[]>
+    create: (input: ShopOrderInput) => Promise<ShopOrder>
+    update: (id: number, input: ShopOrderInput) => Promise<ShopOrder>
+    remove: (id: number) => Promise<void>
   }
 }

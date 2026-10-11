@@ -8,6 +8,7 @@ import type {
   ExportOptions,
   HostConfigInput,
   PortInput,
+  ShopOrderInput,
   SubnetInput,
   VwDeviceManagerApi
 } from '../shared/types'
@@ -110,6 +111,12 @@ const api: VwDeviceManagerApi = {
     update: (id: number, input: HostConfigInput) => ipcRenderer.invoke('configs:update', id, input),
     remove: (id: number) => ipcRenderer.invoke('configs:remove', id),
     generate: (id: number) => ipcRenderer.invoke('configs:generate', id)
+  },
+  orders: {
+    list: () => ipcRenderer.invoke('orders:list'),
+    create: (input: ShopOrderInput) => ipcRenderer.invoke('orders:create', input),
+    update: (id: number, input: ShopOrderInput) => ipcRenderer.invoke('orders:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('orders:remove', id)
   }
 }
 

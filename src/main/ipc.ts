@@ -14,6 +14,7 @@ import type {
   ExportOptions,
   HostConfigInput,
   PortInput,
+  ShopOrderInput,
   SubnetInput
 } from '../shared/types'
 
@@ -117,6 +118,14 @@ export function registerIpcHandlers(): void {
     shell.showItemInFolder(res.filePath) // reveal (don't execute) the .ps1
     return res.filePath
   })
+
+  // Shop orders (Orders tab).
+  ipcMain.handle('orders:list', () => repo.listShopOrders())
+  ipcMain.handle('orders:create', (_e, input: ShopOrderInput) => repo.createShopOrder(input))
+  ipcMain.handle('orders:update', (_e, id: number, input: ShopOrderInput) =>
+    repo.updateShopOrder(id, input)
+  )
+  ipcMain.handle('orders:remove', (_e, id: number) => repo.deleteShopOrder(id))
 
   // App auto-update (Settings → Updates).
   ipcMain.handle('updates:getState', () => updater.getUpdateStatus())

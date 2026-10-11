@@ -4,10 +4,11 @@ import SubnetsPage from './pages/SubnetsPage'
 import DevicesPage from './pages/DevicesPage'
 import CablesPage from './pages/CablesPage'
 import ConfigsPage from './pages/ConfigsPage'
+import OrdersPage from './pages/OrdersPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjectMenu from './components/ProjectMenu'
 
-type Tab = 'devices' | 'subnets' | 'cables' | 'configs' | 'settings'
+type Tab = 'devices' | 'subnets' | 'cables' | 'configs' | 'orders' | 'settings'
 
 function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('devices')
@@ -95,6 +96,12 @@ function App(): React.JSX.Element {
             Configs
           </button>
           <button
+            className={`tab ${tab === 'orders' ? 'active' : ''}`}
+            onClick={() => setTab('orders')}
+          >
+            Orders
+          </button>
+          <button
             className={`tab ${tab === 'settings' ? 'active' : ''}`}
             onClick={() => setTab('settings')}
           >
@@ -125,6 +132,8 @@ function App(): React.JSX.Element {
           />
         ) : tab === 'configs' ? (
           <ConfigsPage subnets={subnets} />
+        ) : tab === 'orders' ? (
+          <OrdersPage />
         ) : (
           <SettingsPage
             key={project?.path}

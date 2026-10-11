@@ -117,6 +117,19 @@ CREATE TABLE IF NOT EXISTS host_configs (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Shop orders (equipment purchasing / receiving). Line items are a JSON array
+-- in items_json; each item tracks quantity ordered vs. received.
+CREATE TABLE IF NOT EXISTS shop_orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  vendor TEXT,
+  order_date TEXT,
+  notes TEXT,
+  items_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `
 
 // A real embedded SQLite (Node's built-in node:sqlite — no native module) that

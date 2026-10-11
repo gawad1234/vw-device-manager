@@ -10,10 +10,13 @@ import type {
   DeviceWarning,
   HostConfig,
   HostConfigInput,
+  OrderItem,
   Port,
   PortInput,
   SaveDeviceResult,
   SavePortResult,
+  ShopOrder,
+  ShopOrderInput,
   Subnet,
   SubnetInput,
   VlanEntry
@@ -584,6 +587,58 @@ export function updateHostConfig(id: number, input: HostConfigInput): HostConfig
 
 export function deleteHostConfig(id: number): void {
   dbRun('DELETE FROM host_configs WHERE id = ?', [id])
+}
+
+// ---- Shop orders --------------------------------------------------------
+
+function mapShopOrder(row: Row): ShopOrder {
+  let items: OrderItem[] = []
+  try {
+    items = JSON.parse((row.items_json as string) || '[]') as OrderItem[]
+  } catch {
+    items = []
+  }
+  return {
+    id: row.id as number,
+    name: row.name as string,
+    vendor: (row.vendor as string | null) ?? null,
+    orderDate: (row.order_date as string | null) ?? null,
+    notes: (row.notes as string | null) ?? null,
+    items,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string
+  }
+}
+
+export function listShopOrders(): ShopOrder[] {
+  return queryAll('SELECT * FROM shop_orders ORDER BY created_at DESC').map(mapShopOrder)
+}
+
+function getShopOrderById(id: number): ShopOrder | null {
+  const row = queryOne('SELECT * FROM shop_orders WHERE id = ?', [id])
+  return row ? mapShopOrder(row) : null
+}
+
+export function createShopOrder(input: ShopOrderInput): ShopOrder {
+  dbRun(
+    'INSERT INTO shop_orders (name, vendor, order_date, notes, items_json) VALUES (?, ?, ?, ?, ?)',
+    [input.name, input.vendor, input.orderDate, input.notes, JSON.stringify(input.items)]
+  )
+  return getShopOrderById(lastInsertRowId()) as ShopOrder
+}
+
+export function updateShopOrder(id: number, input: ShopOrderInput): ShopOrder {
+  dbRun(
+    `UPDATE shop_orders SET name = ?, vendor = ?, order_date = ?, notes = ?, items_json = ?,
+       updated_at = datetime('now')
+     WHERE id = ?`,
+    [input.name, input.vendor, input.orderDate, input.notes, JSON.stringify(input.items), id]
+  )
+  return getShopOrderById(id) as ShopOrder
+}
+
+export function deleteShopOrder(id: number): void {
+  dbRun('DELETE FROM shop_orders WHERE id = ?', [id])
 }
 
 export function getProjectMeta(key: string): string | null {

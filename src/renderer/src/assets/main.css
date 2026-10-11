@@ -644,6 +644,35 @@ input[type='checkbox'] {
   border: 1px solid rgba(59, 111, 224, 0.3);
 }
 
+/* Shop-order status badges + received line items */
+.badge-ok {
+  background: rgba(127, 206, 154, 0.16);
+  color: #7fce9a;
+  border-color: rgba(127, 206, 154, 0.32);
+}
+
+.badge-warn {
+  background: rgba(224, 184, 95, 0.16);
+  color: #ffcf8a;
+  border-color: rgba(224, 184, 95, 0.32);
+}
+
+.badge-open {
+  background: rgba(224, 104, 95, 0.16);
+  color: #ff9a91;
+  border-color: rgba(224, 104, 95, 0.3);
+}
+
+.item-received {
+  opacity: 0.6;
+}
+
+.item-outstanding {
+  align-self: center;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
 /* ---- Expanded editor (ports & cables share this) --------------------- */
 
 .ports-row > td {
