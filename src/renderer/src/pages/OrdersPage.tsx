@@ -12,14 +12,15 @@ interface Stats {
 }
 
 export function orderStats(o: ShopOrder): Stats {
-  const totalQty = o.items.reduce((s, i) => s + (Number(i.quantity) || 0), 0)
-  const recvQty = o.items.reduce(
-    (s, i) => s + Math.min(Number(i.received) || 0, Number(i.quantity) || 0),
-    0
-  )
+  const lines = [
+    ...o.items.map((i) => ({ q: i.quantity, r: i.received })),
+    ...(o.cables ?? []).map((c) => ({ q: c.quantity, r: c.received }))
+  ]
+  const totalQty = lines.reduce((s, x) => s + (Number(x.q) || 0), 0)
+  const recvQty = lines.reduce((s, x) => s + Math.min(Number(x.r) || 0, Number(x.q) || 0), 0)
   const outstanding = Math.max(0, totalQty - recvQty)
   const status =
-    o.items.length === 0
+    lines.length === 0
       ? 'empty'
       : outstanding === 0
         ? 'complete'
@@ -67,18 +68,25 @@ function OrdersPage(): React.JSX.Element {
         ? (orders.find((o) => o.id === openId) ?? null)
         : null
 
-  // Everything still outstanding, across all orders.
+  // Everything still outstanding, across all orders (equipment + cables).
   const waiting = useMemo(
     () =>
-      orders.flatMap((o) =>
-        o.items
+      orders.flatMap((o) => [
+        ...o.items
           .map((i) => ({
             order: o.name,
-            name: i.name,
+            label: i.name,
             waiting: Math.max(0, (Number(i.quantity) || 0) - (Number(i.received) || 0))
           }))
-          .filter((w) => w.waiting > 0 && w.name.trim())
-      ),
+          .filter((w) => w.waiting > 0 && w.label.trim()),
+        ...(o.cables ?? [])
+          .map((c) => ({
+            order: o.name,
+            label: `${c.cableType} ${c.length}`.trim(),
+            waiting: Math.max(0, (Number(c.quantity) || 0) - (Number(c.received) || 0))
+          }))
+          .filter((w) => w.waiting > 0 && w.label.trim())
+      ]),
     [orders]
   )
 
@@ -120,7 +128,7 @@ function OrdersPage(): React.JSX.Element {
             {waiting.map((w, i) => (
               <li key={i}>
                 <span>
-                  <strong>{w.waiting}×</strong> {w.name}
+                  <strong>{w.waiting}×</strong> {w.label}
                   <span className="muted"> — {w.order}</span>
                 </span>
               </li>

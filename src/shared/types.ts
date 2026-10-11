@@ -235,6 +235,15 @@ export interface OrderItem {
   notes: string | null
 }
 
+/** A cable line on an order: a type at a specific length, with a quantity. */
+export interface CableOrderItem {
+  cableType: string
+  length: string
+  quantity: number
+  received: number
+  notes: string | null
+}
+
 export interface ShopOrder {
   id: number
   /** order name or number */
@@ -245,6 +254,8 @@ export interface ShopOrder {
   orderDate: string | null
   notes: string | null
   items: OrderItem[]
+  /** cable lines (type · length · quantity), kept separate from equipment */
+  cables: CableOrderItem[]
   /** when this order was last exported (for the change-highlight baseline) */
   lastExportAt: string | null
   createdAt: string

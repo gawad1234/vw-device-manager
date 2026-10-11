@@ -127,6 +127,8 @@ CREATE TABLE IF NOT EXISTS shop_orders (
   order_date TEXT,
   notes TEXT,
   items_json TEXT NOT NULL DEFAULT '[]',
+  -- cable lines (type · length · quantity), kept separate from equipment items
+  cables_json TEXT NOT NULL DEFAULT '[]',
   -- snapshot of items_json at the last export + when, for change highlighting
   last_export_json TEXT,
   last_export_at TEXT,
@@ -359,6 +361,13 @@ function migrateAddOrderExportSnapshot(database: DatabaseSync): void {
   `)
 }
 
+/** Adds `shop_orders.cables_json` (cable lines, separate from equipment). Guarded. */
+function migrateAddOrderCables(database: DatabaseSync): void {
+  if (!tableExists(database, 'shop_orders')) return
+  if (tableHasColumn(database, 'shop_orders', 'cables_json')) return
+  database.exec("ALTER TABLE shop_orders ADD COLUMN cables_json TEXT NOT NULL DEFAULT '[]'")
+}
+
 /** Bring a freshly opened DB up to date: schema + all migrations. Network
  *  signals / cable types are NOT here — they live in the shared library. */
 function applySchemaAndMigrations(database: DatabaseSync): void {
@@ -373,6 +382,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateAddDeviceCategory(database)
   migrateAddPortUnused(database)
   migrateAddOrderExportSnapshot(database)
+  migrateAddOrderCables(database)
 }
 
 /**

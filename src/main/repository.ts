@@ -5,6 +5,7 @@ import type {
   BundleInput,
   Cable,
   CableInput,
+  CableOrderItem,
   Device,
   DeviceInput,
   DeviceWarning,
@@ -593,10 +594,16 @@ export function deleteHostConfig(id: number): void {
 
 function mapShopOrder(row: Row): ShopOrder {
   let items: OrderItem[] = []
+  let cables: CableOrderItem[] = []
   try {
     items = JSON.parse((row.items_json as string) || '[]') as OrderItem[]
   } catch {
     items = []
+  }
+  try {
+    cables = JSON.parse((row.cables_json as string) || '[]') as CableOrderItem[]
+  } catch {
+    cables = []
   }
   return {
     id: row.id as number,
@@ -605,6 +612,7 @@ function mapShopOrder(row: Row): ShopOrder {
     orderDate: (row.order_date as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
     items,
+    cables,
     lastExportAt: (row.last_export_at as string | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string
@@ -622,8 +630,15 @@ export function getShopOrderById(id: number): ShopOrder | null {
 
 export function createShopOrder(input: ShopOrderInput): ShopOrder {
   dbRun(
-    'INSERT INTO shop_orders (name, vendor, order_date, notes, items_json) VALUES (?, ?, ?, ?, ?)',
-    [input.name, input.vendor, input.orderDate, input.notes, JSON.stringify(input.items)]
+    'INSERT INTO shop_orders (name, vendor, order_date, notes, items_json, cables_json) VALUES (?, ?, ?, ?, ?, ?)',
+    [
+      input.name,
+      input.vendor,
+      input.orderDate,
+      input.notes,
+      JSON.stringify(input.items),
+      JSON.stringify(input.cables ?? [])
+    ]
   )
   return getShopOrderById(lastInsertRowId()) as ShopOrder
 }
@@ -631,9 +646,17 @@ export function createShopOrder(input: ShopOrderInput): ShopOrder {
 export function updateShopOrder(id: number, input: ShopOrderInput): ShopOrder {
   dbRun(
     `UPDATE shop_orders SET name = ?, vendor = ?, order_date = ?, notes = ?, items_json = ?,
-       updated_at = datetime('now')
+       cables_json = ?, updated_at = datetime('now')
      WHERE id = ?`,
-    [input.name, input.vendor, input.orderDate, input.notes, JSON.stringify(input.items), id]
+    [
+      input.name,
+      input.vendor,
+      input.orderDate,
+      input.notes,
+      JSON.stringify(input.items),
+      JSON.stringify(input.cables ?? []),
+      id
+    ]
   )
   return getShopOrderById(id) as ShopOrder
 }

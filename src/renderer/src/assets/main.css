@@ -201,6 +201,15 @@ code {
   height: 14px;
 }
 
+/* Sub-tabs inside the order editor (Equipment / Cables) */
+.subtabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+}
+
 /* ---- Updates panel (Settings) ---------------------------------------- */
 
 .update-controls {

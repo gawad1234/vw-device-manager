@@ -664,6 +664,47 @@ function shopOrderTable(
   return { headers: prevMap ? ['Change', ...core] : core, rows }
 }
 
+/** Cable lines (type · length · qty) flat table for CSV/XLSX. */
+function cableOrderTable(order: ShopOrder, receiving: boolean): Table {
+  const rows = order.cables
+    .slice()
+    .sort((a, b) => a.cableType.localeCompare(b.cableType) || a.length.localeCompare(b.length))
+    .map((c) => {
+      const qty = Number(c.quantity) || 0
+      const recv = Number(c.received) || 0
+      const base = [c.cableType || '', c.length || '']
+      return receiving
+        ? [...base, String(qty), String(recv), String(Math.max(0, qty - recv)), c.notes || '']
+        : [...base, String(qty), String(recv), c.notes || '']
+    })
+  const headers = receiving
+    ? ['Cable type', 'Length', 'Requested', 'Received', 'Outstanding', 'Notes']
+    : ['Cable type', 'Length', 'Requested', 'Received', 'Notes']
+  return { headers, rows }
+}
+
+/** The cables PDF section (appended after the equipment sections). */
+function cableSectionHtml(order: ShopOrder, receiving: boolean): string {
+  if (!order.cables.length) return ''
+  const rows = order.cables
+    .slice()
+    .sort((a, b) => a.cableType.localeCompare(b.cableType) || a.length.localeCompare(b.length))
+  const head = receiving
+    ? '<th class="chk">✓</th><th>Cable type</th><th>Length</th><th class="chk">Req</th><th class="chk">Recv</th><th class="chk">Out</th><th>Notes</th>'
+    : '<th>Cable type</th><th>Length</th><th class="chk">Req</th><th class="chk">Recv</th><th>Notes</th>'
+  const body = rows
+    .map((c) => {
+      const qty = Number(c.quantity) || 0
+      const recv = Number(c.received) || 0
+      const cells = `<td>${esc(c.cableType)}</td><td>${esc(c.length)}</td>`
+      return receiving
+        ? `<tr><td class="chk">☐</td>${cells}<td class="chk">${qty}</td><td class="chk">${recv}</td><td class="chk">${Math.max(0, qty - recv)}</td><td>${esc(c.notes || '')}</td></tr>`
+        : `<tr>${cells}<td class="chk">${qty}</td><td class="chk">${recv}</td><td>${esc(c.notes || '')}</td></tr>`
+    })
+    .join('')
+  return `<section><h2>Cables <span class="meta">(${rows.length})</span></h2><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
+}
+
 /** PDF: order meta header + a section per category. Receiving adds a ☐ column;
  *  both show Requested + Received. When highlighting, new/changed rows are
  *  colored and tagged, with a legend. */
@@ -713,7 +754,34 @@ function shopOrderHtml(
     ? `<div class="legend"><span class="sw-new"></span> new &nbsp;&nbsp; <span class="sw-chg"></span> changed since last export${baselineDate ? ` (${esc(baselineDate)})` : ''}</div>`
     : ''
   const title = (receiving ? 'Receiving Checklist — ' : 'Shop Order — ') + order.name
-  return page(title, metaBlock + legend + sections, logo)
+  return page(title, metaBlock + legend + sections + cableSectionHtml(order, receiving), logo)
+}
+
+/** XLSX for an order: an Equipment/Receiving sheet + (if any) a Cables sheet. */
+async function orderXlsx(
+  order: ShopOrder,
+  receiving: boolean,
+  prevMap: Map<string, OrderItem> | null,
+  logo: string | null
+): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook()
+  const img = parseImageDataUrl(logo)
+  const addSheet = (sheetName: string, t: Table): void => {
+    const ws = wb.addWorksheet(sheetName)
+    ws.columns = t.headers.map((h) => ({ header: h, key: h, width: Math.max(10, Math.min(30, h.length + 8)) }))
+    const headerRowNum = img ? 5 : 1
+    if (img) {
+      ws.spliceRows(1, 0, [], [], [], [])
+      const imgId = wb.addImage({ base64: img.base64, extension: img.extension })
+      ws.addImage(imgId, { tl: { col: 0, row: 0 }, ext: { width: 170, height: 60 } })
+    }
+    ws.getRow(headerRowNum).font = { bold: true }
+    ws.views = [{ state: 'frozen', ySplit: headerRowNum }]
+    for (const r of t.rows) ws.addRow(r)
+  }
+  addSheet(receiving ? 'Receiving' : 'Equipment', shopOrderTable(order, receiving, prevMap))
+  if (order.cables.length) addSheet('Cables', cableOrderTable(order, receiving))
+  return (await wb.xlsx.writeBuffer()) as unknown as Buffer
 }
 
 async function htmlToPdf(html: string, landscape: boolean, footerNote?: string): Promise<Buffer> {
@@ -773,9 +841,13 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     const prevMap = opts.highlightChanges ? prevItemMap(getOrderExportSnapshot(order.id)) : null
     const baselineDate = fmtTs(order.lastExportAt)
     const table = shopOrderTable(order, receiving, prevMap)
-    if (opts.format === 'csv') writeFileSync(outPath, tableCsv(table), 'utf-8')
-    else if (opts.format === 'xlsx')
-      writeFileSync(outPath, await tableXlsx(table, logo, receiving ? 'Receiving' : 'Order'))
+    if (opts.format === 'csv') {
+      const cablesCsv = order.cables.length
+        ? '\r\n\r\nCABLES\r\n' + tableCsv(cableOrderTable(order, receiving))
+        : ''
+      writeFileSync(outPath, tableCsv(table) + cablesCsv, 'utf-8')
+    } else if (opts.format === 'xlsx')
+      writeFileSync(outPath, await orderXlsx(order, receiving, prevMap, logo))
     else
       writeFileSync(
         outPath,

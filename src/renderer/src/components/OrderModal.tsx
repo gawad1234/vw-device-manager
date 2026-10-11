@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import type { OrderItem, ShopOrder, ShopOrderInput } from '../../../shared/types'
+import type {
+  CableOrderItem,
+  OrderItem,
+  ShopOrder,
+  ShopOrderInput
+} from '../../../shared/types'
 import Modal from './Modal'
 import ExportMenu, { type ExportSection } from './ExportMenu'
 
@@ -31,6 +36,13 @@ const BLANK: OrderItem = {
   received: 0,
   notes: null
 }
+const BLANK_CABLE: CableOrderItem = {
+  cableType: '',
+  length: '',
+  quantity: 1,
+  received: 0,
+  notes: null
+}
 
 interface Props {
   order: ShopOrder | null
@@ -45,11 +57,12 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   const [orderDate, setOrderDate] = useState(order?.orderDate ?? '')
   const [notes, setNotes] = useState(order?.notes ?? '')
   const [items, setItems] = useState<OrderItem[]>(order?.items ?? [])
+  const [cables, setCables] = useState<CableOrderItem[]>(order?.cables ?? [])
   const [error, setError] = useState<string | null>(null)
   const [importNote, setImportNote] = useState<string | null>(null)
   const [categories, setCategories] = useState<string[]>([])
+  const [section, setSection] = useState<'equipment' | 'cables'>('equipment')
 
-  // The shared device-category list (same one used in Settings / Devices).
   useEffect(() => {
     window.api.deviceCategories.list().then(setCategories)
   }, [])
@@ -60,10 +73,13 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     setOrderDate(order?.orderDate ?? '')
     setNotes(order?.notes ?? '')
     setItems(order?.items ?? [])
+    setCables(order?.cables ?? [])
     setError(null)
     setImportNote(null)
+    setSection('equipment')
   }, [order?.id])
 
+  // ---- equipment items ----
   function patchItem(i: number, patch: Partial<OrderItem>): void {
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)))
   }
@@ -73,24 +89,17 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   function addItem(): void {
     setItems((prev) => [...prev, { ...BLANK }])
   }
-  function receiveAll(): void {
+  function receiveAllItems(): void {
     setItems((prev) => prev.map((it) => ({ ...it, received: it.quantity })))
   }
 
-  // Pull equipment from the Vectorworks drawing (the project's synced devices),
-  // grouped into a bill of materials: one line per Model/type with its count
-  // (falling back to the device name when a device has no Model). Lines already
-  // on the order (by name) are left alone so re-importing doesn't duplicate.
   async function importFromDrawing(): Promise<void> {
     const devices = await window.api.devices.list()
     if (devices.length === 0) {
       setImportNote('No devices in this project yet — link them from Vectorworks first.')
       return
     }
-    const counts = new Map<
-      string,
-      { count: number; fromModel: boolean; category: string | null }
-    >()
+    const counts = new Map<string, { count: number; fromModel: boolean; category: string | null }>()
     for (const d of devices) {
       const model = d.deviceType?.trim()
       const key = (model || d.name?.trim() || 'Unknown').trim()
@@ -98,7 +107,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
       const e = counts.get(key)
       if (e) {
         e.count++
-        if (e.category !== cat) e.category = null // devices disagree → leave uncategorized
+        if (e.category !== cat) e.category = null
       } else {
         counts.set(key, { count: 1, fromModel: Boolean(model), category: cat })
       }
@@ -129,50 +138,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     )
   }
 
-  // Pull cables from the Cables tab (all bundles), grouped by cable type with
-  // counts. Types already on the order (by name) are left alone.
-  async function importCables(): Promise<void> {
-    const bundles = await window.api.bundles.list()
-    const cables = bundles.flatMap((b) => b.cables)
-    if (cables.length === 0) {
-      setImportNote('No cables in this project yet — add some in the Cables tab first.')
-      return
-    }
-    const counts = new Map<string, number>()
-    for (const c of cables) {
-      const key = (c.cableType?.trim() || 'Cable (untyped)').trim()
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    }
-    const existing = new Set(items.map((i) => i.name.trim().toLowerCase()))
-    const additions: OrderItem[] = [...counts.entries()]
-      .filter(([key]) => !existing.has(key.toLowerCase()))
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([key, count]) => ({
-        name: key,
-        manufacturer: null,
-        modelNumber: null,
-        category: null,
-        quantity: count,
-        received: 0,
-        notes: null
-      }))
-    if (additions.length === 0) {
-      setImportNote('Nothing new — those cable types are already on this order.')
-      return
-    }
-    setItems((prev) => [...prev, ...additions])
-    const skipped = counts.size - additions.length
-    setImportNote(
-      `Imported ${additions.length} cable type(s) from ${cables.length} cable(s) across ${bundles.length} bundle(s)` +
-        (skipped > 0 ? ` (${skipped} already on the order)` : '') +
-        '. Review quantities, then Save.'
-    )
-  }
-
-  // Paste a block copied from Excel/Sheets: tab-separated columns, one row per
-  // line → Item, Manufacturer, Model, Ordered, Received, Notes. A single value
-  // (no tabs/newlines) pastes normally into the focused cell.
-  function onPaste(e: React.ClipboardEvent): void {
+  function onPasteItems(e: React.ClipboardEvent): void {
     const text = e.clipboardData.getData('text/plain')
     if (!text) return
     const multi = text.includes('\t') || text.replace(/\r/g, '').trim().includes('\n')
@@ -202,6 +168,92 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     )
   }
 
+  // ---- cable lines ----
+  function patchCable(i: number, patch: Partial<CableOrderItem>): void {
+    setCables((prev) => prev.map((c, idx) => (idx === i ? { ...c, ...patch } : c)))
+  }
+  function removeCable(i: number): void {
+    setCables((prev) => prev.filter((_, idx) => idx !== i))
+  }
+  function addCable(): void {
+    setCables((prev) => [...prev, { ...BLANK_CABLE }])
+  }
+  function receiveAllCables(): void {
+    setCables((prev) => prev.map((c) => ({ ...c, received: c.quantity })))
+  }
+
+  // Pull cables from the bundles, grouped by type AND length, with counts.
+  async function importCables(): Promise<void> {
+    const bundles = await window.api.bundles.list()
+    const all = bundles.flatMap((b) =>
+      b.cables.map((c) => ({
+        type: c.cableType?.trim() || 'Cable (untyped)',
+        length: b.length?.trim() || ''
+      }))
+    )
+    if (all.length === 0) {
+      setImportNote('No cables in this project yet — add some in the Cables tab first.')
+      return
+    }
+    const counts = new Map<string, { type: string; length: string; count: number }>()
+    for (const x of all) {
+      const key = x.type + '\u0001' + x.length
+      const e = counts.get(key)
+      if (e) e.count++
+      else counts.set(key, { type: x.type, length: x.length, count: 1 })
+    }
+    const existing = new Set(cables.map((c) => (c.cableType + '\u0001' + c.length).toLowerCase()))
+    const additions: CableOrderItem[] = [...counts.values()]
+      .filter((v) => !existing.has((v.type + '\u0001' + v.length).toLowerCase()))
+      .sort((a, b) => a.type.localeCompare(b.type) || a.length.localeCompare(b.length))
+      .map((v) => ({
+        cableType: v.type,
+        length: v.length,
+        quantity: v.count,
+        received: 0,
+        notes: null
+      }))
+    if (additions.length === 0) {
+      setImportNote('Nothing new — those cable type/length combos are already on this order.')
+      return
+    }
+    setCables((prev) => [...prev, ...additions])
+    const skipped = counts.size - additions.length
+    setImportNote(
+      `Imported ${additions.length} cable line(s) from ${all.length} cable(s) across ${bundles.length} bundle(s)` +
+        (skipped > 0 ? ` (${skipped} already on the order)` : '') +
+        '. Review quantities, then Save.'
+    )
+  }
+
+  function onPasteCables(e: React.ClipboardEvent): void {
+    const text = e.clipboardData.getData('text/plain')
+    if (!text) return
+    const multi = text.includes('\t') || text.replace(/\r/g, '').trim().includes('\n')
+    if (!multi) return
+    e.preventDefault()
+    const parsed: CableOrderItem[] = text
+      .replace(/\r/g, '')
+      .split('\n')
+      .filter((r) => r.trim().length)
+      .map((r) => {
+        const c = r.split('\t')
+        const q = (c[2] ?? '').trim()
+        return {
+          cableType: (c[0] ?? '').trim(),
+          length: (c[1] ?? '').trim(),
+          quantity: q ? Math.max(0, Math.trunc(Number(q) || 0)) : 1,
+          received: Math.max(0, Math.trunc(Number((c[3] ?? '').trim()) || 0)),
+          notes: (c[4] ?? '').trim() || null
+        }
+      })
+    if (parsed.length === 0) return
+    setCables((prev) => [...prev, ...parsed])
+    setImportNote(
+      `Pasted ${parsed.length} cable row(s). Column order: Type, Length, Quantity, Received, Notes.`
+    )
+  }
+
   function currentInput(): ShopOrderInput {
     return {
       name: name.trim(),
@@ -216,6 +268,13 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
         quantity: Math.max(0, Math.trunc(Number(it.quantity) || 0)),
         received: Math.max(0, Math.trunc(Number(it.received) || 0)),
         notes: it.notes
+      })),
+      cables: cables.map((c) => ({
+        cableType: c.cableType,
+        length: c.length,
+        quantity: Math.max(0, Math.trunc(Number(c.quantity) || 0)),
+        received: Math.max(0, Math.trunc(Number(c.received) || 0)),
+        notes: c.notes
       }))
     }
   }
@@ -243,18 +302,16 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     onClose()
   }
 
-  // Persist current edits before an export so the generated file is up to date.
   async function saveCurrent(): Promise<void> {
     if (!order) return
     await window.api.orders.update(order.id, currentInput())
     onChanged()
   }
 
-  const totalQty = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0)
-  const recvQty = items.reduce(
-    (s, i) => s + Math.min(Number(i.received) || 0, Number(i.quantity) || 0),
-    0
-  )
+  const itemsRecv = items.reduce((s, i) => s + Math.min(Number(i.received) || 0, Number(i.quantity) || 0), 0)
+  const itemsTot = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0)
+  const cablesRecv = cables.reduce((s, c) => s + Math.min(Number(c.received) || 0, Number(c.quantity) || 0), 0)
+  const cablesTot = cables.reduce((s, c) => s + (Number(c.quantity) || 0), 0)
 
   const footer = (
     <>
@@ -298,19 +355,11 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
         </label>
         <label>
           Vendor / source
-          <input
-            value={vendor}
-            onChange={(e) => setVendor(e.target.value)}
-            placeholder="e.g. Rental House"
-          />
+          <input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="e.g. Rental House" />
         </label>
         <label>
           Order date
-          <input
-            value={orderDate}
-            onChange={(e) => setOrderDate(e.target.value)}
-            placeholder="e.g. 2026-10-11"
-          />
+          <input value={orderDate} onChange={(e) => setOrderDate(e.target.value)} placeholder="e.g. 2026-10-11" />
         </label>
         <label className="span-2">
           Notes
@@ -319,151 +368,198 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
       </form>
 
       <div className="modal-section">
-        <h3>
-          Equipment{' '}
-          <span className="cat-count">
-            {recvQty}/{totalQty} received
-          </span>
-        </h3>
-        <p className="muted">
-          Edit inline like a spreadsheet. Click a cell in the <strong>Wait</strong> column to mark
-          that line fully received. You can also <strong>paste rows straight from Excel</strong>
-          (columns: Item, Manufacturer, Model, Ordered, Received, Notes).
-        </p>
+        <nav className="subtabs">
+          <button
+            type="button"
+            className={`tab ${section === 'equipment' ? 'active' : ''}`}
+            onClick={() => setSection('equipment')}
+          >
+            Equipment <span className="cat-count">{itemsRecv}/{itemsTot}</span>
+          </button>
+          <button
+            type="button"
+            className={`tab ${section === 'cables' ? 'active' : ''}`}
+            onClick={() => setSection('cables')}
+          >
+            Cables <span className="cat-count">{cablesRecv}/{cablesTot}</span>
+          </button>
+        </nav>
 
-        <div className="sheet-wrap" onPaste={onPaste}>
-          <table className="sheet">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Manufacturer</th>
-                <th>Model #</th>
-                <th>Category</th>
-                <th className="num">Ord</th>
-                <th className="num">Recv</th>
-                <th className="num">Wait</th>
-                <th>Notes</th>
-                <th aria-label="remove" />
-              </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="sheet-empty">
-                    No items — add a row, import from the drawing, or paste from Excel.
-                  </td>
-                </tr>
-              )}
-              {items.map((it, i) => {
-                const qty = Number(it.quantity) || 0
-                const recv = Number(it.received) || 0
-                const outstanding = Math.max(0, qty - recv)
-                const done = qty > 0 && recv >= qty
-                return (
-                  <tr key={i} className={done ? 'item-received' : ''}>
-                    <td>
-                      <input
-                        value={it.name}
-                        placeholder="Item / description"
-                        onChange={(e) => patchItem(i, { name: e.target.value })}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        value={it.manufacturer ?? ''}
-                        onChange={(e) => patchItem(i, { manufacturer: e.target.value || null })}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        value={it.modelNumber ?? ''}
-                        onChange={(e) => patchItem(i, { modelNumber: e.target.value || null })}
-                      />
-                    </td>
-                    <td>
-                      <select
-                        value={it.category ?? ''}
-                        onChange={(e) => patchItem(i, { category: e.target.value || null })}
-                      >
-                        <option value="">—</option>
-                        {it.category && !categories.includes(it.category) && (
-                          <option value={it.category}>{it.category}</option>
-                        )}
-                        {categories.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="num">
-                      <input
-                        type="number"
-                        min={0}
-                        value={it.quantity}
-                        onChange={(e) => patchItem(i, { quantity: Number(e.target.value) })}
-                      />
-                    </td>
-                    <td className="num">
-                      <input
-                        type="number"
-                        min={0}
-                        value={it.received}
-                        onChange={(e) => patchItem(i, { received: Number(e.target.value) })}
-                      />
-                    </td>
-                    <td
-                      className="num waiting-cell"
-                      role="button"
-                      title="Click to mark this line fully received"
-                      onClick={() => patchItem(i, { received: qty })}
-                    >
-                      {done ? '✓' : outstanding}
-                    </td>
-                    <td>
-                      <input
-                        value={it.notes ?? ''}
-                        onChange={(e) => patchItem(i, { notes: e.target.value || null })}
-                      />
-                    </td>
-                    <td className="rm">
-                      <button type="button" title="Remove row" onClick={() => removeItem(i)}>
-                        ×
-                      </button>
-                    </td>
+        {section === 'equipment' ? (
+          <>
+            <p className="muted">
+              Edit inline like a spreadsheet. Click a <strong>Wait</strong> cell to mark a line fully
+              received. Paste rows from Excel (Item, Manufacturer, Model, Ordered, Received, Notes).
+            </p>
+            <div className="sheet-wrap" onPaste={onPasteItems}>
+              <table className="sheet">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Manufacturer</th>
+                    <th>Model #</th>
+                    <th>Category</th>
+                    <th className="num">Ord</th>
+                    <th className="num">Recv</th>
+                    <th className="num">Wait</th>
+                    <th>Notes</th>
+                    <th aria-label="remove" />
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {items.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="sheet-empty">
+                        No items — add a row, import from the drawing, or paste from Excel.
+                      </td>
+                    </tr>
+                  )}
+                  {items.map((it, i) => {
+                    const qty = Number(it.quantity) || 0
+                    const recv = Number(it.received) || 0
+                    const out = Math.max(0, qty - recv)
+                    const done = qty > 0 && recv >= qty
+                    return (
+                      <tr key={i} className={done ? 'item-received' : ''}>
+                        <td>
+                          <input value={it.name} placeholder="Item / description" onChange={(e) => patchItem(i, { name: e.target.value })} />
+                        </td>
+                        <td>
+                          <input value={it.manufacturer ?? ''} onChange={(e) => patchItem(i, { manufacturer: e.target.value || null })} />
+                        </td>
+                        <td>
+                          <input value={it.modelNumber ?? ''} onChange={(e) => patchItem(i, { modelNumber: e.target.value || null })} />
+                        </td>
+                        <td>
+                          <select value={it.category ?? ''} onChange={(e) => patchItem(i, { category: e.target.value || null })}>
+                            <option value="">—</option>
+                            {it.category && !categories.includes(it.category) && (
+                              <option value={it.category}>{it.category}</option>
+                            )}
+                            {categories.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="num">
+                          <input type="number" min={0} value={it.quantity} onChange={(e) => patchItem(i, { quantity: Number(e.target.value) })} />
+                        </td>
+                        <td className="num">
+                          <input type="number" min={0} value={it.received} onChange={(e) => patchItem(i, { received: Number(e.target.value) })} />
+                        </td>
+                        <td className="num waiting-cell" role="button" title="Click to mark fully received" onClick={() => patchItem(i, { received: qty })}>
+                          {done ? '✓' : out}
+                        </td>
+                        <td>
+                          <input value={it.notes ?? ''} onChange={(e) => patchItem(i, { notes: e.target.value || null })} />
+                        </td>
+                        <td className="rm">
+                          <button type="button" title="Remove row" onClick={() => removeItem(i)}>
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="signal-add" style={{ marginTop: 12 }}>
+              <button type="button" className="btn btn-small" onClick={addItem}>
+                + Add row
+              </button>
+              <button type="button" className="btn btn-small" onClick={importFromDrawing} title="Add a line per equipment Model from the Vectorworks drawing">
+                Import from drawing
+              </button>
+              {itemsRecv < itemsTot && (
+                <button type="button" className="btn btn-small" onClick={receiveAllItems}>
+                  Receive everything
+                </button>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="muted">
+              Cable lines are by <strong>type and length</strong> with a quantity. Click a{' '}
+              <strong>Wait</strong> cell to mark a line fully received. Paste from Excel (Type, Length,
+              Quantity, Received, Notes).
+            </p>
+            <div className="sheet-wrap" onPaste={onPasteCables}>
+              <table className="sheet">
+                <thead>
+                  <tr>
+                    <th>Cable type</th>
+                    <th>Length</th>
+                    <th className="num">Qty</th>
+                    <th className="num">Recv</th>
+                    <th className="num">Wait</th>
+                    <th>Notes</th>
+                    <th aria-label="remove" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {cables.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="sheet-empty">
+                        No cable lines — add a row, import from the bundles, or paste from Excel.
+                      </td>
+                    </tr>
+                  )}
+                  {cables.map((c, i) => {
+                    const qty = Number(c.quantity) || 0
+                    const recv = Number(c.received) || 0
+                    const out = Math.max(0, qty - recv)
+                    const done = qty > 0 && recv >= qty
+                    return (
+                      <tr key={i} className={done ? 'item-received' : ''}>
+                        <td>
+                          <input value={c.cableType} placeholder="e.g. Cat6" onChange={(e) => patchCable(i, { cableType: e.target.value })} />
+                        </td>
+                        <td>
+                          <input value={c.length} placeholder="e.g. 50'" onChange={(e) => patchCable(i, { length: e.target.value })} />
+                        </td>
+                        <td className="num">
+                          <input type="number" min={0} value={c.quantity} onChange={(e) => patchCable(i, { quantity: Number(e.target.value) })} />
+                        </td>
+                        <td className="num">
+                          <input type="number" min={0} value={c.received} onChange={(e) => patchCable(i, { received: Number(e.target.value) })} />
+                        </td>
+                        <td className="num waiting-cell" role="button" title="Click to mark fully received" onClick={() => patchCable(i, { received: qty })}>
+                          {done ? '✓' : out}
+                        </td>
+                        <td>
+                          <input value={c.notes ?? ''} onChange={(e) => patchCable(i, { notes: e.target.value || null })} />
+                        </td>
+                        <td className="rm">
+                          <button type="button" title="Remove row" onClick={() => removeCable(i)}>
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="signal-add" style={{ marginTop: 12 }}>
+              <button type="button" className="btn btn-small" onClick={addCable}>
+                + Add row
+              </button>
+              <button type="button" className="btn btn-small" onClick={importCables} title="Add a line per cable type + length from the Cables tab">
+                Import cables
+              </button>
+              {cablesRecv < cablesTot && (
+                <button type="button" className="btn btn-small" onClick={receiveAllCables}>
+                  Receive everything
+                </button>
+              )}
+            </div>
+          </>
+        )}
 
-        <div className="signal-add" style={{ marginTop: 12 }}>
-          <button type="button" className="btn btn-small" onClick={addItem}>
-            + Add row
-          </button>
-          <button
-            type="button"
-            className="btn btn-small"
-            title="Add a line per equipment Model from the Vectorworks drawing, with quantities"
-            onClick={importFromDrawing}
-          >
-            Import from drawing
-          </button>
-          <button
-            type="button"
-            className="btn btn-small"
-            title="Add a line per cable type from the Cables tab, with quantities"
-            onClick={importCables}
-          >
-            Import cables
-          </button>
-          {items.length > 0 && recvQty < totalQty && (
-            <button type="button" className="btn btn-small" onClick={receiveAll}>
-              Receive everything
-            </button>
-          )}
-        </div>
         {importNote && (
           <p className="muted" style={{ marginTop: 8 }}>
             {importNote}
