@@ -129,6 +129,46 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     )
   }
 
+  // Pull cables from the Cables tab (all bundles), grouped by cable type with
+  // counts. Types already on the order (by name) are left alone.
+  async function importCables(): Promise<void> {
+    const bundles = await window.api.bundles.list()
+    const cables = bundles.flatMap((b) => b.cables)
+    if (cables.length === 0) {
+      setImportNote('No cables in this project yet — add some in the Cables tab first.')
+      return
+    }
+    const counts = new Map<string, number>()
+    for (const c of cables) {
+      const key = (c.cableType?.trim() || 'Cable (untyped)').trim()
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    const existing = new Set(items.map((i) => i.name.trim().toLowerCase()))
+    const additions: OrderItem[] = [...counts.entries()]
+      .filter(([key]) => !existing.has(key.toLowerCase()))
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([key, count]) => ({
+        name: key,
+        manufacturer: null,
+        modelNumber: null,
+        category: null,
+        quantity: count,
+        received: 0,
+        notes: null
+      }))
+    if (additions.length === 0) {
+      setImportNote('Nothing new — those cable types are already on this order.')
+      return
+    }
+    setItems((prev) => [...prev, ...additions])
+    const skipped = counts.size - additions.length
+    setImportNote(
+      `Imported ${additions.length} cable type(s) from ${cables.length} cable(s) across ${bundles.length} bundle(s)` +
+        (skipped > 0 ? ` (${skipped} already on the order)` : '') +
+        '. Review quantities, then Save.'
+    )
+  }
+
   // Paste a block copied from Excel/Sheets: tab-separated columns, one row per
   // line → Item, Manufacturer, Model, Ordered, Received, Notes. A single value
   // (no tabs/newlines) pastes normally into the focused cell.
@@ -409,6 +449,14 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
             onClick={importFromDrawing}
           >
             Import from drawing
+          </button>
+          <button
+            type="button"
+            className="btn btn-small"
+            title="Add a line per cable type from the Cables tab, with quantities"
+            onClick={importCables}
+          >
+            Import cables
           </button>
           {items.length > 0 && recvQty < totalQty && (
             <button type="button" className="btn btn-small" onClick={receiveAll}>
