@@ -224,6 +224,8 @@ export interface OrderItem {
   name: string
   manufacturer: string | null
   modelNumber: string | null
+  /** grouping, from the shared device-category list */
+  category: string | null
   quantity: number
   received: number
   notes: string | null

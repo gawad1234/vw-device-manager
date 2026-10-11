@@ -709,7 +709,8 @@ input[type='checkbox'] {
 }
 
 /* inputs fill the cell with no chrome, so the grid lines read like a sheet */
-.sheet td input {
+.sheet td input,
+.sheet td select {
   width: 100%;
   border: none;
   border-radius: 0;
@@ -719,7 +720,13 @@ input[type='checkbox'] {
   min-width: 90px;
 }
 
-.sheet td input:focus {
+.sheet td select {
+  min-width: 120px;
+  cursor: pointer;
+}
+
+.sheet td input:focus,
+.sheet td select:focus {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
   background: var(--ev-c-black-soft);

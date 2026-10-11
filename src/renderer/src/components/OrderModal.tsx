@@ -6,6 +6,7 @@ const BLANK: OrderItem = {
   name: '',
   manufacturer: null,
   modelNumber: null,
+  category: null,
   quantity: 1,
   received: 0,
   notes: null
@@ -26,6 +27,12 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   const [items, setItems] = useState<OrderItem[]>(order?.items ?? [])
   const [error, setError] = useState<string | null>(null)
   const [importNote, setImportNote] = useState<string | null>(null)
+  const [categories, setCategories] = useState<string[]>([])
+
+  // The shared device-category list (same one used in Settings / Devices).
+  useEffect(() => {
+    window.api.deviceCategories.list().then(setCategories)
+  }, [])
 
   useEffect(() => {
     setName(order?.name ?? '')
@@ -60,22 +67,31 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
       setImportNote('No devices in this project yet — link them from Vectorworks first.')
       return
     }
-    const counts = new Map<string, { count: number; fromModel: boolean }>()
+    const counts = new Map<
+      string,
+      { count: number; fromModel: boolean; category: string | null }
+    >()
     for (const d of devices) {
       const model = d.deviceType?.trim()
       const key = (model || d.name?.trim() || 'Unknown').trim()
+      const cat = d.category?.trim() || null
       const e = counts.get(key)
-      if (e) e.count++
-      else counts.set(key, { count: 1, fromModel: Boolean(model) })
+      if (e) {
+        e.count++
+        if (e.category !== cat) e.category = null // devices disagree → leave uncategorized
+      } else {
+        counts.set(key, { count: 1, fromModel: Boolean(model), category: cat })
+      }
     }
     const existing = new Set(items.map((i) => i.name.trim().toLowerCase()))
     const additions: OrderItem[] = [...counts.entries()]
       .filter(([key]) => !existing.has(key.toLowerCase()))
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([key, { count, fromModel }]) => ({
+      .map(([key, { count, fromModel, category }]) => ({
         name: key,
         manufacturer: null,
         modelNumber: fromModel ? key : null,
+        category,
         quantity: count,
         received: 0,
         notes: null
@@ -113,6 +129,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
           name: (c[0] ?? '').trim(),
           manufacturer: (c[1] ?? '').trim() || null,
           modelNumber: (c[2] ?? '').trim() || null,
+          category: (c[6] ?? '').trim() || null,
           quantity: q ? Math.max(0, Math.trunc(Number(q) || 0)) : 1,
           received: Math.max(0, Math.trunc(Number((c[4] ?? '').trim()) || 0)),
           notes: (c[5] ?? '').trim() || null
@@ -121,7 +138,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     if (parsed.length === 0) return
     setItems((prev) => [...prev, ...parsed])
     setImportNote(
-      `Pasted ${parsed.length} row(s). Column order: Item, Manufacturer, Model, Ordered, Received, Notes.`
+      `Pasted ${parsed.length} row(s). Column order: Item, Manufacturer, Model, Ordered, Received, Notes, Category.`
     )
   }
 
@@ -135,6 +152,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
         name: it.name,
         manufacturer: it.manufacturer?.trim() || null,
         modelNumber: it.modelNumber?.trim() || null,
+        category: it.category?.trim() || null,
         quantity: Math.max(0, Math.trunc(Number(it.quantity) || 0)),
         received: Math.max(0, Math.trunc(Number(it.received) || 0)),
         notes: it.notes
@@ -243,6 +261,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
                 <th>Item</th>
                 <th>Manufacturer</th>
                 <th>Model #</th>
+                <th>Category</th>
                 <th className="num">Ord</th>
                 <th className="num">Recv</th>
                 <th className="num">Wait</th>
@@ -253,7 +272,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="sheet-empty">
+                  <td colSpan={9} className="sheet-empty">
                     No items — add a row, import from the drawing, or paste from Excel.
                   </td>
                 </tr>
@@ -283,6 +302,22 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
                         value={it.modelNumber ?? ''}
                         onChange={(e) => patchItem(i, { modelNumber: e.target.value || null })}
                       />
+                    </td>
+                    <td>
+                      <select
+                        value={it.category ?? ''}
+                        onChange={(e) => patchItem(i, { category: e.target.value || null })}
+                      >
+                        <option value="">—</option>
+                        {it.category && !categories.includes(it.category) && (
+                          <option value={it.category}>{it.category}</option>
+                        )}
+                        {categories.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td className="num">
                       <input
