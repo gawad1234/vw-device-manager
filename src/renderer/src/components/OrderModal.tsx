@@ -37,6 +37,19 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     setImportNote(null)
   }, [order?.id])
 
+  function patchItem(i: number, patch: Partial<OrderItem>): void {
+    setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)))
+  }
+  function removeItem(i: number): void {
+    setItems((prev) => prev.filter((_, idx) => idx !== i))
+  }
+  function addItem(): void {
+    setItems((prev) => [...prev, { ...BLANK }])
+  }
+  function receiveAll(): void {
+    setItems((prev) => prev.map((it) => ({ ...it, received: it.quantity })))
+  }
+
   // Pull equipment from the Vectorworks drawing (the project's synced devices),
   // grouped into a bill of materials: one line per Model/type with its count
   // (falling back to the device name when a device has no Model). Lines already
@@ -62,7 +75,6 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
       .map(([key, { count, fromModel }]) => ({
         name: key,
         manufacturer: null,
-        // a device's Model (deviceType) is its model number
         modelNumber: fromModel ? key : null,
         quantity: count,
         received: 0,
@@ -81,17 +93,36 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     )
   }
 
-  function patchItem(i: number, patch: Partial<OrderItem>): void {
-    setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)))
-  }
-  function removeItem(i: number): void {
-    setItems((prev) => prev.filter((_, idx) => idx !== i))
-  }
-  function addItem(): void {
-    setItems((prev) => [...prev, { ...BLANK }])
-  }
-  function receiveAll(): void {
-    setItems((prev) => prev.map((it) => ({ ...it, received: it.quantity })))
+  // Paste a block copied from Excel/Sheets: tab-separated columns, one row per
+  // line → Item, Manufacturer, Model, Ordered, Received, Notes. A single value
+  // (no tabs/newlines) pastes normally into the focused cell.
+  function onPaste(e: React.ClipboardEvent): void {
+    const text = e.clipboardData.getData('text/plain')
+    if (!text) return
+    const multi = text.includes('\t') || text.replace(/\r/g, '').trim().includes('\n')
+    if (!multi) return
+    e.preventDefault()
+    const parsed: OrderItem[] = text
+      .replace(/\r/g, '')
+      .split('\n')
+      .filter((r) => r.trim().length)
+      .map((r) => {
+        const c = r.split('\t')
+        const q = (c[3] ?? '').trim()
+        return {
+          name: (c[0] ?? '').trim(),
+          manufacturer: (c[1] ?? '').trim() || null,
+          modelNumber: (c[2] ?? '').trim() || null,
+          quantity: q ? Math.max(0, Math.trunc(Number(q) || 0)) : 1,
+          received: Math.max(0, Math.trunc(Number((c[4] ?? '').trim()) || 0)),
+          notes: (c[5] ?? '').trim() || null
+        }
+      })
+    if (parsed.length === 0) return
+    setItems((prev) => [...prev, ...parsed])
+    setImportNote(
+      `Pasted ${parsed.length} row(s). Column order: Item, Manufacturer, Model, Ordered, Received, Notes.`
+    )
   }
 
   function currentInput(): ShopOrderInput {
@@ -158,7 +189,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   )
 
   return (
-    <Modal title={order ? order.name : 'New order'} onClose={onClose} footer={footer}>
+    <Modal title={order ? order.name : 'New order'} onClose={onClose} footer={footer} wide>
       <form id="order-form" className="form-grid" onSubmit={save}>
         {error && <div className="banner banner-error">{error}</div>}
         <label>
@@ -200,101 +231,104 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
           </span>
         </h3>
         <p className="muted">
-          Set the quantity ordered and how many have arrived. Anything still outstanding shows up
-          in the &ldquo;still waiting&rdquo; list on the Orders tab.
+          Edit inline like a spreadsheet. Click a cell in the <strong>Wait</strong> column to mark
+          that line fully received. You can also <strong>paste rows straight from Excel</strong>
+          (columns: Item, Manufacturer, Model, Ordered, Received, Notes).
         </p>
 
-        {items.length === 0 && <p className="muted">No items yet — add one below.</p>}
+        <div className="sheet-wrap" onPaste={onPaste}>
+          <table className="sheet">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Manufacturer</th>
+                <th>Model #</th>
+                <th className="num">Ord</th>
+                <th className="num">Recv</th>
+                <th className="num">Wait</th>
+                <th>Notes</th>
+                <th aria-label="remove" />
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="sheet-empty">
+                    No items — add a row, import from the drawing, or paste from Excel.
+                  </td>
+                </tr>
+              )}
+              {items.map((it, i) => {
+                const qty = Number(it.quantity) || 0
+                const recv = Number(it.received) || 0
+                const outstanding = Math.max(0, qty - recv)
+                const done = qty > 0 && recv >= qty
+                return (
+                  <tr key={i} className={done ? 'item-received' : ''}>
+                    <td>
+                      <input
+                        value={it.name}
+                        placeholder="Item / description"
+                        onChange={(e) => patchItem(i, { name: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={it.manufacturer ?? ''}
+                        onChange={(e) => patchItem(i, { manufacturer: e.target.value || null })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={it.modelNumber ?? ''}
+                        onChange={(e) => patchItem(i, { modelNumber: e.target.value || null })}
+                      />
+                    </td>
+                    <td className="num">
+                      <input
+                        type="number"
+                        min={0}
+                        value={it.quantity}
+                        onChange={(e) => patchItem(i, { quantity: Number(e.target.value) })}
+                      />
+                    </td>
+                    <td className="num">
+                      <input
+                        type="number"
+                        min={0}
+                        value={it.received}
+                        onChange={(e) => patchItem(i, { received: Number(e.target.value) })}
+                      />
+                    </td>
+                    <td
+                      className="num waiting-cell"
+                      role="button"
+                      title="Click to mark this line fully received"
+                      onClick={() => patchItem(i, { received: qty })}
+                    >
+                      {done ? '✓' : outstanding}
+                    </td>
+                    <td>
+                      <input
+                        value={it.notes ?? ''}
+                        onChange={(e) => patchItem(i, { notes: e.target.value || null })}
+                      />
+                    </td>
+                    <td className="rm">
+                      <button type="button" title="Remove row" onClick={() => removeItem(i)}>
+                        ×
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
 
-        {items.map((it, i) => {
-          const qty = Number(it.quantity) || 0
-          const recv = Number(it.received) || 0
-          const outstanding = Math.max(0, qty - recv)
-          const done = qty > 0 && recv >= qty
-          return (
-            <div className={`port-row${done ? ' item-received' : ''}`} key={i}>
-              <div className="port-fields">
-                <label style={{ flex: '2 1 220px' }}>
-                  Item
-                  <input
-                    value={it.name}
-                    onChange={(e) => patchItem(i, { name: e.target.value })}
-                    placeholder="e.g. Netgear M4250-10G2F"
-                  />
-                </label>
-                <label style={{ flex: '0 1 90px' }}>
-                  Ordered
-                  <input
-                    type="number"
-                    min={0}
-                    value={it.quantity}
-                    onChange={(e) => patchItem(i, { quantity: Number(e.target.value) })}
-                  />
-                </label>
-                <label style={{ flex: '0 1 90px' }}>
-                  Received
-                  <input
-                    type="number"
-                    min={0}
-                    value={it.received}
-                    onChange={(e) => patchItem(i, { received: Number(e.target.value) })}
-                  />
-                </label>
-                <span className="item-outstanding muted" title="Still waiting">
-                  {outstanding > 0 ? `${outstanding} waiting` : '✓ all in'}
-                </span>
-                <div className="port-actions">
-                  <button
-                    type="button"
-                    className="btn btn-small"
-                    title="Mark this line fully received"
-                    onClick={() => patchItem(i, { received: qty })}
-                    disabled={done}
-                  >
-                    Receive all
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-small btn-danger"
-                    onClick={() => removeItem(i)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-              <div className="endpoint-row">
-                <label className="endpoint-field" style={{ flex: '1 1 160px' }}>
-                  Manufacturer
-                  <input
-                    value={it.manufacturer ?? ''}
-                    onChange={(e) => patchItem(i, { manufacturer: e.target.value || null })}
-                    placeholder="e.g. Netgear"
-                  />
-                </label>
-                <label className="endpoint-field" style={{ flex: '1 1 160px' }}>
-                  Model number
-                  <input
-                    value={it.modelNumber ?? ''}
-                    onChange={(e) => patchItem(i, { modelNumber: e.target.value || null })}
-                    placeholder="e.g. M4250-10G2F"
-                  />
-                </label>
-                <label className="endpoint-field" style={{ flex: '2 1 200px' }}>
-                  Notes
-                  <input
-                    value={it.notes ?? ''}
-                    onChange={(e) => patchItem(i, { notes: e.target.value || null })}
-                    placeholder="(optional — serials, condition, etc.)"
-                  />
-                </label>
-              </div>
-            </div>
-          )
-        })}
-
-        <div className="signal-add" style={{ marginTop: 14 }}>
+        <div className="signal-add" style={{ marginTop: 12 }}>
           <button type="button" className="btn btn-small" onClick={addItem}>
-            + Add item
+            + Add row
           </button>
           <button
             type="button"
