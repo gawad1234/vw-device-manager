@@ -18,6 +18,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   const [notes, setNotes] = useState(order?.notes ?? '')
   const [items, setItems] = useState<OrderItem[]>(order?.items ?? [])
   const [error, setError] = useState<string | null>(null)
+  const [importNote, setImportNote] = useState<string | null>(null)
 
   useEffect(() => {
     setName(order?.name ?? '')
@@ -26,7 +27,41 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     setNotes(order?.notes ?? '')
     setItems(order?.items ?? [])
     setError(null)
+    setImportNote(null)
   }, [order?.id])
+
+  // Pull equipment from the Vectorworks drawing (the project's synced devices),
+  // grouped into a bill of materials: one line per Model/type with its count
+  // (falling back to the device name when a device has no Model). Lines already
+  // on the order (by name) are left alone so re-importing doesn't duplicate.
+  async function importFromDrawing(): Promise<void> {
+    const devices = await window.api.devices.list()
+    if (devices.length === 0) {
+      setImportNote('No devices in this project yet — link them from Vectorworks first.')
+      return
+    }
+    const counts = new Map<string, number>()
+    for (const d of devices) {
+      const key = (d.deviceType?.trim() || d.name?.trim() || 'Unknown').trim()
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    const existing = new Set(items.map((i) => i.name.trim().toLowerCase()))
+    const additions: OrderItem[] = [...counts.entries()]
+      .filter(([name]) => !existing.has(name.toLowerCase()))
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, quantity]) => ({ name, quantity, received: 0, notes: null }))
+    if (additions.length === 0) {
+      setImportNote('Nothing new to import — every drawing item is already on this order.')
+      return
+    }
+    setItems((prev) => [...prev, ...additions])
+    const skipped = counts.size - additions.length
+    setImportNote(
+      `Imported ${additions.length} item type(s) from ${devices.length} device(s)` +
+        (skipped > 0 ? ` (${skipped} already on the order)` : '') +
+        '. Review quantities, then Save.'
+    )
+  }
 
   function patchItem(i: number, patch: Partial<OrderItem>): void {
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)))
@@ -225,12 +260,25 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
           <button type="button" className="btn btn-small" onClick={addItem}>
             + Add item
           </button>
+          <button
+            type="button"
+            className="btn btn-small"
+            title="Add a line per equipment Model from the Vectorworks drawing, with quantities"
+            onClick={importFromDrawing}
+          >
+            Import from drawing
+          </button>
           {items.length > 0 && recvQty < totalQty && (
             <button type="button" className="btn btn-small" onClick={receiveAll}>
               Receive everything
             </button>
           )}
         </div>
+        {importNote && (
+          <p className="muted" style={{ marginTop: 8 }}>
+            {importNote}
+          </p>
+        )}
       </div>
     </Modal>
   )
