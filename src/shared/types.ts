@@ -149,6 +149,8 @@ export interface ExportOptions {
   doc: 'pullsheet' | 'schedule' | 'labels' | 'ipschedule' | 'devicelist' | 'order' | 'receiving'
   format: 'pdf' | 'xlsx' | 'csv'
   labelStyle?: 'cards' | 'flag'
+  /** order/receiving: color new/changed rows vs. the last export + add a Change column */
+  highlightChanges?: boolean
 }
 
 // ---- App updates ----------------------------------------------------------
@@ -243,11 +245,13 @@ export interface ShopOrder {
   orderDate: string | null
   notes: string | null
   items: OrderItem[]
+  /** when this order was last exported (for the change-highlight baseline) */
+  lastExportAt: string | null
   createdAt: string
   updatedAt: string
 }
 
-export type ShopOrderInput = Omit<ShopOrder, 'id' | 'createdAt' | 'updatedAt'>
+export type ShopOrderInput = Omit<ShopOrder, 'id' | 'createdAt' | 'updatedAt' | 'lastExportAt'>
 
 /** A sub-editor row's save, called by a modal's "Save changes" so it flushes
  *  every child row (ports/cables), not just the top-level fields. */

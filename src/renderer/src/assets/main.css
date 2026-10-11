@@ -189,6 +189,18 @@ code {
   bottom: calc(100% + 6px);
 }
 
+.highlight-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.highlight-opt input {
+  width: 14px;
+  height: 14px;
+}
+
 /* ---- Updates panel (Settings) ---------------------------------------- */
 
 .update-controls {

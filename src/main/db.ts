@@ -127,6 +127,9 @@ CREATE TABLE IF NOT EXISTS shop_orders (
   order_date TEXT,
   notes TEXT,
   items_json TEXT NOT NULL DEFAULT '[]',
+  -- snapshot of items_json at the last export + when, for change highlighting
+  last_export_json TEXT,
+  last_export_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -346,6 +349,16 @@ function migrateAddPortUnused(database: DatabaseSync): void {
   database.exec('ALTER TABLE ports ADD COLUMN is_unused INTEGER NOT NULL DEFAULT 0')
 }
 
+/** Adds the shop-order export snapshot columns (change highlighting). Guarded. */
+function migrateAddOrderExportSnapshot(database: DatabaseSync): void {
+  if (!tableExists(database, 'shop_orders')) return
+  if (tableHasColumn(database, 'shop_orders', 'last_export_at')) return
+  database.exec(`
+    ALTER TABLE shop_orders ADD COLUMN last_export_json TEXT;
+    ALTER TABLE shop_orders ADD COLUMN last_export_at TEXT;
+  `)
+}
+
 /** Bring a freshly opened DB up to date: schema + all migrations. Network
  *  signals / cable types are NOT here — they live in the shared library. */
 function applySchemaAndMigrations(database: DatabaseSync): void {
@@ -359,6 +372,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateAddPortPrimary(database)
   migrateAddDeviceCategory(database)
   migrateAddPortUnused(database)
+  migrateAddOrderExportSnapshot(database)
 }
 
 /**

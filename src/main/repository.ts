@@ -605,6 +605,7 @@ function mapShopOrder(row: Row): ShopOrder {
     orderDate: (row.order_date as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
     items,
+    lastExportAt: (row.last_export_at as string | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string
   }
@@ -639,6 +640,25 @@ export function updateShopOrder(id: number, input: ShopOrderInput): ShopOrder {
 
 export function deleteShopOrder(id: number): void {
   dbRun('DELETE FROM shop_orders WHERE id = ?', [id])
+}
+
+/** The item list as it was at the last export (the change-highlight baseline). */
+export function getOrderExportSnapshot(id: number): OrderItem[] | null {
+  const row = queryOne('SELECT last_export_json FROM shop_orders WHERE id = ?', [id])
+  if (!row || row.last_export_json == null) return null
+  try {
+    return JSON.parse(row.last_export_json as string) as OrderItem[]
+  } catch {
+    return null
+  }
+}
+
+/** Record that the order was just exported: snapshot its items + stamp the time. */
+export function markOrderExported(id: number, items: OrderItem[]): void {
+  dbRun(
+    "UPDATE shop_orders SET last_export_json = ?, last_export_at = datetime('now') WHERE id = ?",
+    [JSON.stringify(items), id]
+  )
 }
 
 export function getProjectMeta(key: string): string | null {

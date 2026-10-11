@@ -13,6 +13,8 @@ interface Props {
   dropUp?: boolean
   /** override the menu contents (defaults to the cable export sections) */
   sections?: ExportSection[]
+  /** show a "highlight changes since last export" checkbox (order exports) */
+  highlightToggle?: boolean
 }
 
 export interface ExportItem {
@@ -60,10 +62,12 @@ function ExportMenu({
   onBeforeRun,
   label = 'Export',
   dropUp,
-  sections = CABLE_SECTIONS
+  sections = CABLE_SECTIONS,
+  highlightToggle
 }: Props): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [highlight, setHighlight] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -84,7 +88,8 @@ function ExportMenu({
         orderId,
         doc: item.doc,
         format: item.format,
-        labelStyle: item.labelStyle
+        labelStyle: item.labelStyle,
+        highlightChanges: highlightToggle ? highlight : undefined
       })
     } finally {
       setBusy(false)
@@ -99,6 +104,19 @@ function ExportMenu({
       </button>
       {open && (
         <div className={`project-dropdown export-dropdown${dropUp ? ' drop-up' : ''}`}>
+          {highlightToggle && (
+            <>
+              <label className="menu-item highlight-opt">
+                <input
+                  type="checkbox"
+                  checked={highlight}
+                  onChange={(e) => setHighlight(e.target.checked)}
+                />
+                Highlight changes since last export
+              </label>
+              <div className="menu-sep" />
+            </>
+          )}
           {sections.map((s, i) => (
             <div key={s.label}>
               {i > 0 && <div className="menu-sep" />}

@@ -3,13 +3,15 @@ import { writeFileSync } from 'fs'
 import ExcelJS from 'exceljs'
 import {
   getProjectMeta,
+  getOrderExportSnapshot,
   getShopOrderById,
   listBundles,
   listDevices,
-  listSubnets
+  listSubnets,
+  markOrderExported
 } from './repository'
 import { ipInCidr } from './ip-utils'
-import type { Bundle, CableEndpoint, ExportOptions, ShopOrder } from '../shared/types'
+import type { Bundle, CableEndpoint, ExportOptions, OrderItem, ShopOrder } from '../shared/types'
 
 // The show name for the export in progress — read once in exportDocument and
 // used by the shared page() header and printToPDF footer (avoids threading it
@@ -203,6 +205,13 @@ function page(title: string, body: string, logo: string | null): string {
     th { background: #f2f2f2; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
     td.chk, th.chk { text-align: center; width: 58px; font-size: 15px; }
     tbody tr:nth-child(even) { background: #fafafa; }
+    tr.row-new > td { background: #e6f7ea; }
+    tr.row-chg > td { background: #fff5d6; }
+    .chg-tag { font-size: 8.5px; color: #7a5b00; background: #ffe8a3; padding: 1px 4px;
+               border-radius: 3px; margin-left: 6px; white-space: nowrap; }
+    .legend { font-size: 10px; color: #555; margin: 0 0 12px; display: flex; align-items: center; gap: 6px; }
+    .sw-new, .sw-chg { display: inline-block; width: 11px; height: 11px; border-radius: 2px; border: 1px solid #0002; }
+    .sw-new { background: #e6f7ea; } .sw-chg { background: #fff5d6; }
     .labels { display: flex; flex-wrap: wrap; gap: 8px; }
     .label { width: 2.6in; border: 1px solid #bbb; border-left-width: 6px; border-radius: 4px;
              padding: 7px 9px; page-break-inside: avoid; }
@@ -602,24 +611,69 @@ function orderItemsSorted(order: ShopOrder): ShopOrder['items'] {
     )
 }
 
-/** Flat table for CSV/XLSX. `receiving` adds ordered/received/outstanding. */
-function shopOrderTable(order: ShopOrder, receiving: boolean): Table {
+type ItemChange = { label: string; kind: 'new' | 'chg' | '' }
+const itemKey = (it: OrderItem): string =>
+  (it.name + '|' + (it.modelNumber || '')).trim().toLowerCase()
+
+/** Map the previous (last-export) items by identity, or null if not highlighting. */
+function prevItemMap(prev: OrderItem[] | null): Map<string, OrderItem> | null {
+  if (!prev) return null
+  return new Map(prev.map((p) => [itemKey(p), p]))
+}
+
+/** What changed for this item vs. the last export. */
+function changeFor(it: OrderItem, prevMap: Map<string, OrderItem> | null): ItemChange {
+  if (!prevMap) return { label: '', kind: '' }
+  const p = prevMap.get(itemKey(it))
+  if (!p) return { label: 'NEW', kind: 'new' }
+  const parts: string[] = []
+  if ((Number(p.quantity) || 0) !== (Number(it.quantity) || 0))
+    parts.push(`req ${p.quantity}→${it.quantity}`)
+  if ((Number(p.received) || 0) !== (Number(it.received) || 0))
+    parts.push(`recv ${p.received}→${it.received}`)
+  return { label: parts.join(', '), kind: parts.length ? 'chg' : '' }
+}
+
+/** SQLite UTC timestamp → local string. */
+function fmtTs(ts: string | null): string {
+  if (!ts) return ''
+  const d = new Date(ts.replace(' ', 'T') + 'Z')
+  return Number.isNaN(d.getTime()) ? ts : d.toLocaleString()
+}
+
+/** Flat table for CSV/XLSX. Both docs carry Requested + Received; receiving adds
+ *  Outstanding. When `prevMap` is set, a leading Change column is added. */
+function shopOrderTable(
+  order: ShopOrder,
+  receiving: boolean,
+  prevMap: Map<string, OrderItem> | null
+): Table {
   const rows = orderItemsSorted(order).map((it) => {
     const qty = Number(it.quantity) || 0
     const recv = Number(it.received) || 0
     const base = [it.category || '', it.name || '', it.manufacturer || '', it.modelNumber || '']
-    return receiving
-      ? [...base, String(qty), String(recv), String(Math.max(0, qty - recv)), it.notes || '']
-      : [...base, String(qty), it.notes || '']
+    const tail = receiving
+      ? [String(qty), String(recv), String(Math.max(0, qty - recv)), it.notes || '']
+      : [String(qty), String(recv), it.notes || '']
+    const row = [...base, ...tail]
+    return prevMap ? [changeFor(it, prevMap).label, ...row] : row
   })
-  const headers = receiving
-    ? ['Category', 'Item', 'Manufacturer', 'Model', 'Ordered', 'Received', 'Outstanding', 'Notes']
-    : ['Category', 'Item', 'Manufacturer', 'Model', 'Qty', 'Notes']
-  return { headers, rows }
+  const core = receiving
+    ? ['Category', 'Item', 'Manufacturer', 'Model', 'Requested', 'Received', 'Outstanding', 'Notes']
+    : ['Category', 'Item', 'Manufacturer', 'Model', 'Requested', 'Received', 'Notes']
+  return { headers: prevMap ? ['Change', ...core] : core, rows }
 }
 
-/** PDF: order meta header + a section per category. Receiving adds a ☐ column. */
-function shopOrderHtml(order: ShopOrder, receiving: boolean, logo: string | null): string {
+/** PDF: order meta header + a section per category. Receiving adds a ☐ column;
+ *  both show Requested + Received. When highlighting, new/changed rows are
+ *  colored and tagged, with a legend. */
+function shopOrderHtml(
+  order: ShopOrder,
+  receiving: boolean,
+  logo: string | null,
+  prevMap: Map<string, OrderItem> | null,
+  baselineDate: string
+): string {
   const items = orderItemsSorted(order)
   const groups: { cat: string; items: ShopOrder['items'] }[] = []
   for (const it of items) {
@@ -629,8 +683,8 @@ function shopOrderHtml(order: ShopOrder, receiving: boolean, logo: string | null
     else groups.push({ cat: label, items: [it] })
   }
   const head = receiving
-    ? '<th class="chk">✓</th><th>Item</th><th>Manufacturer</th><th>Model</th><th class="chk">Ord</th><th class="chk">Recv</th><th>Notes</th>'
-    : '<th>Item</th><th>Manufacturer</th><th>Model</th><th class="chk">Qty</th><th>Notes</th>'
+    ? '<th class="chk">✓</th><th>Item</th><th>Manufacturer</th><th>Model</th><th class="chk">Req</th><th class="chk">Recv</th><th class="chk">Out</th><th>Notes</th>'
+    : '<th>Item</th><th>Manufacturer</th><th>Model</th><th class="chk">Req</th><th class="chk">Recv</th><th>Notes</th>'
   const sections = groups.length
     ? groups
         .map((g) => {
@@ -638,12 +692,15 @@ function shopOrderHtml(order: ShopOrder, receiving: boolean, logo: string | null
             .map((it) => {
               const qty = Number(it.quantity) || 0
               const recv = Number(it.received) || 0
-              const cells = `<td>${esc(it.name)}</td><td>${esc(it.manufacturer || '')}</td><td>${esc(
+              const ch = changeFor(it, prevMap)
+              const cls = ch.kind === 'new' ? ' class="row-new"' : ch.kind === 'chg' ? ' class="row-chg"' : ''
+              const tag = ch.label ? ` <span class="chg-tag">${esc(ch.label)}</span>` : ''
+              const cells = `<td>${esc(it.name)}${tag}</td><td>${esc(it.manufacturer || '')}</td><td>${esc(
                 it.modelNumber || ''
               )}</td>`
               return receiving
-                ? `<tr><td class="chk">☐</td>${cells}<td class="chk">${qty}</td><td class="chk">${recv}</td><td>${esc(it.notes || '')}</td></tr>`
-                : `<tr>${cells}<td class="chk">${qty}</td><td>${esc(it.notes || '')}</td></tr>`
+                ? `<tr${cls}><td class="chk">☐</td>${cells}<td class="chk">${qty}</td><td class="chk">${recv}</td><td class="chk">${Math.max(0, qty - recv)}</td><td>${esc(it.notes || '')}</td></tr>`
+                : `<tr${cls}>${cells}<td class="chk">${qty}</td><td class="chk">${recv}</td><td>${esc(it.notes || '')}</td></tr>`
             })
             .join('')
           return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
@@ -652,18 +709,23 @@ function shopOrderHtml(order: ShopOrder, receiving: boolean, logo: string | null
     : '<p>No items on this order.</p>'
   const meta = [order.vendor, order.orderDate].filter(Boolean).map((x) => esc(x as string)).join(' · ')
   const metaBlock = meta ? `<div class="meta">${meta}</div>` : ''
+  const legend = prevMap
+    ? `<div class="legend"><span class="sw-new"></span> new &nbsp;&nbsp; <span class="sw-chg"></span> changed since last export${baselineDate ? ` (${esc(baselineDate)})` : ''}</div>`
+    : ''
   const title = (receiving ? 'Receiving Checklist — ' : 'Shop Order — ') + order.name
-  return page(title, metaBlock + sections, logo)
+  return page(title, metaBlock + legend + sections, logo)
 }
 
-async function htmlToPdf(html: string, landscape: boolean): Promise<Buffer> {
+async function htmlToPdf(html: string, landscape: boolean, footerNote?: string): Promise<Buffer> {
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: false } })
   try {
     await win.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
-    // Running footer on every page: show name (left) + "Page X of Y" (right).
+    // Running footer on every page: show name (left) + optional note (center,
+    // e.g. the export timestamp) + "Page X of Y" (right).
     const footer =
       '<div style="width:100%;font-size:8px;color:#888;padding:0 0.4in;display:flex;justify-content:space-between;">' +
       `<span>${esc(docShowName || '')}</span>` +
+      `<span>${esc(footerNote || '')}</span>` +
       '<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>'
     const pdf = await win.webContents.printToPDF({
       printBackground: true,
@@ -707,11 +769,24 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     })
     if (res.canceled || !res.filePath) return null
     const outPath = res.filePath
-    const table = shopOrderTable(order, receiving)
+    // Change highlighting compares against the snapshot from the last export.
+    const prevMap = opts.highlightChanges ? prevItemMap(getOrderExportSnapshot(order.id)) : null
+    const baselineDate = fmtTs(order.lastExportAt)
+    const table = shopOrderTable(order, receiving, prevMap)
     if (opts.format === 'csv') writeFileSync(outPath, tableCsv(table), 'utf-8')
     else if (opts.format === 'xlsx')
       writeFileSync(outPath, await tableXlsx(table, logo, receiving ? 'Receiving' : 'Order'))
-    else writeFileSync(outPath, await htmlToPdf(shopOrderHtml(order, receiving, logo), false))
+    else
+      writeFileSync(
+        outPath,
+        await htmlToPdf(
+          shopOrderHtml(order, receiving, logo, prevMap, baselineDate),
+          false,
+          `Exported ${new Date().toLocaleString()}`
+        )
+      )
+    // Snapshot the current items as the new baseline for the next export's diff.
+    markOrderExported(order.id, order.items)
     shell.openPath(outPath)
     return outPath
   }

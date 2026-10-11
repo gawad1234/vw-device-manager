@@ -228,6 +228,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
             orderId={order.id}
             sections={ORDER_SECTIONS}
             onBeforeRun={saveCurrent}
+            highlightToggle
             dropUp
           />
         </>
