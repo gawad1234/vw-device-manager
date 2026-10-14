@@ -276,7 +276,8 @@ export interface LabelField {
  *  the 8.5" x 5.5" label (origin top-left). */
 export interface LabelElement {
   id: string
-  type: 'text' | 'rect' | 'line'
+  /** text/rect/line are freeform; showname/logo bind to the project's show name + logo */
+  type: 'text' | 'rect' | 'line' | 'showname' | 'logo'
   x: number
   y: number
   w: number

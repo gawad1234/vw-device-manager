@@ -14,6 +14,9 @@ function defaultElement(type: LabelElement['type']): LabelElement {
   const base = { id: uid(), x: 0.5, y: 0.5 }
   if (type === 'text')
     return { ...base, type, w: 4, h: 0.8, text: 'Text', fontSize: 28, bold: true, align: 'left', color: '#111111' }
+  if (type === 'showname')
+    return { ...base, type, w: 5, h: 0.6, fontSize: 26, bold: true, align: 'left', color: '#111111' }
+  if (type === 'logo') return { ...base, type, w: 2.6, h: 1.2 }
   if (type === 'line') return { ...base, type, w: 4, h: 0.04, color: '#111111' }
   return { ...base, type: 'rect', w: 3, h: 1.5, fill: null, color: '#111111', borderWidth: 2 }
 }
@@ -42,19 +45,37 @@ function legacyToElements(t: LabelTemplate, showText: string): LabelElement[] {
 
 interface Props {
   template: LabelTemplate | null
+  /** for a new template seeded from a preset */
+  initialName?: string
+  initialElements?: LabelElement[]
   onClose: () => void
   onChanged: () => void
   onCreated: (id: number) => void
 }
 
-function LabelModal({ template, onClose, onChanged, onCreated }: Props): React.JSX.Element {
+function LabelModal({
+  template,
+  initialName,
+  initialElements,
+  onClose,
+  onChanged,
+  onCreated
+}: Props): React.JSX.Element {
   const [name, setName] = useState(template?.name ?? '')
   const [elements, setElements] = useState<LabelElement[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copies, setCopies] = useState(2)
+  const [projectShow, setProjectShow] = useState('')
+  const [logo, setLogo] = useState<string | null>(null)
 
-  // Seed the canvas: existing elements, else convert a legacy template, else a title.
+  // Project show name + logo, for rendering the bound showname/logo elements.
+  useEffect(() => {
+    window.api.showName.get().then((n) => setProjectShow(n ?? ''))
+    window.api.showLogo.get().then(setLogo)
+  }, [])
+
+  // Seed the canvas: existing elements, a preset, a legacy conversion, or a title.
   useEffect(() => {
     let cancelled = false
     async function seed(): Promise<void> {
@@ -64,6 +85,8 @@ function LabelModal({ template, onClose, onChanged, onCreated }: Props): React.J
         const showText = (await window.api.showName.get()) ?? ''
         const els = legacyToElements(template, showText)
         if (!cancelled) setElements(els)
+      } else if (initialElements && initialElements.length) {
+        if (!cancelled) setElements(initialElements)
       } else {
         if (!cancelled)
           setElements([
@@ -71,7 +94,7 @@ function LabelModal({ template, onClose, onChanged, onCreated }: Props): React.J
           ])
       }
     }
-    setName(template?.name ?? '')
+    setName(template?.name ?? initialName ?? '')
     setSelectedId(null)
     setError(null)
     seed()
@@ -214,6 +237,12 @@ function LabelModal({ template, onClose, onChanged, onCreated }: Props): React.J
         <button type="button" className="btn btn-small" onClick={() => addEl('line')}>
           + Line
         </button>
+        <button type="button" className="btn btn-small" onClick={() => addEl('showname')} title="Bound to the project's show name">
+          + Show name
+        </button>
+        <button type="button" className="btn btn-small" onClick={() => addEl('logo')} title="Bound to the project's show logo">
+          + Show logo
+        </button>
         <span className="footer-spacer" />
         {selected && (
           <>
@@ -247,7 +276,8 @@ function LabelModal({ template, onClose, onChanged, onCreated }: Props): React.J
                   width: el.w * SCALE,
                   height: el.h * SCALE
                 }
-                if (el.type === 'text') {
+                const isText = el.type === 'text' || el.type === 'showname'
+                if (isText) {
                   style.fontSize = (el.fontSize || 18) * (SCALE / 72)
                   style.fontWeight = el.bold ? 800 : 400
                   style.textAlign = el.align || 'left'
@@ -255,10 +285,22 @@ function LabelModal({ template, onClose, onChanged, onCreated }: Props): React.J
                   style.lineHeight = 1.05
                 } else if (el.type === 'line') {
                   style.background = el.color || '#111'
-                } else {
+                } else if (el.type === 'rect') {
                   if (el.fill) style.background = el.fill
                   if (el.borderWidth) style.border = `${(el.borderWidth || 0) * (SCALE / 72)}px solid ${el.color || '#111'}`
                 }
+                const content =
+                  el.type === 'showname' ? (
+                    projectShow || '{Show name}'
+                  ) : el.type === 'text' ? (
+                    el.text
+                  ) : el.type === 'logo' ? (
+                    logo ? (
+                      <img src={logo} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'left center' }} />
+                    ) : (
+                      <span className="lc-logo-ph">Show logo</span>
+                    )
+                  ) : null
                 return (
                   <div
                     key={el.id}
@@ -266,7 +308,7 @@ function LabelModal({ template, onClose, onChanged, onCreated }: Props): React.J
                     style={style}
                     onMouseDown={(e) => startDrag(e, el.id, 'move')}
                   >
-                    {el.type === 'text' ? el.text : null}
+                    {content}
                     {selectedId === el.id && (
                       <span className="lc-handle" onMouseDown={(e) => startDrag(e, el.id, 'resize')} />
                     )}
@@ -282,8 +324,53 @@ function LabelModal({ template, onClose, onChanged, onCreated }: Props): React.J
           {selected && (
             <>
               <div className="lc-prop-title">
-                {selected.type === 'text' ? 'Text' : selected.type === 'line' ? 'Line' : 'Box'}
+                {selected.type === 'text'
+                  ? 'Text'
+                  : selected.type === 'showname'
+                    ? 'Show name'
+                    : selected.type === 'logo'
+                      ? 'Show logo'
+                      : selected.type === 'line'
+                        ? 'Line'
+                        : 'Box'}
               </div>
+              {selected.type === 'showname' && (
+                <>
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    Prints the project&rsquo;s show name (set it in Settings → Show branding).
+                  </p>
+                  <div className="lc-prop-row">
+                    <label>
+                      Size (pt)
+                      <input type="number" min={6} max={200} value={selected.fontSize ?? 18} onChange={(e) => patchEl(selected.id, { fontSize: Number(e.target.value) })} />
+                    </label>
+                    <label>
+                      Align
+                      <select value={selected.align ?? 'left'} onChange={(e) => patchEl(selected.id, { align: e.target.value as LabelElement['align'] })}>
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="lc-prop-row">
+                    <label className="checkbox-field">
+                      <input type="checkbox" checked={!!selected.bold} onChange={(e) => patchEl(selected.id, { bold: e.target.checked })} />
+                      Bold
+                    </label>
+                    <label>
+                      Color
+                      <input type="color" value={selected.color ?? '#111111'} onChange={(e) => patchEl(selected.id, { color: e.target.value })} />
+                    </label>
+                  </div>
+                </>
+              )}
+              {selected.type === 'logo' && (
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Prints the project&rsquo;s show logo (set it in Settings → Show branding). Position
+                  and size it below.
+                </p>
+              )}
               {selected.type === 'text' && (
                 <>
                   <label>

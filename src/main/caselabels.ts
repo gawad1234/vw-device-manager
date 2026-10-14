@@ -11,13 +11,18 @@ function esc(s: string): string {
 }
 
 /** Freeform elements positioned in inches on the label. */
-function elementsHtml(t: LabelTemplate): string {
+function elementsHtml(t: LabelTemplate, showNameText: string, logo: string | null): string {
   return t.elements
     .map((el) => {
       const pos = `position:absolute;left:${el.x}in;top:${el.y}in;width:${el.w}in;height:${el.h}in;`
-      if (el.type === 'text') {
+      if (el.type === 'text' || el.type === 'showname') {
         const fs = el.fontSize || 18
-        return `<div style="${pos}font-size:${fs}pt;font-weight:${el.bold ? 800 : 400};text-align:${el.align || 'left'};color:${esc(el.color || '#111111')};line-height:1.05;overflow:hidden;word-break:break-word;">${esc(el.text || '')}</div>`
+        const txt = el.type === 'showname' ? showNameText : el.text || ''
+        return `<div style="${pos}font-size:${fs}pt;font-weight:${el.bold ? 800 : 400};text-align:${el.align || 'left'};color:${esc(el.color || '#111111')};line-height:1.05;overflow:hidden;word-break:break-word;">${esc(txt)}</div>`
+      }
+      if (el.type === 'logo') {
+        if (!logo) return ''
+        return `<div style="${pos}overflow:hidden;"><img src="${logo}" style="width:100%;height:100%;object-fit:contain;object-position:left center;"></div>`
       }
       if (el.type === 'line') {
         return `<div style="${pos}background:${esc(el.color || '#111111')};"></div>`
@@ -34,7 +39,7 @@ function elementsHtml(t: LabelTemplate): string {
 function labelHtml(t: LabelTemplate, showNameText: string, logo: string | null): string {
   // Freeform layout wins when present.
   if (t.elements && t.elements.length) {
-    return `<div class="label label-free">${elementsHtml(t)}</div>`
+    return `<div class="label label-free">${elementsHtml(t, showNameText, logo)}</div>`
   }
   const band = t.color ? `<div class="band" style="background:${esc(t.color)}"></div>` : ''
   const showTop = t.showName && showNameText ? `<span class="lshow">${esc(showNameText)}</span>` : '<span></span>'
