@@ -11,6 +11,9 @@ import type {
   DeviceWarning,
   HostConfig,
   HostConfigInput,
+  LabelField,
+  LabelTemplate,
+  LabelTemplateInput,
   OrderItem,
   Port,
   PortInput,
@@ -682,6 +685,58 @@ export function markOrderExported(id: number, items: OrderItem[]): void {
     "UPDATE shop_orders SET last_export_json = ?, last_export_at = datetime('now') WHERE id = ?",
     [JSON.stringify(items), id]
   )
+}
+
+// ---- Case label templates -----------------------------------------------
+
+function mapLabelTemplate(row: Row): LabelTemplate {
+  let fields: LabelField[] = []
+  try {
+    fields = JSON.parse((row.fields_json as string) || '[]') as LabelField[]
+  } catch {
+    fields = []
+  }
+  return {
+    id: row.id as number,
+    name: row.name as string,
+    title: (row.title as string | null) ?? '',
+    color: (row.color as string | null) ?? null,
+    showName: Boolean(row.show_name),
+    fields,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string
+  }
+}
+
+export function listLabelTemplates(): LabelTemplate[] {
+  return queryAll('SELECT * FROM label_templates ORDER BY name COLLATE NOCASE').map(mapLabelTemplate)
+}
+
+export function getLabelTemplateById(id: number): LabelTemplate | null {
+  const row = queryOne('SELECT * FROM label_templates WHERE id = ?', [id])
+  return row ? mapLabelTemplate(row) : null
+}
+
+export function createLabelTemplate(input: LabelTemplateInput): LabelTemplate {
+  dbRun(
+    'INSERT INTO label_templates (name, title, color, show_name, fields_json) VALUES (?, ?, ?, ?, ?)',
+    [input.name, input.title, input.color, input.showName ? 1 : 0, JSON.stringify(input.fields)]
+  )
+  return getLabelTemplateById(lastInsertRowId()) as LabelTemplate
+}
+
+export function updateLabelTemplate(id: number, input: LabelTemplateInput): LabelTemplate {
+  dbRun(
+    `UPDATE label_templates SET name = ?, title = ?, color = ?, show_name = ?, fields_json = ?,
+       updated_at = datetime('now')
+     WHERE id = ?`,
+    [input.name, input.title, input.color, input.showName ? 1 : 0, JSON.stringify(input.fields), id]
+  )
+  return getLabelTemplateById(id) as LabelTemplate
+}
+
+export function deleteLabelTemplate(id: number): void {
+  dbRun('DELETE FROM label_templates WHERE id = ?', [id])
 }
 
 export function getProjectMeta(key: string): string | null {

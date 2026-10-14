@@ -135,6 +135,19 @@ CREATE TABLE IF NOT EXISTS shop_orders (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Case label templates (printed 2-up on Uline S-19323 8.5"x5.5" sheets).
+-- User-defined fields are a JSON array in fields_json.
+CREATE TABLE IF NOT EXISTS label_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  title TEXT,
+  color TEXT,
+  show_name INTEGER NOT NULL DEFAULT 1,
+  fields_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `
 
 // A real embedded SQLite (Node's built-in node:sqlite — no native module) that

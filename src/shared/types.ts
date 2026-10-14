@@ -264,6 +264,31 @@ export interface ShopOrder {
 
 export type ShopOrderInput = Omit<ShopOrder, 'id' | 'createdAt' | 'updatedAt' | 'lastExportAt'>
 
+// ---- Case label templates (Uline S-19323, 8.5" x 5.5", 2-up) --------------
+
+/** One user-defined field on a case label: a caption + its value. */
+export interface LabelField {
+  label: string
+  value: string
+}
+
+export interface LabelTemplate {
+  id: number
+  /** template name (not printed) */
+  name: string
+  /** the big line printed on the label */
+  title: string
+  /** hex color for the accent band; null = none */
+  color: string | null
+  /** print the project's show name along the top */
+  showName: boolean
+  fields: LabelField[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type LabelTemplateInput = Omit<LabelTemplate, 'id' | 'createdAt' | 'updatedAt'>
+
 /** A sub-editor row's save, called by a modal's "Save changes" so it flushes
  *  every child row (ports/cables), not just the top-level fields. */
 export type RowSaver = () => Promise<{ ok: boolean; error?: string }>
@@ -381,5 +406,14 @@ export interface VwDeviceManagerApi {
     create: (input: ShopOrderInput) => Promise<ShopOrder>
     update: (id: number, input: ShopOrderInput) => Promise<ShopOrder>
     remove: (id: number) => Promise<void>
+  }
+  /** Case label templates → printed 2-up on Uline S-19323 (8.5"x5.5") sheets. */
+  labels: {
+    list: () => Promise<LabelTemplate[]>
+    create: (input: LabelTemplateInput) => Promise<LabelTemplate>
+    update: (id: number, input: LabelTemplateInput) => Promise<LabelTemplate>
+    remove: (id: number) => Promise<void>
+    /** render `copies` of the label to a PDF and save it (returns path, or null) */
+    print: (id: number, copies: number) => Promise<string | null>
   }
 }
