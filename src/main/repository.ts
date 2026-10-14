@@ -15,6 +15,9 @@ import type {
   LabelField,
   LabelTemplate,
   LabelTemplateInput,
+  OrderColumn,
+  OrderExportFormat,
+  OrderExportFormatInput,
   OrderItem,
   PackCase,
   PackCaseInput,
@@ -822,6 +825,78 @@ export function updateCase(id: number, input: PackCaseInput): PackCase {
 
 export function deleteCase(id: number): void {
   dbRun('DELETE FROM cases WHERE id = ?', [id])
+}
+
+function mapOrderExportFormat(row: Row): OrderExportFormat {
+  let columns: OrderColumn[] = []
+  try {
+    columns = JSON.parse((row.columns_json as string) || '[]') as OrderColumn[]
+  } catch {
+    columns = []
+  }
+  return {
+    id: row.id as number,
+    name: row.name as string,
+    columns,
+    groupByCategory: Boolean(row.group_by_category),
+    sort: (row.sort as OrderExportFormat['sort']) ?? 'category',
+    orientation: (row.orientation as OrderExportFormat['orientation']) ?? 'portrait',
+    density: (row.density as OrderExportFormat['density']) ?? 'normal',
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string
+  }
+}
+
+export function listOrderExportFormats(): OrderExportFormat[] {
+  return queryAll('SELECT * FROM order_export_formats ORDER BY name COLLATE NOCASE').map(
+    mapOrderExportFormat
+  )
+}
+
+export function getOrderExportFormatById(id: number): OrderExportFormat | null {
+  const row = queryOne('SELECT * FROM order_export_formats WHERE id = ?', [id])
+  return row ? mapOrderExportFormat(row) : null
+}
+
+export function createOrderExportFormat(input: OrderExportFormatInput): OrderExportFormat {
+  dbRun(
+    `INSERT INTO order_export_formats (name, columns_json, group_by_category, sort, orientation, density)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      input.name,
+      JSON.stringify(input.columns),
+      input.groupByCategory ? 1 : 0,
+      input.sort,
+      input.orientation,
+      input.density
+    ]
+  )
+  return getOrderExportFormatById(lastInsertRowId()) as OrderExportFormat
+}
+
+export function updateOrderExportFormat(
+  id: number,
+  input: OrderExportFormatInput
+): OrderExportFormat {
+  dbRun(
+    `UPDATE order_export_formats SET name = ?, columns_json = ?, group_by_category = ?, sort = ?,
+       orientation = ?, density = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+    [
+      input.name,
+      JSON.stringify(input.columns),
+      input.groupByCategory ? 1 : 0,
+      input.sort,
+      input.orientation,
+      input.density,
+      id
+    ]
+  )
+  return getOrderExportFormatById(id) as OrderExportFormat
+}
+
+export function deleteOrderExportFormat(id: number): void {
+  dbRun('DELETE FROM order_export_formats WHERE id = ?', [id])
 }
 
 export function getProjectMeta(key: string): string | null {

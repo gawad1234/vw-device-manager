@@ -8,6 +8,7 @@ import type {
   ExportOptions,
   HostConfigInput,
   LabelTemplateInput,
+  OrderExportFormatInput,
   PackCaseInput,
   PortInput,
   ShopOrderInput,
@@ -134,6 +135,13 @@ const api: VwDeviceManagerApi = {
     create: (input: PackCaseInput) => ipcRenderer.invoke('cases:create', input),
     update: (id: number, input: PackCaseInput) => ipcRenderer.invoke('cases:update', id, input),
     remove: (id: number) => ipcRenderer.invoke('cases:remove', id)
+  },
+  orderFormats: {
+    list: () => ipcRenderer.invoke('orderFormats:list'),
+    create: (input: OrderExportFormatInput) => ipcRenderer.invoke('orderFormats:create', input),
+    update: (id: number, input: OrderExportFormatInput) =>
+      ipcRenderer.invoke('orderFormats:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('orderFormats:remove', id)
   }
 }
 

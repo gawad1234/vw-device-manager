@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs'
 import {
   getProjectMeta,
   getOrderExportSnapshot,
+  getOrderExportFormatById,
   getShopOrderById,
   listBundles,
   listDevices,
@@ -11,7 +12,16 @@ import {
   markOrderExported
 } from './repository'
 import { ipInCidr } from './ip-utils'
-import type { Bundle, CableEndpoint, ExportOptions, OrderItem, ShopOrder } from '../shared/types'
+import type {
+  Bundle,
+  CableEndpoint,
+  ExportOptions,
+  OrderColumn,
+  OrderColumnKey,
+  OrderExportFormat,
+  OrderItem,
+  ShopOrder
+} from '../shared/types'
 
 // The show name for the export in progress — read once in exportDocument and
 // used by the shared page() header and printToPDF footer (avoids threading it
@@ -173,7 +183,14 @@ function esc(s: string): string {
   )
 }
 
-function page(title: string, body: string, logo: string | null): string {
+type Density = 'compact' | 'normal' | 'large'
+const DENSITY_CSS: Record<Density, string> = {
+  compact: 'body{font-size:10.5px}th,td{padding:3px 5px}',
+  normal: '',
+  large: 'body{font-size:13.5px}th,td{padding:7px 9px}h2{font-size:15px}'
+}
+
+function page(title: string, body: string, logo: string | null, density: Density = 'normal'): string {
   const titleBlock = docShowName
     ? `<div class="show">${esc(docShowName)}</div><div class="doctitle">${esc(title)}</div>`
     : `<div class="show">${esc(title)}</div>`
@@ -229,6 +246,7 @@ function page(title: string, body: string, logo: string | null): string {
              background: repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 3px,#fff 3px,#fff 6px); }
     .fname { font-weight: 700; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .fends { font-size: 8px; color: #555555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    ${DENSITY_CSS[density]}
   </style></head><body>${header}${body}</body></html>`
 }
 
@@ -601,14 +619,109 @@ function ipScheduleHtml(logo: string | null): string {
 }
 
 // ---- Shop order / receiving checklist ------------------------------------
-function orderItemsSorted(order: ShopOrder): ShopOrder['items'] {
-  return order.items
-    .slice()
-    .sort(
-      (a, b) =>
-        (a.category || '￿').localeCompare(b.category || '￿') ||
-        a.name.localeCompare(b.name)
+
+// The column registry: label (and a short PDF header), whether it's a narrow
+// centered number, a default width weight, and how to read it off an item.
+type ColDef = {
+  label: string
+  short: string
+  num: boolean
+  width: number
+  cell: (it: OrderItem, qty: number, recv: number) => string
+}
+const ORDER_COLS: Record<OrderColumnKey, ColDef> = {
+  category: { label: 'Category', short: 'Category', num: false, width: 16, cell: (it) => it.category || '' },
+  item: { label: 'Item', short: 'Item', num: false, width: 28, cell: (it) => it.name || '' },
+  manufacturer: { label: 'Manufacturer', short: 'Manufacturer', num: false, width: 18, cell: (it) => it.manufacturer || '' },
+  model: { label: 'Model', short: 'Model', num: false, width: 18, cell: (it) => it.modelNumber || '' },
+  requested: { label: 'Requested', short: 'Req', num: true, width: 10, cell: (_it, qty) => String(qty) },
+  received: { label: 'Received', short: 'Recv', num: true, width: 10, cell: (_it, _qty, recv) => String(recv) },
+  outstanding: { label: 'Outstanding', short: 'Out', num: true, width: 10, cell: (_it, qty, recv) => String(Math.max(0, qty - recv)) },
+  notes: { label: 'Notes', short: 'Notes', num: false, width: 24, cell: (it) => it.notes || '' }
+}
+
+const ALL_KEYS: OrderColumnKey[] = [
+  'category', 'item', 'manufacturer', 'model', 'requested', 'received', 'outstanding', 'notes'
+]
+
+/** The built-in default format — reproduces the original fixed layout. */
+function defaultFormat(receiving: boolean): OrderExportFormat {
+  const shown = new Set<OrderColumnKey>([
+    'item', 'manufacturer', 'model', 'requested', 'received', 'notes'
+  ])
+  if (receiving) shown.add('outstanding')
+  return {
+    id: 0,
+    name: 'Default',
+    columns: ALL_KEYS.map((key) => ({ key, show: shown.has(key), width: ORDER_COLS[key].width })),
+    groupByCategory: true,
+    sort: 'category',
+    orientation: 'portrait',
+    density: 'normal',
+    createdAt: '',
+    updatedAt: ''
+  }
+}
+
+type Resolved = {
+  columns: OrderColumn[] // shown, in print order
+  groupByCategory: boolean
+  sort: OrderExportFormat['sort']
+  orientation: OrderExportFormat['orientation']
+  density: OrderExportFormat['density']
+}
+
+/** Turn a stored format (or the default) into the shown, ordered column list. */
+function resolveFormat(fmt: OrderExportFormat | null, receiving: boolean): Resolved {
+  const f = fmt ?? defaultFormat(receiving)
+  // Keep only known, shown columns; a template may predate a column, so fill gaps.
+  const seen = new Set<OrderColumnKey>()
+  const columns: OrderColumn[] = []
+  for (const c of f.columns) {
+    if (!ORDER_COLS[c.key] || seen.has(c.key)) continue
+    seen.add(c.key)
+    if (c.show) columns.push({ key: c.key, show: true, width: c.width || ORDER_COLS[c.key].width })
+  }
+  if (columns.length === 0) columns.push({ key: 'item', show: true, width: ORDER_COLS.item.width })
+  return {
+    columns,
+    groupByCategory: f.groupByCategory,
+    sort: f.sort,
+    orientation: f.orientation,
+    density: f.density
+  }
+}
+
+/** Columns for a flat medium (CSV/XLSX): when grouping, keep a Category column
+ *  up front so the grouping survives in a flat file. */
+function flatColumns(r: Resolved): OrderColumn[] {
+  const cols = r.columns
+  if (r.groupByCategory && !cols.some((c) => c.key === 'category')) {
+    return [{ key: 'category', show: true, width: ORDER_COLS.category.width }, ...cols]
+  }
+  return cols
+}
+
+/** Columns for the grouped PDF body: the Category column is redundant with the
+ *  section headings, so drop it when grouping. */
+function bodyColumns(r: Resolved): OrderColumn[] {
+  return r.groupByCategory ? r.columns.filter((c) => c.key !== 'category') : r.columns
+}
+
+function sortItems(items: ShopOrder['items'], sort: OrderExportFormat['sort']): ShopOrder['items'] {
+  const out = items.slice()
+  if (sort === 'name') out.sort((a, b) => a.name.localeCompare(b.name))
+  else if (sort === 'outstanding')
+    out.sort((a, b) => {
+      const oa = Math.max(0, (Number(a.quantity) || 0) - (Number(a.received) || 0))
+      const ob = Math.max(0, (Number(b.quantity) || 0) - (Number(b.received) || 0))
+      return ob - oa || a.name.localeCompare(b.name)
+    })
+  else
+    out.sort(
+      (a, b) => (a.category || '￿').localeCompare(b.category || '￿') || a.name.localeCompare(b.name)
     )
+  return out
 }
 
 type ItemChange = { label: string; kind: 'new' | 'chg' | '' }
@@ -641,27 +754,22 @@ function fmtTs(ts: string | null): string {
   return Number.isNaN(d.getTime()) ? ts : d.toLocaleString()
 }
 
-/** Flat table for CSV/XLSX. Both docs carry Requested + Received; receiving adds
- *  Outstanding. When `prevMap` is set, a leading Change column is added. */
+/** Flat table (CSV/XLSX) built from the resolved format's columns. When
+ *  `prevMap` is set, a leading Change column is added. */
 function shopOrderTable(
   order: ShopOrder,
-  receiving: boolean,
+  r: Resolved,
   prevMap: Map<string, OrderItem> | null
 ): Table {
-  const rows = orderItemsSorted(order).map((it) => {
+  const cols = flatColumns(r)
+  const rows = sortItems(order.items, r.sort).map((it) => {
     const qty = Number(it.quantity) || 0
     const recv = Number(it.received) || 0
-    const base = [it.category || '', it.name || '', it.manufacturer || '', it.modelNumber || '']
-    const tail = receiving
-      ? [String(qty), String(recv), String(Math.max(0, qty - recv)), it.notes || '']
-      : [String(qty), String(recv), it.notes || '']
-    const row = [...base, ...tail]
+    const row = cols.map((c) => ORDER_COLS[c.key].cell(it, qty, recv))
     return prevMap ? [changeFor(it, prevMap).label, ...row] : row
   })
-  const core = receiving
-    ? ['Category', 'Item', 'Manufacturer', 'Model', 'Requested', 'Received', 'Outstanding', 'Notes']
-    : ['Category', 'Item', 'Manufacturer', 'Model', 'Requested', 'Received', 'Notes']
-  return { headers: prevMap ? ['Change', ...core] : core, rows }
+  const headers = cols.map((c) => ORDER_COLS[c.key].label)
+  return { headers: prevMap ? ['Change', ...headers] : headers, rows }
 }
 
 /** Cable lines (type · length · qty) flat table for CSV/XLSX. */
@@ -705,70 +813,121 @@ function cableSectionHtml(order: ShopOrder, receiving: boolean): string {
   return `<section><h2>Cables <span class="meta">(${rows.length})</span></h2><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
 }
 
-/** PDF: order meta header + a section per category. Receiving adds a ☐ column;
- *  both show Requested + Received. When highlighting, new/changed rows are
- *  colored and tagged, with a legend. */
+/** A <colgroup> that spreads the shown columns across the page by their width
+ *  weights (plus fixed slots for the leading check column, when present). */
+function colGroup(cols: OrderColumn[], checkCol: boolean): string {
+  const total = cols.reduce((s, c) => s + (c.width || 1), 0) || 1
+  const parts: string[] = []
+  if (checkCol) parts.push('<col style="width:34px">')
+  for (const c of cols) {
+    const pct = Math.max(3, Math.round(((c.width || 1) / total) * 100))
+    parts.push(`<col style="width:${pct}%">`)
+  }
+  return `<colgroup>${parts.join('')}</colgroup>`
+}
+
+function headCells(cols: OrderColumn[], checkCol: boolean): string {
+  const chk = checkCol ? '<th class="chk">✓</th>' : ''
+  return (
+    chk +
+    cols
+      .map((c) => `<th${ORDER_COLS[c.key].num ? ' class="chk"' : ''}>${esc(ORDER_COLS[c.key].short)}</th>`)
+      .join('')
+  )
+}
+
+function bodyRow(
+  it: OrderItem,
+  cols: OrderColumn[],
+  checkCol: boolean,
+  prevMap: Map<string, OrderItem> | null
+): string {
+  const qty = Number(it.quantity) || 0
+  const recv = Number(it.received) || 0
+  const ch = changeFor(it, prevMap)
+  const cls = ch.kind === 'new' ? ' class="row-new"' : ch.kind === 'chg' ? ' class="row-chg"' : ''
+  const tag = ch.label ? ` <span class="chg-tag">${esc(ch.label)}</span>` : ''
+  const chk = checkCol ? '<td class="chk">☐</td>' : ''
+  const cells = cols
+    .map((c) => {
+      const v = esc(ORDER_COLS[c.key].cell(it, qty, recv))
+      // the Change tag rides along on the Item cell
+      const inner = c.key === 'item' ? v + tag : v
+      return `<td${ORDER_COLS[c.key].num ? ' class="chk"' : ''}>${inner}</td>`
+    })
+    .join('')
+  return `<tr${cls}>${chk}${cells}</tr>`
+}
+
+/** PDF: order meta header, then either a section per category or one flat table,
+ *  with the resolved columns + widths. Receiving adds a ☐ column; highlighting
+ *  colors + tags new/changed rows. */
 function shopOrderHtml(
   order: ShopOrder,
   receiving: boolean,
   logo: string | null,
   prevMap: Map<string, OrderItem> | null,
-  baselineDate: string
+  baselineDate: string,
+  r: Resolved
 ): string {
-  const items = orderItemsSorted(order)
-  const groups: { cat: string; items: ShopOrder['items'] }[] = []
-  for (const it of items) {
-    const label = it.category?.trim() || 'Uncategorized'
-    const last = groups[groups.length - 1]
-    if (last && last.cat === label) last.items.push(it)
-    else groups.push({ cat: label, items: [it] })
+  const cols = bodyColumns(r)
+  const items = sortItems(order.items, r.sort)
+  const colg = colGroup(cols, receiving)
+  const head = headCells(cols, receiving)
+
+  let bodyHtml: string
+  if (!items.length) {
+    bodyHtml = '<p>No items on this order.</p>'
+  } else if (r.groupByCategory) {
+    const groups: { cat: string; items: ShopOrder['items'] }[] = []
+    for (const it of sortItems(order.items, 'category')) {
+      const label = it.category?.trim() || 'Uncategorized'
+      const last = groups[groups.length - 1]
+      if (last && last.cat === label) last.items.push(it)
+      else groups.push({ cat: label, items: [it] })
+    }
+    bodyHtml = groups
+      .map((g) => {
+        const body = g.items.map((it) => bodyRow(it, cols, receiving, prevMap)).join('')
+        return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table>${colg}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
+      })
+      .join('')
+  } else {
+    const body = items.map((it) => bodyRow(it, cols, receiving, prevMap)).join('')
+    bodyHtml = `<section><table>${colg}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
   }
-  const head = receiving
-    ? '<th class="chk">✓</th><th>Item</th><th>Manufacturer</th><th>Model</th><th class="chk">Req</th><th class="chk">Recv</th><th class="chk">Out</th><th>Notes</th>'
-    : '<th>Item</th><th>Manufacturer</th><th>Model</th><th class="chk">Req</th><th class="chk">Recv</th><th>Notes</th>'
-  const sections = groups.length
-    ? groups
-        .map((g) => {
-          const body = g.items
-            .map((it) => {
-              const qty = Number(it.quantity) || 0
-              const recv = Number(it.received) || 0
-              const ch = changeFor(it, prevMap)
-              const cls = ch.kind === 'new' ? ' class="row-new"' : ch.kind === 'chg' ? ' class="row-chg"' : ''
-              const tag = ch.label ? ` <span class="chg-tag">${esc(ch.label)}</span>` : ''
-              const cells = `<td>${esc(it.name)}${tag}</td><td>${esc(it.manufacturer || '')}</td><td>${esc(
-                it.modelNumber || ''
-              )}</td>`
-              return receiving
-                ? `<tr${cls}><td class="chk">☐</td>${cells}<td class="chk">${qty}</td><td class="chk">${recv}</td><td class="chk">${Math.max(0, qty - recv)}</td><td>${esc(it.notes || '')}</td></tr>`
-                : `<tr${cls}>${cells}<td class="chk">${qty}</td><td class="chk">${recv}</td><td>${esc(it.notes || '')}</td></tr>`
-            })
-            .join('')
-          return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
-        })
-        .join('')
-    : '<p>No items on this order.</p>'
+
   const meta = [order.vendor, order.orderDate].filter(Boolean).map((x) => esc(x as string)).join(' · ')
   const metaBlock = meta ? `<div class="meta">${meta}</div>` : ''
   const legend = prevMap
     ? `<div class="legend"><span class="sw-new"></span> new &nbsp;&nbsp; <span class="sw-chg"></span> changed since last export${baselineDate ? ` (${esc(baselineDate)})` : ''}</div>`
     : ''
   const title = (receiving ? 'Receiving Checklist — ' : 'Shop Order — ') + order.name
-  return page(title, metaBlock + legend + sections + cableSectionHtml(order, receiving), logo)
+  return page(title, metaBlock + legend + bodyHtml + cableSectionHtml(order, receiving), logo, r.density)
 }
 
-/** XLSX for an order: an Equipment/Receiving sheet + (if any) a Cables sheet. */
+/** XLSX for an order: an Equipment/Receiving sheet + (if any) a Cables sheet.
+ *  `widths` (when given) sets the column character widths from the format. */
 async function orderXlsx(
   order: ShopOrder,
   receiving: boolean,
   prevMap: Map<string, OrderItem> | null,
-  logo: string | null
+  logo: string | null,
+  r: Resolved
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   const img = parseImageDataUrl(logo)
-  const addSheet = (sheetName: string, t: Table): void => {
+  // Width per header label: Change column + the resolved columns' weights.
+  const widthByHeader = new Map<string, number>()
+  for (const c of flatColumns(r)) widthByHeader.set(ORDER_COLS[c.key].label, c.width || ORDER_COLS[c.key].width)
+  widthByHeader.set('Change', 16)
+  const addSheet = (sheetName: string, t: Table, useWidths: boolean): void => {
     const ws = wb.addWorksheet(sheetName)
-    ws.columns = t.headers.map((h) => ({ header: h, key: h, width: Math.max(10, Math.min(30, h.length + 8)) }))
+    ws.columns = t.headers.map((h) => ({
+      header: h,
+      key: h,
+      width: useWidths && widthByHeader.has(h) ? Math.max(6, widthByHeader.get(h) as number) : Math.max(10, Math.min(30, h.length + 8))
+    }))
     const headerRowNum = img ? 5 : 1
     if (img) {
       ws.spliceRows(1, 0, [], [], [], [])
@@ -777,10 +936,10 @@ async function orderXlsx(
     }
     ws.getRow(headerRowNum).font = { bold: true }
     ws.views = [{ state: 'frozen', ySplit: headerRowNum }]
-    for (const r of t.rows) ws.addRow(r)
+    for (const row of t.rows) ws.addRow(row)
   }
-  addSheet(receiving ? 'Receiving' : 'Equipment', shopOrderTable(order, receiving, prevMap))
-  if (order.cables.length) addSheet('Cables', cableOrderTable(order, receiving))
+  addSheet(receiving ? 'Receiving' : 'Equipment', shopOrderTable(order, r, prevMap), true)
+  if (order.cables.length) addSheet('Cables', cableOrderTable(order, receiving), false)
   return (await wb.xlsx.writeBuffer()) as unknown as Buffer
 }
 
@@ -840,20 +999,22 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     // Change highlighting compares against the snapshot from the last export.
     const prevMap = opts.highlightChanges ? prevItemMap(getOrderExportSnapshot(order.id)) : null
     const baselineDate = fmtTs(order.lastExportAt)
-    const table = shopOrderTable(order, receiving, prevMap)
+    const fmt = opts.formatId != null ? getOrderExportFormatById(opts.formatId) : null
+    const resolved = resolveFormat(fmt, receiving)
+    const table = shopOrderTable(order, resolved, prevMap)
     if (opts.format === 'csv') {
       const cablesCsv = order.cables.length
         ? '\r\n\r\nCABLES\r\n' + tableCsv(cableOrderTable(order, receiving))
         : ''
       writeFileSync(outPath, tableCsv(table) + cablesCsv, 'utf-8')
     } else if (opts.format === 'xlsx')
-      writeFileSync(outPath, await orderXlsx(order, receiving, prevMap, logo))
+      writeFileSync(outPath, await orderXlsx(order, receiving, prevMap, logo, resolved))
     else
       writeFileSync(
         outPath,
         await htmlToPdf(
-          shopOrderHtml(order, receiving, logo, prevMap, baselineDate),
-          false,
+          shopOrderHtml(order, receiving, logo, prevMap, baselineDate, resolved),
+          resolved.orientation === 'landscape',
           `Exported ${new Date().toLocaleString()}`
         )
       )

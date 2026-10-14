@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ExportOptions } from '../../../shared/types'
+import type { ExportOptions, OrderExportFormat } from '../../../shared/types'
 
 interface Props {
   scope: 'bundle' | 'all'
@@ -15,6 +15,13 @@ interface Props {
   sections?: ExportSection[]
   /** show a "highlight changes since last export" checkbox (order exports) */
   highlightToggle?: boolean
+  /** order exports: saved export-format templates to choose from */
+  formats?: OrderExportFormat[]
+  /** currently chosen format (null = built-in default) */
+  formatId?: number | null
+  onSelectFormat?: (id: number | null) => void
+  /** open the format manager */
+  onManageFormats?: () => void
 }
 
 export interface ExportItem {
@@ -63,12 +70,17 @@ function ExportMenu({
   label = 'Export',
   dropUp,
   sections = CABLE_SECTIONS,
-  highlightToggle
+  highlightToggle,
+  formats,
+  formatId,
+  onSelectFormat,
+  onManageFormats
 }: Props): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [highlight, setHighlight] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const showFormats = !!formats && !!onSelectFormat
 
   useEffect(() => {
     function onDoc(e: MouseEvent): void {
@@ -89,7 +101,8 @@ function ExportMenu({
         doc: item.doc,
         format: item.format,
         labelStyle: item.labelStyle,
-        highlightChanges: highlightToggle ? highlight : undefined
+        highlightChanges: highlightToggle ? highlight : undefined,
+        formatId: showFormats && formatId != null ? formatId : undefined
       })
     } finally {
       setBusy(false)
@@ -104,6 +117,39 @@ function ExportMenu({
       </button>
       {open && (
         <div className={`project-dropdown export-dropdown${dropUp ? ' drop-up' : ''}`}>
+          {showFormats && (
+            <>
+              <div className="menu-label">Format</div>
+              <label className="menu-item fmt-pick">
+                <select
+                  value={formatId ?? ''}
+                  onChange={(e) =>
+                    onSelectFormat?.(e.target.value ? Number(e.target.value) : null)
+                  }
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <option value="">Default (built-in)</option>
+                  {formats?.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {onManageFormats && (
+                <button
+                  className="menu-item"
+                  onClick={() => {
+                    setOpen(false)
+                    onManageFormats()
+                  }}
+                >
+                  Edit formats…
+                </button>
+              )}
+              <div className="menu-sep" />
+            </>
+          )}
           {highlightToggle && (
             <>
               <label className="menu-item highlight-opt">

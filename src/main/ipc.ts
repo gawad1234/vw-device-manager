@@ -15,6 +15,7 @@ import type {
   ExportOptions,
   HostConfigInput,
   LabelTemplateInput,
+  OrderExportFormatInput,
   PackCaseInput,
   PortInput,
   ShopOrderInput,
@@ -146,6 +147,16 @@ export function registerIpcHandlers(): void {
     if (!t) return null
     return printCasesLabels(t, repo.listCasesByIds(caseIds))
   })
+
+  // Shop-order export formats ("order types").
+  ipcMain.handle('orderFormats:list', () => repo.listOrderExportFormats())
+  ipcMain.handle('orderFormats:create', (_e, input: OrderExportFormatInput) =>
+    repo.createOrderExportFormat(input)
+  )
+  ipcMain.handle('orderFormats:update', (_e, id: number, input: OrderExportFormatInput) =>
+    repo.updateOrderExportFormat(id, input)
+  )
+  ipcMain.handle('orderFormats:remove', (_e, id: number) => repo.deleteOrderExportFormat(id))
 
   // Cases (packing manager).
   ipcMain.handle('cases:list', () => repo.listCases())

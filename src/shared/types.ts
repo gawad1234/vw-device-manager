@@ -151,6 +151,75 @@ export interface ExportOptions {
   labelStyle?: 'cards' | 'flag'
   /** order/receiving: color new/changed rows vs. the last export + add a Change column */
   highlightChanges?: boolean
+  /** order/receiving: which saved export-format template to apply (null = built-in default) */
+  formatId?: number
+}
+
+// ---- Shop-order export format templates -----------------------------------
+
+/** The columns a shop-order export can show, in a stable key set. */
+export type OrderColumnKey =
+  | 'category'
+  | 'item'
+  | 'manufacturer'
+  | 'model'
+  | 'requested'
+  | 'received'
+  | 'outstanding'
+  | 'notes'
+
+/** One column in an export-format template (array order = print order). */
+export interface OrderColumn {
+  key: OrderColumnKey
+  show: boolean
+  /** relative width weight for the PDF, and the character width in Excel */
+  width: number
+}
+
+/** A reusable "order type" format: which columns, how wide, grouping + layout. */
+export interface OrderExportFormat {
+  id: number
+  name: string
+  columns: OrderColumn[]
+  /** PDF: a section per category; CSV/Excel: a leading Category column + sort */
+  groupByCategory: boolean
+  sort: 'category' | 'name' | 'outstanding'
+  orientation: 'portrait' | 'landscape'
+  density: 'compact' | 'normal' | 'large'
+  createdAt: string
+  updatedAt: string
+}
+
+export type OrderExportFormatInput = Omit<OrderExportFormat, 'id' | 'createdAt' | 'updatedAt'>
+
+/** Display label + default width for each order column (shared by the editor). */
+export const ORDER_COLUMN_META: Record<OrderColumnKey, { label: string; width: number }> = {
+  category: { label: 'Category', width: 16 },
+  item: { label: 'Item', width: 28 },
+  manufacturer: { label: 'Manufacturer', width: 18 },
+  model: { label: 'Model', width: 18 },
+  requested: { label: 'Requested', width: 10 },
+  received: { label: 'Received', width: 10 },
+  outstanding: { label: 'Outstanding', width: 10 },
+  notes: { label: 'Notes', width: 24 }
+}
+
+/** A fresh column set for a new format (sensible defaults, all common ones on). */
+export function defaultOrderColumns(): OrderColumn[] {
+  const on = new Set<OrderColumnKey>([
+    'item',
+    'manufacturer',
+    'model',
+    'requested',
+    'received',
+    'outstanding',
+    'notes'
+  ])
+  return (Object.keys(ORDER_COLUMN_META) as OrderColumnKey[]).map((key) => ({
+    key,
+    show: on.has(key),
+    width: ORDER_COLUMN_META[key].width
+  }))
 }
 
 // ---- App updates ----------------------------------------------------------
@@ -460,6 +529,13 @@ export interface VwDeviceManagerApi {
     list: () => Promise<ShopOrder[]>
     create: (input: ShopOrderInput) => Promise<ShopOrder>
     update: (id: number, input: ShopOrderInput) => Promise<ShopOrder>
+    remove: (id: number) => Promise<void>
+  }
+  /** Reusable export-format templates for shop-order / receiving documents. */
+  orderFormats: {
+    list: () => Promise<OrderExportFormat[]>
+    create: (input: OrderExportFormatInput) => Promise<OrderExportFormat>
+    update: (id: number, input: OrderExportFormatInput) => Promise<OrderExportFormat>
     remove: (id: number) => Promise<void>
   }
   /** Case label templates → printed 2-up on Uline S-19323 (8.5"x5.5") sheets. */

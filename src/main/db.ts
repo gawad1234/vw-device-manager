@@ -151,6 +151,20 @@ CREATE TABLE IF NOT EXISTS label_templates (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Reusable shop-order export formats ("order types"): which columns + widths,
+-- grouping, sort, and page layout. columns_json = [{key,show,width}].
+CREATE TABLE IF NOT EXISTS order_export_formats (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  columns_json TEXT NOT NULL DEFAULT '[]',
+  group_by_category INTEGER NOT NULL DEFAULT 1,
+  sort TEXT NOT NULL DEFAULT 'category',
+  orientation TEXT NOT NULL DEFAULT 'portrait',
+  density TEXT NOT NULL DEFAULT 'normal',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Cases (what's packed in each case). fields_json = [{label,value}]; contents is
 -- free text (one item per line). Printed to labels via a template's {tokens}.
 CREATE TABLE IF NOT EXISTS cases (

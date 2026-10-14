@@ -1434,3 +1434,50 @@ input[type='checkbox'] {
   width: 60px;
   text-align: center;
 }
+
+/* Order export-format manager */
+.fmt-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.fmt-tab {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ev-c-text-1);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.fmt-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.fmt-tab.fmt-new {
+  color: var(--ev-c-text-2);
+}
+.fmt-cols {
+  width: 100%;
+  border-collapse: collapse;
+}
+.fmt-cols td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.fmt-width {
+  width: 70px;
+  text-align: center;
+}
+.fmt-cols .btn-small {
+  padding: 2px 7px;
+  margin-right: 3px;
+}
+.fmt-pick select {
+  width: 100%;
+}

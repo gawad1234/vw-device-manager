@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import type {
   CableOrderItem,
+  OrderExportFormat,
   OrderItem,
   ShopOrder,
   ShopOrderInput
 } from '../../../shared/types'
 import Modal from './Modal'
 import ExportMenu, { type ExportSection } from './ExportMenu'
+import OrderFormatModal from './OrderFormatModal'
 
 const ORDER_SECTIONS: ExportSection[] = [
   {
@@ -62,9 +64,21 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   const [importNote, setImportNote] = useState<string | null>(null)
   const [categories, setCategories] = useState<string[]>([])
   const [section, setSection] = useState<'equipment' | 'cables'>('equipment')
+  const [formats, setFormats] = useState<OrderExportFormat[]>([])
+  const [formatId, setFormatId] = useState<number | null>(null)
+  const [managingFormats, setManagingFormats] = useState(false)
+
+  const refreshFormats = (): void => {
+    window.api.orderFormats.list().then((list) => {
+      setFormats(list)
+      // drop a selection that was just deleted
+      setFormatId((prev) => (prev != null && !list.some((f) => f.id === prev) ? null : prev))
+    })
+  }
 
   useEffect(() => {
     window.api.deviceCategories.list().then(setCategories)
+    refreshFormats()
   }, [])
 
   useEffect(() => {
@@ -326,6 +340,10 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
             sections={ORDER_SECTIONS}
             onBeforeRun={saveCurrent}
             highlightToggle
+            formats={formats}
+            formatId={formatId}
+            onSelectFormat={setFormatId}
+            onManageFormats={() => setManagingFormats(true)}
             dropUp
           />
         </>
@@ -341,6 +359,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   )
 
   return (
+    <>
     <Modal title={order ? order.name : 'New order'} onClose={onClose} footer={footer} wide>
       <form id="order-form" className="form-grid" onSubmit={save}>
         {error && <div className="banner banner-error">{error}</div>}
@@ -567,6 +586,10 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
         )}
       </div>
     </Modal>
+    {managingFormats && (
+      <OrderFormatModal onClose={() => setManagingFormats(false)} onChanged={refreshFormats} />
+    )}
+    </>
   )
 }
 
