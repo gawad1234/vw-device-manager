@@ -16,6 +16,9 @@ import type {
   LabelTemplate,
   LabelTemplateInput,
   OrderItem,
+  PackCase,
+  PackCaseInput,
+  CaseField,
   Port,
   PortInput,
   SaveDeviceResult,
@@ -760,6 +763,65 @@ export function updateLabelTemplate(id: number, input: LabelTemplateInput): Labe
 
 export function deleteLabelTemplate(id: number): void {
   dbRun('DELETE FROM label_templates WHERE id = ?', [id])
+}
+
+function mapCase(row: Row): PackCase {
+  let fields: CaseField[] = []
+  try {
+    fields = JSON.parse((row.fields_json as string) || '[]') as CaseField[]
+  } catch {
+    fields = []
+  }
+  return {
+    id: row.id as number,
+    name: row.name as string,
+    fields,
+    contents: (row.contents as string | null) ?? '',
+    notes: (row.notes as string | null) ?? null,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string
+  }
+}
+
+export function listCases(): PackCase[] {
+  return queryAll('SELECT * FROM cases ORDER BY name COLLATE NOCASE').map(mapCase)
+}
+
+export function getCaseById(id: number): PackCase | null {
+  const row = queryOne('SELECT * FROM cases WHERE id = ?', [id])
+  return row ? mapCase(row) : null
+}
+
+export function listCasesByIds(ids: number[]): PackCase[] {
+  if (ids.length === 0) return []
+  const placeholders = ids.map(() => '?').join(', ')
+  const rows = queryAll(`SELECT * FROM cases WHERE id IN (${placeholders})`, ids).map(mapCase)
+  // preserve the caller's order
+  const byId = new Map(rows.map((c) => [c.id, c]))
+  return ids.map((id) => byId.get(id)).filter((c): c is PackCase => c != null)
+}
+
+export function createCase(input: PackCaseInput): PackCase {
+  dbRun('INSERT INTO cases (name, fields_json, contents, notes) VALUES (?, ?, ?, ?)', [
+    input.name,
+    JSON.stringify(input.fields),
+    input.contents,
+    input.notes
+  ])
+  return getCaseById(lastInsertRowId()) as PackCase
+}
+
+export function updateCase(id: number, input: PackCaseInput): PackCase {
+  dbRun(
+    `UPDATE cases SET name = ?, fields_json = ?, contents = ?, notes = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+    [input.name, JSON.stringify(input.fields), input.contents, input.notes, id]
+  )
+  return getCaseById(id) as PackCase
+}
+
+export function deleteCase(id: number): void {
+  dbRun('DELETE FROM cases WHERE id = ?', [id])
 }
 
 export function getProjectMeta(key: string): string | null {

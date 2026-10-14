@@ -1,10 +1,58 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { LabelElement, LabelTemplate, LabelTemplateInput } from '../../../shared/types'
 import Modal from './Modal'
 
 const LABEL_W = 8.5
 const LABEL_H = 5.5
 const SCALE = 68 // px per inch in the editor canvas
+
+/** Text rendered inside its box, matching the print renderer: wrap, and a live
+ *  shrink-to-fit when auto-size is on (so the preview tracks what prints). */
+function CanvasText({ el, text }: { el: LabelElement; text: string }): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const baseFs = (el.fontSize || 18) * (SCALE / 72)
+  const [fs, setFs] = useState(baseFs)
+
+  useLayoutEffect(() => {
+    const inner = ref.current
+    if (!el.autoSize || !inner) {
+      setFs(baseFs)
+      return
+    }
+    const box = inner.parentElement
+    if (!box) return
+    let size = baseFs
+    let guard = 0
+    inner.style.fontSize = size + 'px'
+    while (
+      guard++ < 200 &&
+      size > 4 &&
+      (inner.scrollHeight > box.clientHeight + 1 || inner.scrollWidth > box.clientWidth + 1)
+    ) {
+      size = Math.max(4, size - Math.max(0.5, size * 0.05))
+      inner.style.fontSize = size + 'px'
+    }
+    setFs(size)
+  }, [el.autoSize, el.text, el.w, el.h, el.fontSize, el.bold, el.wrap, baseFs, text])
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        width: '100%',
+        fontSize: fs,
+        fontWeight: el.bold ? 800 : 400,
+        textAlign: el.align || 'left',
+        color: el.color || '#111',
+        lineHeight: 1.1,
+        wordBreak: 'break-word',
+        whiteSpace: el.wrap === false ? 'pre' : 'pre-wrap'
+      }}
+    >
+      {text}
+    </div>
+  )
+}
 
 const uid = (): string => Math.random().toString(36).slice(2, 10)
 const round2 = (v: number): number => Math.round(v * 100) / 100
@@ -123,6 +171,37 @@ function LabelModal({
     const copy = { ...el, id: uid(), x: round2(clamp(el.x + 0.2, 0, LABEL_W - el.w)), y: round2(clamp(el.y + 0.2, 0, LABEL_H - el.h)) }
     setElements((prev) => [...prev, copy])
     setSelectedId(copy.id)
+  }
+
+  // Stacking order — the array order is the paint order (last = on top).
+  function reorderEl(id: string, dir: 'front' | 'back' | 'forward' | 'backward'): void {
+    setElements((prev) => {
+      const i = prev.findIndex((e) => e.id === id)
+      if (i < 0) return prev
+      const arr = [...prev]
+      const [it] = arr.splice(i, 1)
+      if (dir === 'front') arr.push(it)
+      else if (dir === 'back') arr.unshift(it)
+      else if (dir === 'forward') arr.splice(Math.min(arr.length, i + 1), 0, it)
+      else arr.splice(Math.max(0, i - 1), 0, it)
+      return arr
+    })
+  }
+
+  // Align the selected element to the label edges / center.
+  function alignEl(where: 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom'): void {
+    if (!selectedId) return
+    setElements((prev) =>
+      prev.map((p) => {
+        if (p.id !== selectedId) return p
+        if (where === 'left') return { ...p, x: 0 }
+        if (where === 'hcenter') return { ...p, x: round2(clamp((LABEL_W - p.w) / 2, 0, LABEL_W)) }
+        if (where === 'right') return { ...p, x: round2(clamp(LABEL_W - p.w, 0, LABEL_W)) }
+        if (where === 'top') return { ...p, y: 0 }
+        if (where === 'vcenter') return { ...p, y: round2(clamp((LABEL_H - p.h) / 2, 0, LABEL_H)) }
+        return { ...p, y: round2(clamp(LABEL_H - p.h, 0, LABEL_H)) }
+      })
+    )
   }
 
   function startDrag(e: React.MouseEvent, id: string, mode: 'move' | 'resize'): void {
@@ -256,6 +335,44 @@ function LabelModal({
         )}
       </div>
 
+      {selected && (
+        <div className="lc-toolbar lc-arrange">
+          <span className="lc-tool-label">Order</span>
+          <button type="button" className="btn btn-small" title="Bring to front" onClick={() => reorderEl(selected.id, 'front')}>
+            Front
+          </button>
+          <button type="button" className="btn btn-small" title="Bring forward" onClick={() => reorderEl(selected.id, 'forward')}>
+            ↑
+          </button>
+          <button type="button" className="btn btn-small" title="Send backward" onClick={() => reorderEl(selected.id, 'backward')}>
+            ↓
+          </button>
+          <button type="button" className="btn btn-small" title="Send to back" onClick={() => reorderEl(selected.id, 'back')}>
+            Back
+          </button>
+          <span className="lc-tool-sep" />
+          <span className="lc-tool-label">Align</span>
+          <button type="button" className="btn btn-small" title="Align left" onClick={() => alignEl('left')}>
+            ⬅
+          </button>
+          <button type="button" className="btn btn-small" title="Center horizontally" onClick={() => alignEl('hcenter')}>
+            ⬌
+          </button>
+          <button type="button" className="btn btn-small" title="Align right" onClick={() => alignEl('right')}>
+            ➡
+          </button>
+          <button type="button" className="btn btn-small" title="Align top" onClick={() => alignEl('top')}>
+            ⬆
+          </button>
+          <button type="button" className="btn btn-small" title="Center vertically" onClick={() => alignEl('vcenter')}>
+            ⬍
+          </button>
+          <button type="button" className="btn btn-small" title="Align bottom" onClick={() => alignEl('bottom')}>
+            ⬇
+          </button>
+        </div>
+      )}
+
       <div className="label-editor">
         <div>
           <div className="muted" style={{ fontSize: 12.5, marginBottom: 8 }}>
@@ -278,11 +395,11 @@ function LabelModal({
                 }
                 const isText = el.type === 'text' || el.type === 'showname'
                 if (isText) {
-                  style.fontSize = (el.fontSize || 18) * (SCALE / 72)
-                  style.fontWeight = el.bold ? 800 : 400
-                  style.textAlign = el.align || 'left'
-                  style.color = el.color || '#111'
-                  style.lineHeight = 1.05
+                  style.display = 'flex'
+                  style.flexDirection = 'column'
+                  style.justifyContent =
+                    el.valign === 'middle' ? 'center' : el.valign === 'bottom' ? 'flex-end' : 'flex-start'
+                  style.overflow = 'hidden'
                 } else if (el.type === 'line') {
                   style.background = el.color || '#111'
                 } else if (el.type === 'rect') {
@@ -291,9 +408,9 @@ function LabelModal({
                 }
                 const content =
                   el.type === 'showname' ? (
-                    projectShow || '{Show name}'
+                    <CanvasText el={el} text={projectShow || '{Show name}'} />
                   ) : el.type === 'text' ? (
-                    el.text
+                    <CanvasText el={el} text={el.text ?? ''} />
                   ) : el.type === 'logo' ? (
                     logo ? (
                       <img src={logo} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'left center' }} />
@@ -363,6 +480,20 @@ function LabelModal({
                       <input type="color" value={selected.color ?? '#111111'} onChange={(e) => patchEl(selected.id, { color: e.target.value })} />
                     </label>
                   </div>
+                  <div className="lc-prop-row">
+                    <label>
+                      Vertical
+                      <select value={selected.valign ?? 'top'} onChange={(e) => patchEl(selected.id, { valign: e.target.value as LabelElement['valign'] })}>
+                        <option value="top">Top</option>
+                        <option value="middle">Middle</option>
+                        <option value="bottom">Bottom</option>
+                      </select>
+                    </label>
+                    <label className="checkbox-field">
+                      <input type="checkbox" checked={!!selected.autoSize} onChange={(e) => patchEl(selected.id, { autoSize: e.target.checked })} />
+                      Auto-size
+                    </label>
+                  </div>
                 </>
               )}
               {selected.type === 'logo' && (
@@ -405,6 +536,24 @@ function LabelModal({
                       <input type="color" value={selected.color ?? '#111111'} onChange={(e) => patchEl(selected.id, { color: e.target.value })} />
                     </label>
                   </div>
+                  <div className="lc-prop-row">
+                    <label>
+                      Vertical
+                      <select value={selected.valign ?? 'top'} onChange={(e) => patchEl(selected.id, { valign: e.target.value as LabelElement['valign'] })}>
+                        <option value="top">Top</option>
+                        <option value="middle">Middle</option>
+                        <option value="bottom">Bottom</option>
+                      </select>
+                    </label>
+                    <label className="checkbox-field">
+                      <input type="checkbox" checked={selected.wrap !== false} onChange={(e) => patchEl(selected.id, { wrap: e.target.checked })} />
+                      Wrap text
+                    </label>
+                  </div>
+                  <label className="checkbox-field">
+                    <input type="checkbox" checked={!!selected.autoSize} onChange={(e) => patchEl(selected.id, { autoSize: e.target.checked })} />
+                    Auto-size to fit box
+                  </label>
                 </>
               )}
               {selected.type === 'line' && (

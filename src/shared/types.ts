@@ -287,6 +287,12 @@ export interface LabelElement {
   fontSize?: number // points
   bold?: boolean
   align?: 'left' | 'center' | 'right'
+  /** vertical alignment of text within its box (default 'top') */
+  valign?: 'top' | 'middle' | 'bottom'
+  /** wrap long lines inside the box (default true); false = single line, clipped */
+  wrap?: boolean
+  /** shrink text to fit the box when it's too big (never grows past fontSize) */
+  autoSize?: boolean
   /** text color / line color / rect border color */
   color?: string | null
   /** rect fill (null = transparent) */
@@ -314,6 +320,29 @@ export interface LabelTemplate {
 }
 
 export type LabelTemplateInput = Omit<LabelTemplate, 'id' | 'createdAt' | 'updatedAt'>
+
+// ---- Cases (what's packed in each case) -----------------------------------
+
+/** A key/value detail on a case (e.g. Truck # = 12). */
+export interface CaseField {
+  label: string
+  value: string
+}
+
+/** A physical case and what's packed in it. Prints to a label via a template:
+ *  template text tokens {Case}, {Contents}, {Show}, or {FieldName} are filled in. */
+export interface PackCase {
+  id: number
+  name: string
+  fields: CaseField[]
+  /** what's inside (free text, one item per line) */
+  contents: string
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type PackCaseInput = Omit<PackCase, 'id' | 'createdAt' | 'updatedAt'>
 
 /** A sub-editor row's save, called by a modal's "Save changes" so it flushes
  *  every child row (ports/cables), not just the top-level fields. */
@@ -441,5 +470,14 @@ export interface VwDeviceManagerApi {
     remove: (id: number) => Promise<void>
     /** render `copies` of the label to a PDF and save it (returns path, or null) */
     print: (id: number, copies: number) => Promise<string | null>
+    /** print one label per case (filling the template's {tokens}); caseIds empty = all */
+    printCases: (templateId: number, caseIds: number[]) => Promise<string | null>
+  }
+  /** Cases manager: organize what's packed in each case. */
+  cases: {
+    list: () => Promise<PackCase[]>
+    create: (input: PackCaseInput) => Promise<PackCase>
+    update: (id: number, input: PackCaseInput) => Promise<PackCase>
+    remove: (id: number) => Promise<void>
   }
 }

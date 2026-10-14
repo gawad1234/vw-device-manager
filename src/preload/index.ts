@@ -8,6 +8,7 @@ import type {
   ExportOptions,
   HostConfigInput,
   LabelTemplateInput,
+  PackCaseInput,
   PortInput,
   ShopOrderInput,
   SubnetInput,
@@ -124,7 +125,15 @@ const api: VwDeviceManagerApi = {
     create: (input: LabelTemplateInput) => ipcRenderer.invoke('labels:create', input),
     update: (id: number, input: LabelTemplateInput) => ipcRenderer.invoke('labels:update', id, input),
     remove: (id: number) => ipcRenderer.invoke('labels:remove', id),
-    print: (id: number, copies: number) => ipcRenderer.invoke('labels:print', id, copies)
+    print: (id: number, copies: number) => ipcRenderer.invoke('labels:print', id, copies),
+    printCases: (templateId: number, caseIds: number[]) =>
+      ipcRenderer.invoke('labels:printCases', templateId, caseIds)
+  },
+  cases: {
+    list: () => ipcRenderer.invoke('cases:list'),
+    create: (input: PackCaseInput) => ipcRenderer.invoke('cases:create', input),
+    update: (id: number, input: PackCaseInput) => ipcRenderer.invoke('cases:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('cases:remove', id)
   }
 }
 

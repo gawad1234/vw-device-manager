@@ -150,6 +150,18 @@ CREATE TABLE IF NOT EXISTS label_templates (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Cases (what's packed in each case). fields_json = [{label,value}]; contents is
+-- free text (one item per line). Printed to labels via a template's {tokens}.
+CREATE TABLE IF NOT EXISTS cases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  fields_json TEXT NOT NULL DEFAULT '[]',
+  contents TEXT NOT NULL DEFAULT '',
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `
 
 // A real embedded SQLite (Node's built-in node:sqlite — no native module) that

@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog, shell } from 'electron'
 import { writeFileSync } from 'fs'
 import { getProjectMeta } from './repository'
-import type { LabelTemplate } from '../shared/types'
+import type { LabelTemplate, PackCase } from '../shared/types'
 
 function esc(s: string): string {
   return String(s ?? '').replace(
@@ -10,15 +10,46 @@ function esc(s: string): string {
   )
 }
 
+/**
+ * Substitute `{tokens}` in label text from a case + the project show name.
+ * `{Case}` → case name, `{Contents}` → case contents, `{Show}` → show name,
+ * `{AnyField}` → the matching case field value (label match, case-insensitive).
+ * Unmatched tokens are blanked so stray placeholders never print.
+ */
+function resolveText(text: string, pc: PackCase | null, showNameText: string): string {
+  if (!text) return ''
+  return text.replace(/\{([^}]+)\}/g, (_m, rawKey: string) => {
+    const key = rawKey.trim().toLowerCase()
+    if (key === 'show') return showNameText
+    if (!pc) return ''
+    if (key === 'case') return pc.name
+    if (key === 'contents') return pc.contents
+    const field = pc.fields.find((f) => (f.label || '').trim().toLowerCase() === key)
+    return field ? field.value : ''
+  })
+}
+
 /** Freeform elements positioned in inches on the label. */
-function elementsHtml(t: LabelTemplate, showNameText: string, logo: string | null): string {
+function elementsHtml(
+  t: LabelTemplate,
+  showNameText: string,
+  logo: string | null,
+  pc: PackCase | null
+): string {
   return t.elements
     .map((el) => {
       const pos = `position:absolute;left:${el.x}in;top:${el.y}in;width:${el.w}in;height:${el.h}in;`
       if (el.type === 'text' || el.type === 'showname') {
         const fs = el.fontSize || 18
-        const txt = el.type === 'showname' ? showNameText : el.text || ''
-        return `<div style="${pos}font-size:${fs}pt;font-weight:${el.bold ? 800 : 400};text-align:${el.align || 'left'};color:${esc(el.color || '#111111')};line-height:1.05;overflow:hidden;word-break:break-word;">${esc(txt)}</div>`
+        const raw = el.type === 'showname' ? showNameText : el.text || ''
+        const txt = el.type === 'showname' ? raw : resolveText(raw, pc, showNameText)
+        const wrap = el.wrap !== false
+        const justify =
+          el.valign === 'middle' ? 'center' : el.valign === 'bottom' ? 'flex-end' : 'flex-start'
+        const box = `${pos}display:flex;flex-direction:column;justify-content:${justify};overflow:hidden;`
+        const inner = `font-size:${fs}pt;font-weight:${el.bold ? 800 : 400};text-align:${el.align || 'left'};color:${esc(el.color || '#111111')};line-height:1.1;width:100%;word-break:break-word;white-space:${wrap ? 'pre-wrap' : 'pre'};`
+        const autofit = el.autoSize ? ` data-autofit="${fs}"` : ''
+        return `<div style="${box}"><div style="${inner}"${autofit}>${esc(txt)}</div></div>`
       }
       if (el.type === 'logo') {
         if (!logo) return ''
@@ -36,20 +67,36 @@ function elementsHtml(t: LabelTemplate, showNameText: string, logo: string | nul
 }
 
 /** One case label's inner HTML (an 8.5" x 5.5" block). */
-function labelHtml(t: LabelTemplate, showNameText: string, logo: string | null): string {
+function labelHtml(
+  t: LabelTemplate,
+  showNameText: string,
+  logo: string | null,
+  pc: PackCase | null
+): string {
   // Freeform layout wins when present.
   if (t.elements && t.elements.length) {
-    return `<div class="label label-free">${elementsHtml(t, showNameText, logo)}</div>`
+    return `<div class="label label-free">${elementsHtml(t, showNameText, logo, pc)}</div>`
   }
   const band = t.color ? `<div class="band" style="background:${esc(t.color)}"></div>` : ''
-  const showTop = t.showName && showNameText ? `<span class="lshow">${esc(showNameText)}</span>` : '<span></span>'
+  const showTop =
+    t.showName && showNameText ? `<span class="lshow">${esc(showNameText)}</span>` : '<span></span>'
   const logoTop = logo ? `<img class="llogo" src="${logo}" alt="">` : ''
-  const top = t.showName && showNameText ? `<div class="ltop">${showTop}${logoTop}</div>` : logo ? `<div class="ltop"><span></span>${logoTop}</div>` : ''
+  const top =
+    t.showName && showNameText
+      ? `<div class="ltop">${showTop}${logoTop}</div>`
+      : logo
+        ? `<div class="ltop"><span></span>${logoTop}</div>`
+        : ''
+  const title = pc ? resolveText(t.title || '', pc, showNameText) : t.title || ''
   const fields = t.fields
+    .map((f) => ({
+      label: f.label,
+      value: pc ? resolveText(f.value, pc, showNameText) : f.value
+    }))
     .filter((f) => (f.label || '').trim() || (f.value || '').trim())
     .map((f) => `<div class="lf"><span class="lk">${esc(f.label)}</span><span class="lv">${esc(f.value)}</span></div>`)
     .join('')
-  return `<div class="label">${band}<div class="lbody">${top}<div class="ltitle">${esc(t.title || '')}</div><div class="lfields">${fields}</div></div></div>`
+  return `<div class="label">${band}<div class="lbody">${top}<div class="ltitle">${esc(title)}</div><div class="lfields">${fields}</div></div></div>`
 }
 
 function sheetHtml(labels: string[]): string {
@@ -70,22 +117,23 @@ function sheetHtml(labels: string[]): string {
     .lfields { margin-top: 10pt; display: flex; flex-direction: column; gap: 4pt; }
     .lf { font-size: 18pt; line-height: 1.15; }
     .lk { font-weight: 700; text-transform: uppercase; font-size: 12pt; color: #333; margin-right: 10pt; }
-  </style></head><body>${labels.join('')}</body></html>`
+  </style></head><body>${labels.join('')}
+  <script>
+    // Shrink any auto-size text down until it fits its box (never grows past the set size).
+    for (var n of document.querySelectorAll('[data-autofit]')) {
+      var box = n.parentElement, max = parseFloat(n.getAttribute('data-autofit')) || 18, fs = max, guard = 0
+      while (guard++ < 200 && fs > 4 && (n.scrollHeight > box.clientHeight + 1 || n.scrollWidth > box.clientWidth + 1)) {
+        fs = Math.max(4, fs - Math.max(0.5, fs * 0.05))
+        n.style.fontSize = fs + 'pt'
+      }
+    }
+  </script></body></html>`
 }
 
-/** Render `copies` of a label template to a PDF (2 per Letter sheet) and save it. */
-export async function printCaseLabels(
-  template: LabelTemplate,
-  copies: number
-): Promise<string | null> {
-  const showNameText = getProjectMeta('showName') ?? ''
-  const logo = getProjectMeta('logo')
-  const n = Math.max(1, Math.min(200, Math.trunc(copies) || 1))
-  const one = labelHtml(template, showNameText, logo)
-  const html = sheetHtml(Array(n).fill(one))
-
+/** Render a sheet of labels to PDF, prompt for a save location, write + open it. */
+async function savePdf(html: string, defaultName: string): Promise<string | null> {
   const res = await dialog.showSaveDialog({
-    defaultPath: `${(template.name || 'case label').replace(/[/\\:]/g, '-')} labels.pdf`,
+    defaultPath: `${defaultName.replace(/[/\\:]/g, '-')}.pdf`,
     filters: [{ name: 'PDF', extensions: ['pdf'] }]
   })
   if (res.canceled || !res.filePath) return null
@@ -104,4 +152,30 @@ export async function printCaseLabels(
   }
   shell.openPath(res.filePath)
   return res.filePath
+}
+
+/** Render `copies` of a label template to a PDF (2 per Letter sheet) and save it. */
+export async function printCaseLabels(
+  template: LabelTemplate,
+  copies: number
+): Promise<string | null> {
+  const showNameText = getProjectMeta('showName') ?? ''
+  const logo = getProjectMeta('logo')
+  const n = Math.max(1, Math.min(200, Math.trunc(copies) || 1))
+  const one = labelHtml(template, showNameText, logo, null)
+  const html = sheetHtml(Array(n).fill(one))
+  return savePdf(html, `${template.name || 'case label'} labels`)
+}
+
+/** Render one label per case, filling the template's `{tokens}` from each case. */
+export async function printCasesLabels(
+  template: LabelTemplate,
+  cases: PackCase[]
+): Promise<string | null> {
+  if (cases.length === 0) return null
+  const showNameText = getProjectMeta('showName') ?? ''
+  const logo = getProjectMeta('logo')
+  const labels = cases.map((pc) => labelHtml(template, showNameText, logo, pc))
+  const html = sheetHtml(labels)
+  return savePdf(html, `${template.name || 'case'} labels`)
 }

@@ -5,7 +5,7 @@ import * as projects from './projects'
 import * as library from './library'
 import { exportDocument } from './exports'
 import { generateVlanScript } from './vlan-script'
-import { printCaseLabels } from './caselabels'
+import { printCaseLabels, printCasesLabels } from './caselabels'
 import * as updater from './updater'
 import type {
   BundleInput,
@@ -15,6 +15,7 @@ import type {
   ExportOptions,
   HostConfigInput,
   LabelTemplateInput,
+  PackCaseInput,
   PortInput,
   ShopOrderInput,
   SubnetInput
@@ -140,6 +141,19 @@ export function registerIpcHandlers(): void {
     const t = repo.getLabelTemplateById(id)
     return t ? printCaseLabels(t, copies) : null
   })
+  ipcMain.handle('labels:printCases', (_e, templateId: number, caseIds: number[]) => {
+    const t = repo.getLabelTemplateById(templateId)
+    if (!t) return null
+    return printCasesLabels(t, repo.listCasesByIds(caseIds))
+  })
+
+  // Cases (packing manager).
+  ipcMain.handle('cases:list', () => repo.listCases())
+  ipcMain.handle('cases:create', (_e, input: PackCaseInput) => repo.createCase(input))
+  ipcMain.handle('cases:update', (_e, id: number, input: PackCaseInput) =>
+    repo.updateCase(id, input)
+  )
+  ipcMain.handle('cases:remove', (_e, id: number) => repo.deleteCase(id))
 
   // App auto-update (Settings → Updates).
   ipcMain.handle('updates:getState', () => updater.getUpdateStatus())
