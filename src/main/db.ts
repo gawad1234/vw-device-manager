@@ -145,6 +145,8 @@ CREATE TABLE IF NOT EXISTS label_templates (
   color TEXT,
   show_name INTEGER NOT NULL DEFAULT 1,
   fields_json TEXT NOT NULL DEFAULT '[]',
+  -- freeform positioned elements (text/shapes); when non-empty, this is what prints
+  elements_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -381,6 +383,13 @@ function migrateAddOrderCables(database: DatabaseSync): void {
   database.exec("ALTER TABLE shop_orders ADD COLUMN cables_json TEXT NOT NULL DEFAULT '[]'")
 }
 
+/** Adds `label_templates.elements_json` (freeform label layout). Guarded. */
+function migrateAddLabelElements(database: DatabaseSync): void {
+  if (!tableExists(database, 'label_templates')) return
+  if (tableHasColumn(database, 'label_templates', 'elements_json')) return
+  database.exec("ALTER TABLE label_templates ADD COLUMN elements_json TEXT NOT NULL DEFAULT '[]'")
+}
+
 /** Bring a freshly opened DB up to date: schema + all migrations. Network
  *  signals / cable types are NOT here — they live in the shared library. */
 function applySchemaAndMigrations(database: DatabaseSync): void {
@@ -396,6 +405,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateAddPortUnused(database)
   migrateAddOrderExportSnapshot(database)
   migrateAddOrderCables(database)
+  migrateAddLabelElements(database)
 }
 
 /**

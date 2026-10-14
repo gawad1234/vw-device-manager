@@ -11,6 +11,7 @@ import type {
   DeviceWarning,
   HostConfig,
   HostConfigInput,
+  LabelElement,
   LabelField,
   LabelTemplate,
   LabelTemplateInput,
@@ -691,10 +692,16 @@ export function markOrderExported(id: number, items: OrderItem[]): void {
 
 function mapLabelTemplate(row: Row): LabelTemplate {
   let fields: LabelField[] = []
+  let elements: LabelElement[] = []
   try {
     fields = JSON.parse((row.fields_json as string) || '[]') as LabelField[]
   } catch {
     fields = []
+  }
+  try {
+    elements = JSON.parse((row.elements_json as string) || '[]') as LabelElement[]
+  } catch {
+    elements = []
   }
   return {
     id: row.id as number,
@@ -703,6 +710,7 @@ function mapLabelTemplate(row: Row): LabelTemplate {
     color: (row.color as string | null) ?? null,
     showName: Boolean(row.show_name),
     fields,
+    elements,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string
   }
@@ -719,8 +727,15 @@ export function getLabelTemplateById(id: number): LabelTemplate | null {
 
 export function createLabelTemplate(input: LabelTemplateInput): LabelTemplate {
   dbRun(
-    'INSERT INTO label_templates (name, title, color, show_name, fields_json) VALUES (?, ?, ?, ?, ?)',
-    [input.name, input.title, input.color, input.showName ? 1 : 0, JSON.stringify(input.fields)]
+    'INSERT INTO label_templates (name, title, color, show_name, fields_json, elements_json) VALUES (?, ?, ?, ?, ?, ?)',
+    [
+      input.name,
+      input.title,
+      input.color,
+      input.showName ? 1 : 0,
+      JSON.stringify(input.fields),
+      JSON.stringify(input.elements ?? [])
+    ]
   )
   return getLabelTemplateById(lastInsertRowId()) as LabelTemplate
 }
@@ -728,9 +743,17 @@ export function createLabelTemplate(input: LabelTemplateInput): LabelTemplate {
 export function updateLabelTemplate(id: number, input: LabelTemplateInput): LabelTemplate {
   dbRun(
     `UPDATE label_templates SET name = ?, title = ?, color = ?, show_name = ?, fields_json = ?,
-       updated_at = datetime('now')
+       elements_json = ?, updated_at = datetime('now')
      WHERE id = ?`,
-    [input.name, input.title, input.color, input.showName ? 1 : 0, JSON.stringify(input.fields), id]
+    [
+      input.name,
+      input.title,
+      input.color,
+      input.showName ? 1 : 0,
+      JSON.stringify(input.fields),
+      JSON.stringify(input.elements ?? []),
+      id
+    ]
   )
   return getLabelTemplateById(id) as LabelTemplate
 }

@@ -266,23 +266,48 @@ export type ShopOrderInput = Omit<ShopOrder, 'id' | 'createdAt' | 'updatedAt' | 
 
 // ---- Case label templates (Uline S-19323, 8.5" x 5.5", 2-up) --------------
 
-/** One user-defined field on a case label: a caption + its value. */
+/** One user-defined field on a case label: a caption + its value. (legacy layout) */
 export interface LabelField {
   label: string
   value: string
+}
+
+/** A freely-positioned element on the label canvas. Geometry is in INCHES on
+ *  the 8.5" x 5.5" label (origin top-left). */
+export interface LabelElement {
+  id: string
+  type: 'text' | 'rect' | 'line'
+  x: number
+  y: number
+  w: number
+  h: number
+  /** text elements */
+  text?: string
+  fontSize?: number // points
+  bold?: boolean
+  align?: 'left' | 'center' | 'right'
+  /** text color / line color / rect border color */
+  color?: string | null
+  /** rect fill (null = transparent) */
+  fill?: string | null
+  /** rect border / line thickness, in points */
+  borderWidth?: number
 }
 
 export interface LabelTemplate {
   id: number
   /** template name (not printed) */
   name: string
-  /** the big line printed on the label */
+  /** the big line printed on the label (legacy fixed layout) */
   title: string
-  /** hex color for the accent band; null = none */
+  /** hex color for the accent band; null = none (legacy fixed layout) */
   color: string | null
-  /** print the project's show name along the top */
+  /** print the project's show name along the top (legacy fixed layout) */
   showName: boolean
+  /** legacy fixed-layout fields (used only when `elements` is empty) */
   fields: LabelField[]
+  /** freeform layout — when non-empty, this is what prints */
+  elements: LabelElement[]
   createdAt: string
   updatedAt: string
 }

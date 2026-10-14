@@ -10,8 +10,32 @@ function esc(s: string): string {
   )
 }
 
+/** Freeform elements positioned in inches on the label. */
+function elementsHtml(t: LabelTemplate): string {
+  return t.elements
+    .map((el) => {
+      const pos = `position:absolute;left:${el.x}in;top:${el.y}in;width:${el.w}in;height:${el.h}in;`
+      if (el.type === 'text') {
+        const fs = el.fontSize || 18
+        return `<div style="${pos}font-size:${fs}pt;font-weight:${el.bold ? 800 : 400};text-align:${el.align || 'left'};color:${esc(el.color || '#111111')};line-height:1.05;overflow:hidden;word-break:break-word;">${esc(el.text || '')}</div>`
+      }
+      if (el.type === 'line') {
+        return `<div style="${pos}background:${esc(el.color || '#111111')};"></div>`
+      }
+      const bw = el.borderWidth || 0
+      const border = bw > 0 ? `border:${bw}pt solid ${esc(el.color || '#111111')};` : ''
+      const fill = el.fill ? `background:${esc(el.fill)};` : ''
+      return `<div style="${pos}${fill}${border}box-sizing:border-box;"></div>`
+    })
+    .join('')
+}
+
 /** One case label's inner HTML (an 8.5" x 5.5" block). */
 function labelHtml(t: LabelTemplate, showNameText: string, logo: string | null): string {
+  // Freeform layout wins when present.
+  if (t.elements && t.elements.length) {
+    return `<div class="label label-free">${elementsHtml(t)}</div>`
+  }
   const band = t.color ? `<div class="band" style="background:${esc(t.color)}"></div>` : ''
   const showTop = t.showName && showNameText ? `<span class="lshow">${esc(showNameText)}</span>` : '<span></span>'
   const logoTop = logo ? `<img class="llogo" src="${logo}" alt="">` : ''
@@ -30,6 +54,7 @@ function sheetHtml(labels: string[]): string {
     body { margin: 0; font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; color: #111; }
     .label { width: 8.5in; height: 5.5in; padding: 0.35in 0.45in; overflow: hidden; position: relative;
              border-bottom: 1px dashed #cfcfcf; display: flex; }
+    .label-free { padding: 0; display: block; }
     .band { position: absolute; left: 0; top: 0; bottom: 0; width: 0.28in; }
     .lbody { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     .ltop { display: flex; align-items: center; justify-content: space-between; gap: 0.3in; }
