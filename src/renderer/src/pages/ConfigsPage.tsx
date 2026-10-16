@@ -42,9 +42,12 @@ function ConfigsPage({ subnets }: Props): React.JSX.Element {
       </div>
 
       <p className="muted" style={{ marginBottom: 18, maxWidth: 720 }}>
-        Generate a Windows PowerShell script that builds a Hyper-V VLAN trunk on a host — one
-        untagged (native) adapter plus one per tagged VLAN, each with its own IP. Build the VLAN
-        list by hand or pull VLANs straight from this project&rsquo;s subnets.
+        Build a Hyper-V VLAN trunk for a host — one untagged (native) adapter plus one per tagged
+        VLAN, each with its own IP. Build the VLAN list by hand or pull it straight from this
+        project&rsquo;s subnets, then either <strong>Generate script</strong> (a ready-to-run
+        PowerShell file) or <strong>Export JSON</strong> for the standalone{' '}
+        <strong>VLAN Manager</strong> tool, which manages a host&rsquo;s live VLANs from a GUI
+        (see <code>host-tools/</code> in the project repo).
       </p>
 
       <table className="table">

@@ -523,6 +523,8 @@ export interface VwDeviceManagerApi {
     remove: (id: number) => Promise<void>
     /** generate the .ps1 for this config and save it (returns path, or null if cancelled) */
     generate: (id: number) => Promise<string | null>
+    /** export the VLAN list as JSON for the host VlanManager tool (returns path, or null) */
+    exportJson: (id: number) => Promise<string | null>
   }
   /** Shop orders: equipment purchasing + receiving tracking. */
   orders: {

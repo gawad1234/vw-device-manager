@@ -113,7 +113,8 @@ const api: VwDeviceManagerApi = {
     create: (input: HostConfigInput) => ipcRenderer.invoke('configs:create', input),
     update: (id: number, input: HostConfigInput) => ipcRenderer.invoke('configs:update', id, input),
     remove: (id: number) => ipcRenderer.invoke('configs:remove', id),
-    generate: (id: number) => ipcRenderer.invoke('configs:generate', id)
+    generate: (id: number) => ipcRenderer.invoke('configs:generate', id),
+    exportJson: (id: number) => ipcRenderer.invoke('configs:exportJson', id)
   },
   orders: {
     list: () => ipcRenderer.invoke('orders:list'),

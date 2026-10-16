@@ -60,6 +60,7 @@ Device Manager is the database; a set of Python scripts run **inside Vectorworks
 - [Quick Start](docs/QUICK-START.md) — install and your first project in a few minutes.
 - [User Guide](docs/USER-GUIDE.md) — every tab, exports, labels, cases, and troubleshooting.
 - [Vectorworks sync](vectorworks-scripts/README.md) — the ConnectCAD ↔ app workflow.
+- [Host tools](host-tools/README.md) — the Hyper-V **VLAN Manager** GUI for the Windows host.
 
 ## Feedback
 

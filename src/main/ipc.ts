@@ -122,6 +122,31 @@ export function registerIpcHandlers(): void {
     shell.showItemInFolder(res.filePath) // reveal (don't execute) the .ps1
     return res.filePath
   })
+  // Export the VLAN list as JSON for the standalone host VlanManager tool / the
+  // engine's -ConfigPath (schema: [{Name,VlanId,Tagged,Dhcp,IPAddress,PrefixLength,Gateway,DnsServers}]).
+  ipcMain.handle('configs:exportJson', async (_e, id: number) => {
+    const config = repo.getHostConfigById(id)
+    if (!config) return null
+    const json = config.vlans.map((v) => ({
+      Name: v.name,
+      VlanId: Math.trunc(v.vlanId) || 0,
+      Tagged: !!v.tagged,
+      Dhcp: !!v.dhcp,
+      IPAddress: v.dhcp ? null : v.ipAddress || null,
+      PrefixLength: Math.trunc(v.prefixLength) || 24,
+      Gateway: !v.dhcp && v.gateway ? v.gateway : null,
+      DnsServers: (v.dnsServers || []).filter(Boolean)
+    }))
+    const safe = (config.name || 'host-config').replace(/[/\\:*?"<>|]/g, '-')
+    const res = await dialog.showSaveDialog({
+      defaultPath: `${safe}.vlans.json`,
+      filters: [{ name: 'VLAN config (JSON)', extensions: ['json'] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    writeFileSync(res.filePath, JSON.stringify(json, null, 2), 'utf-8')
+    shell.showItemInFolder(res.filePath)
+    return res.filePath
+  })
 
   // Shop orders (Orders tab).
   ipcMain.handle('orders:list', () => repo.listShopOrders())

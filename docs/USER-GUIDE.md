@@ -91,7 +91,23 @@ Manage cable bundles and the individual cables inside them.
 
 ## Configs
 
-Generates a **Hyper-V VLAN setup PowerShell script** from your subnets, so a Windows host's virtual switch can be configured to match the show's VLANs. Pick your options and the app produces the `.ps1` for you to run on the host.
+Builds a **Hyper-V VLAN trunk** for a Windows host — one untagged (native) adapter plus one per tagged VLAN, each with its own IP — so the host's virtual switch matches the show's VLANs. Build the VLAN list by hand or pull it from the project's subnets, then either:
+
+- **Generate script…** — a ready-to-run PowerShell `.ps1` you run on the host (as admin).
+- **Export JSON…** — a config file for the standalone **VLAN Manager** tool.
+
+### VLAN Manager (host tool)
+
+For a GUI instead of a script, the project repo ships a small **VLAN Manager** in the **`host-tools/`** folder. Run it on the Hyper-V host to:
+
+- **see the VLAN adapters that are there right now,**
+- add / edit / remove them,
+- **Preview** the exact changes, then **Apply** them live (idempotent, with retries),
+- **Teardown** the switch + adapters.
+
+Tie it to Device Manager with **Export JSON…** here → **Load config…** in the tool. Setup and full instructions are in [`host-tools/README.md`](../host-tools/README.md).
+
+> Both the generated script and the tool need Windows 10/11 Pro+ with Hyper-V, and administrator rights.
 
 ---
 

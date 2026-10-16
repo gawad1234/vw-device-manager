@@ -113,6 +113,14 @@ function ConfigModal({ config, subnets, onClose, onChanged, onCreated }: Props):
     await window.api.configs.generate(saved.id)
   }
 
+  async function exportJson(): Promise<void> {
+    const saved = await persist()
+    if (!saved) return
+    onChanged()
+    if (!config) onCreated(saved.id)
+    await window.api.configs.exportJson(saved.id)
+  }
+
   async function handleDelete(): Promise<void> {
     if (!config) return
     if (!window.confirm(`Delete config "${config.name}"?`)) return
@@ -131,6 +139,15 @@ function ConfigModal({ config, subnets, onClose, onChanged, onCreated }: Props):
       <span className="footer-spacer" />
       <button className="btn" type="button" onClick={onClose}>
         Close
+      </button>
+      <button
+        className="btn"
+        type="button"
+        onClick={exportJson}
+        disabled={!name.trim() || vlans.length === 0}
+        title="Export the VLAN list as JSON for the host VLAN Manager tool"
+      >
+        Export JSON…
       </button>
       <button
         className="btn"
