@@ -278,7 +278,7 @@ export function listDevices(): Device[] {
   )
 }
 
-function getDeviceById(id: number): Device | null {
+export function getDeviceById(id: number): Device | null {
   const row = queryOne('SELECT * FROM devices WHERE id = ?', [id])
   return row ? mapDevice(row, portsForDevice(id)) : null
 }

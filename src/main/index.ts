@@ -7,6 +7,7 @@ import { ensureLibrary } from './library'
 import { getDataVersion } from './db'
 import { initUpdater } from './updater'
 import { registerIpcHandlers } from './ipc'
+import { setServerWindow, initServer, stopServer } from './server'
 
 function createWindow(): void {
   // Create the browser window.
@@ -56,6 +57,9 @@ function createWindow(): void {
   // Check GitHub Releases for a newer version (packaged builds only).
   initUpdater(mainWindow)
 
+  // Let the LAN Show Server push 'data-changed' here after crew check-ins.
+  setServerWindow(mainWindow)
+
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -88,6 +92,9 @@ app.whenReady().then(async () => {
 
   createWindow()
 
+  // Auto-start the LAN Show Server if this machine has it enabled.
+  await initServer()
+
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
@@ -102,6 +109,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Stop the LAN Show Server cleanly on quit (releases the listening socket).
+app.on('before-quit', () => {
+  void stopServer()
 })
 
 // In this file you can include the rest of your app's specific main process

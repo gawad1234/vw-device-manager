@@ -1083,3 +1083,20 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
   shell.openPath(outPath)
   return outPath
 }
+
+// ---- Server-facing HTML (for the LAN Show Server) -------------------------
+// Thin wrappers that set the module-level show name (used by page()) from the
+// current project, then return the same self-styled HTML the PDF path renders.
+// These let the embedded web server reuse the exact paperwork layouts.
+
+/** The IP schedule as a standalone HTML page. */
+export function ipSchedulePageHtml(): string {
+  docShowName = getProjectMeta('showName')
+  return ipScheduleHtml(getProjectMeta('logo'))
+}
+
+/** The device list (category-sectioned) as a standalone HTML page. */
+export function deviceListPageHtml(): string {
+  docShowName = getProjectMeta('showName')
+  return deviceListHtml(getProjectMeta('logo'))
+}

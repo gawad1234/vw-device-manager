@@ -7,7 +7,9 @@ import { exportDocument } from './exports'
 import { generateVlanScript } from './vlan-script'
 import { printCaseLabels, printCasesLabels } from './caselabels'
 import * as updater from './updater'
+import * as server from './server'
 import type {
+  ServerPins,
   BundleInput,
   CableInput,
   CableTypeInput,
@@ -198,4 +200,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('updates:install', () => updater.quitAndInstall())
   ipcMain.handle('updates:getAutoCheck', () => updater.getAutoCheck())
   ipcMain.handle('updates:setAutoCheck', (_e, value: boolean) => updater.setAutoCheck(value))
+
+  // LAN Show Server (Settings → Show Server).
+  ipcMain.handle('server:getState', () => server.getServerStatus())
+  ipcMain.handle('server:setEnabled', (_e, value: boolean) => server.setEnabled(value))
+  ipcMain.handle('server:setPort', (_e, port: number) => server.setPort(port))
+  ipcMain.handle('server:getPins', () => server.getPins())
+  ipcMain.handle('server:setPins', (_e, pins: ServerPins) => server.setPins(pins))
+  ipcMain.handle('server:connectQr', () => server.connectQr())
 }

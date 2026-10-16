@@ -11,6 +11,7 @@ import type {
   OrderExportFormatInput,
   PackCaseInput,
   PortInput,
+  ServerPins,
   ShopOrderInput,
   SubnetInput,
   VwDeviceManagerApi
@@ -107,6 +108,19 @@ const api: VwDeviceManagerApi = {
     const listener = (_e: unknown, status: Parameters<typeof cb>[0]): void => cb(status)
     ipcRenderer.on('update-status', listener)
     return () => ipcRenderer.removeListener('update-status', listener)
+  },
+  server: {
+    getState: () => ipcRenderer.invoke('server:getState'),
+    setEnabled: (value: boolean) => ipcRenderer.invoke('server:setEnabled', value),
+    setPort: (port: number) => ipcRenderer.invoke('server:setPort', port),
+    getPins: () => ipcRenderer.invoke('server:getPins'),
+    setPins: (pins: ServerPins) => ipcRenderer.invoke('server:setPins', pins),
+    connectQr: () => ipcRenderer.invoke('server:connectQr')
+  },
+  onServerStatus: (cb) => {
+    const listener = (_e: unknown, status: Parameters<typeof cb>[0]): void => cb(status)
+    ipcRenderer.on('server-status', listener)
+    return () => ipcRenderer.removeListener('server-status', listener)
   },
   configs: {
     list: () => ipcRenderer.invoke('configs:list'),

@@ -179,3 +179,26 @@ export async function printCasesLabels(
   const html = sheetHtml(labels)
   return savePdf(html, `${template.name || 'case'} labels`)
 }
+
+// ---- Server-facing HTML (for the LAN Show Server) -------------------------
+// Same 2-up label sheets the PDF path builds, returned as HTML for a browser.
+// The autofit <script> baked into sheetHtml runs in the browser too.
+
+/** `copies` of a template as an HTML label sheet. */
+export function renderTemplateSheetHtml(template: LabelTemplate, copies = 1): string {
+  const showNameText = getProjectMeta('showName') ?? ''
+  const logo = getProjectMeta('logo')
+  const n = Math.max(1, Math.min(200, Math.trunc(copies) || 1))
+  const one = labelHtml(template, showNameText, logo, null)
+  return sheetHtml(Array(n).fill(one))
+}
+
+/** One label per case (filling the template's {tokens}) as an HTML label sheet. */
+export function renderCasesSheetHtml(template: LabelTemplate, cases: PackCase[]): string {
+  const showNameText = getProjectMeta('showName') ?? ''
+  const logo = getProjectMeta('logo')
+  const labels = (cases.length ? cases : [null]).map((pc) =>
+    labelHtml(template, showNameText, logo, pc)
+  )
+  return sheetHtml(labels)
+}

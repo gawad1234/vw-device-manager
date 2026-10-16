@@ -16,7 +16,14 @@ interface Settings {
   recentProjects?: string[]
   /** check GitHub for a newer version on launch (default true) */
   autoCheckUpdates?: boolean
+  /** run the LAN "Show Server" (auto-start on launch); per-machine */
+  showServerEnabled?: boolean
+  /** TCP port for the Show Server (per-machine) */
+  showServerPort?: number
 }
+
+/** Default Show Server port — an uncommon high port to dodge collisions. */
+export const DEFAULT_SERVER_PORT = 8787
 
 // Settings live in this machine's userData (NOT the Dropbox folder), so Mac
 // absolute paths and Windows absolute paths never collide across machines.
@@ -60,6 +67,25 @@ export function getAutoCheckUpdates(): boolean {
 
 export function setAutoCheckUpdates(value: boolean): void {
   writeSettings({ ...readSettings(), autoCheckUpdates: value })
+}
+
+/** Whether the LAN Show Server should run / auto-start (per-machine; default off). */
+export function getShowServerEnabled(): boolean {
+  return readSettings().showServerEnabled ?? false
+}
+
+export function setShowServerEnabled(value: boolean): void {
+  writeSettings({ ...readSettings(), showServerEnabled: value })
+}
+
+/** The Show Server's TCP port (per-machine; default DEFAULT_SERVER_PORT). */
+export function getShowServerPort(): number {
+  const p = readSettings().showServerPort
+  return typeof p === 'number' && p >= 1 && p <= 65535 ? p : DEFAULT_SERVER_PORT
+}
+
+export function setShowServerPort(port: number): void {
+  writeSettings({ ...readSettings(), showServerPort: Math.max(1, Math.min(65535, Math.trunc(port))) })
 }
 
 /** Recent projects that still exist on THIS machine (paths differ per OS). */

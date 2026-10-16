@@ -260,6 +260,31 @@ export interface UpdateStatus {
   canSelfInstall: boolean
 }
 
+// ---- Show Server (LAN web server) -----------------------------------------
+
+/** State of the embedded LAN web server, pushed on every change and returned by
+ *  server.getState(). */
+export interface ServerStatus {
+  /** is the HTTP server currently listening */
+  running: boolean
+  /** persisted per-machine preference: auto-start on launch + stay on */
+  enabled: boolean
+  /** the TCP port it listens on */
+  port: number
+  /** reachable URLs — one per non-internal IPv4 LAN interface */
+  urls: string[]
+  /** how many distinct sessions are currently signed in */
+  clientCount: number
+  /** human-readable message when the server failed to start */
+  error: string | null
+}
+
+/** The two show-level access PINs (blank crew PIN = crew area is open). */
+export interface ServerPins {
+  crew: string
+  manager: string
+}
+
 // ---- Host VLAN config generator -------------------------------------------
 
 /** One network on a host NIC config (mirrors the PowerShell $DefaultVlans entry). */
@@ -515,6 +540,22 @@ export interface VwDeviceManagerApi {
   }
   /** Fires whenever the update status changes. Returns an unsubscribe fn. */
   onUpdateStatus: (cb: (status: UpdateStatus) => void) => () => void
+  /** The embedded LAN "Show Server" that crew reach from their own devices.
+   *  enabled is a per-machine preference (which computer is the server); the
+   *  crew/manager PINs are per-show (stored in the project). */
+  server: {
+    getState: () => Promise<ServerStatus>
+    /** turn the server on/off (persists the preference + starts/stops now) */
+    setEnabled: (value: boolean) => Promise<ServerStatus>
+    /** change the port (persists + restarts if running) */
+    setPort: (port: number) => Promise<ServerStatus>
+    getPins: () => Promise<ServerPins>
+    setPins: (pins: ServerPins) => Promise<void>
+    /** a PNG data-URL QR of the primary connect URL (null when not running) */
+    connectQr: () => Promise<string | null>
+  }
+  /** Fires whenever the server status changes. Returns an unsubscribe fn. */
+  onServerStatus: (cb: (status: ServerStatus) => void) => () => void
   /** Saved host VLAN configs + generating their PowerShell scripts. */
   configs: {
     list: () => Promise<HostConfig[]>
