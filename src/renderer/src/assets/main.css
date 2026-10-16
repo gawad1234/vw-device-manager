@@ -1535,3 +1535,35 @@ input[type='checkbox'] {
 .server-pins input {
   width: 160px;
 }
+
+/* Patching tab */
+.patch-stats { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.patch-stats .pill { font-size: 13px; padding: 3px 11px; border-radius: 999px; background: var(--ev-c-black-soft); color: var(--ev-c-text-2); }
+.patch-stats .pill.ok { background: #13351f; color: #7fe0a1; }
+.patch-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.patch-filters input[type=text] { flex: 1 1 220px; min-width: 160px; }
+.patch-filters input, .patch-filters select {
+  background: #0c0e12; border: 1px solid var(--line); color: var(--ev-c-text-1);
+  border-radius: 7px; padding: 7px 9px; font: inherit;
+}
+.patch-group { margin-bottom: 20px; }
+.patch-group-head { font-size: 14px; margin: 6px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.patch-table td, .patch-table th { vertical-align: top; }
+.patch-table td { padding-top: 11px; padding-bottom: 11px; }
+.patch-table th.chk, .patch-table td.chk { text-align: center; width: 64px; }
+.patch-table td.chk { vertical-align: middle; }
+.patch-table .name { font-weight: 600; display: block; }
+.patch-table .sub { color: var(--ev-c-text-2); font-size: 12.5px; }
+.patch-table .sub2 { display: block; color: var(--ev-c-text-2); font-size: 11.5px; line-height: 1.35; opacity: 0.85; }
+.patch-table tr.is-patched td { background: rgba(46, 158, 91, 0.07); }
+.patch-note {
+  width: 100%; min-width: 90px; background: #0c0e12; border: 1px solid var(--line);
+  color: var(--ev-c-text-1); border-radius: 6px; padding: 5px 7px; font: inherit;
+}
+.banner-info {
+  background: #12263a; border: 1px solid #1e3a52; color: #9fd0f0;
+  padding: 9px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13.5px;
+}
+
+.patch-table tr.is-partial td { background: rgba(240, 198, 116, 0.09); }
+.patch-stats .pill.warn { background: #3a2f12; color: #f0c674; }

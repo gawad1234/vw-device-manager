@@ -165,6 +165,38 @@ CREATE TABLE IF NOT EXISTS order_export_formats (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Patching: circuits imported from a ConnectCAD circuit report. conn_key is the
+-- stable physical-connection identity (src dev+socket → dst dev+socket), used to
+-- merge on re-import while preserving patched/tested/notes. The drawing owns
+-- which circuits exist; status lives only here.
+CREATE TABLE IF NOT EXISTS circuits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conn_key TEXT NOT NULL UNIQUE,
+  cable_number TEXT NOT NULL DEFAULT '',
+  signal TEXT NOT NULL DEFAULT '',
+  est_length TEXT NOT NULL DEFAULT '',
+  src_name TEXT NOT NULL DEFAULT '',
+  src_socket TEXT NOT NULL DEFAULT '',
+  src_connector TEXT NOT NULL DEFAULT '',
+  src_rack TEXT NOT NULL DEFAULT '',
+  src_rack_u TEXT NOT NULL DEFAULT '',
+  src_slot TEXT NOT NULL DEFAULT '',
+  dst_name TEXT NOT NULL DEFAULT '',
+  dst_socket TEXT NOT NULL DEFAULT '',
+  dst_connector TEXT NOT NULL DEFAULT '',
+  dst_rack TEXT NOT NULL DEFAULT '',
+  dst_rack_u TEXT NOT NULL DEFAULT '',
+  dst_slot TEXT NOT NULL DEFAULT '',
+  -- patched is tracked PER END so a half-patched run is visible; tested is
+  -- circuit-level and implies both ends patched.
+  src_patched INTEGER NOT NULL DEFAULT 0,
+  dst_patched INTEGER NOT NULL DEFAULT 0,
+  tested INTEGER NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Cases (what's packed in each case). fields_json = [{label,value}]; contents is
 -- free text (one item per line). Printed to labels via a template's {tokens}.
 CREATE TABLE IF NOT EXISTS cases (
@@ -416,6 +448,20 @@ function migrateAddLabelElements(database: DatabaseSync): void {
   database.exec("ALTER TABLE label_templates ADD COLUMN elements_json TEXT NOT NULL DEFAULT '[]'")
 }
 
+/** Splits circuits' single `patched` into per-end src_patched/dst_patched.
+ *  Guarded — only the brief first-cut `circuits` table had `patched`. */
+function migrateCircuitEnds(database: DatabaseSync): void {
+  if (!tableExists(database, 'circuits')) return
+  if (tableHasColumn(database, 'circuits', 'src_patched')) return
+  database.exec(`
+    ALTER TABLE circuits ADD COLUMN src_patched INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE circuits ADD COLUMN dst_patched INTEGER NOT NULL DEFAULT 0;
+  `)
+  if (tableHasColumn(database, 'circuits', 'patched')) {
+    database.exec('UPDATE circuits SET src_patched = patched, dst_patched = patched')
+  }
+}
+
 /** Bring a freshly opened DB up to date: schema + all migrations. Network
  *  signals / cable types are NOT here — they live in the shared library. */
 function applySchemaAndMigrations(database: DatabaseSync): void {
@@ -432,6 +478,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateAddOrderExportSnapshot(database)
   migrateAddOrderCables(database)
   migrateAddLabelElements(database)
+  migrateCircuitEnds(database)
 }
 
 /**

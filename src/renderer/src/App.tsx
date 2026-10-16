@@ -7,10 +7,11 @@ import ConfigsPage from './pages/ConfigsPage'
 import OrdersPage from './pages/OrdersPage'
 import LabelsPage from './pages/LabelsPage'
 import CasesPage from './pages/CasesPage'
+import PatchingPage from './pages/PatchingPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjectMenu from './components/ProjectMenu'
 
-type Tab = 'devices' | 'subnets' | 'cables' | 'configs' | 'orders' | 'labels' | 'cases' | 'settings'
+type Tab = 'devices' | 'subnets' | 'cables' | 'configs' | 'orders' | 'labels' | 'cases' | 'patching' | 'settings'
 
 function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('devices')
@@ -116,6 +117,12 @@ function App(): React.JSX.Element {
             Cases
           </button>
           <button
+            className={`tab ${tab === 'patching' ? 'active' : ''}`}
+            onClick={() => setTab('patching')}
+          >
+            Patching
+          </button>
+          <button
             className={`tab ${tab === 'settings' ? 'active' : ''}`}
             onClick={() => setTab('settings')}
           >
@@ -152,6 +159,8 @@ function App(): React.JSX.Element {
           <LabelsPage />
         ) : tab === 'cases' ? (
           <CasesPage />
+        ) : tab === 'patching' ? (
+          <PatchingPage />
         ) : (
           <SettingsPage
             key={project?.path}

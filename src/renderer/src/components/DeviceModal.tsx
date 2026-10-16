@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Device, DeviceInput, DeviceWarning, RowSaver, Subnet } from '../../../shared/types'
 import Modal from './Modal'
 import PortsSection from './PortsSection'
+import DeviceConnections from './DeviceConnections'
 
 const EMPTY_FORM: DeviceInput = {
   name: '',
@@ -257,6 +258,13 @@ function DeviceModal({
         </div>
       ) : (
         <p className="muted modal-section">Create the device first, then add its ports here.</p>
+      )}
+
+      {device && (
+        <div className="modal-section">
+          <h3>Connections (patching)</h3>
+          <DeviceConnections deviceName={device.name} />
+        </div>
       )}
     </Modal>
   )

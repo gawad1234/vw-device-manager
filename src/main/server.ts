@@ -22,8 +22,12 @@ import {
   listLabelTemplates,
   getLabelTemplateById,
   listCases,
-  getCaseById
+  getCaseById,
+  listCircuits,
+  getCircuitById,
+  setCircuitStatus
 } from './repository'
+import type { Circuit } from '../shared/types'
 import { getCurrentProject } from './projects'
 import { ipSchedulePageHtml, deviceListPageHtml } from './exports'
 import { renderTemplateSheetHtml, renderCasesSheetHtml } from './caselabels'
@@ -356,6 +360,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
 
   if (path === '/devices') return sendHtml(res, 200, devicesListPage())
   if (path.startsWith('/device/')) return sendHtml(res, 200, await devicePage(Number(path.slice(8))))
+  if (path === '/api/patch' && method === 'POST') return apiPatch(req, res)
 
   if (path === '/paperwork') return sendHtml(res, 200, paperworkHubPage())
   if (path === '/paperwork/ip-schedule') return sendHtml(res, 200, ipSchedulePageHtml())
@@ -589,6 +594,7 @@ async function devicePage(id: number): Promise<string> {
     })
     .join('')
   const qr = await qrSvg(deviceUrl(d.id))
+  const circuits = listCircuits().filter((c) => c.srcName === d.name || c.dstName === d.name)
   return layout(
     esc(d.name),
     `<h1>${esc(d.name)}${d.isSwitch ? ' <span class="pill">switch</span>' : ''}</h1>
@@ -597,13 +603,96 @@ async function devicePage(id: number): Promise<string> {
      <table><tr><th>Port</th><th>IP</th><th>Untagged VLAN</th><th>Tagged VLANs</th></tr>${
        portRows || '<tr><td colspan="4" class="muted">No ports.</td></tr>'
      }</table>
+     ${connectionsSection(d.name, circuits)}
      ${d.isSwitch ? '<h2>Switch config</h2><p class="muted">A generated switch configuration will appear here once that feature ships.</p>' : ''}
      ${d.notes ? `<h2>Notes</h2><p>${esc(d.notes).replace(/\n/g, '<br>')}</p>` : ''}
      <h2>This device’s QR</h2><div class="qr">${qr}</div>
-     <p><a href="/devices">← all devices</a></p>`,
+     <p><a href="/devices">← all devices</a></p>
+     ${patchScript()}`,
     'crew',
     'devices'
   )
+}
+
+/** The connections/patching list for a device page — crew tick THIS end patched
+ *  and tested (tested marks both ends). The far end shows as a read-only badge. */
+function connectionsSection(deviceName: string, circuits: Circuit[]): string {
+  if (circuits.length === 0) return ''
+  const thisEndPatched = circuits.filter((c) =>
+    c.srcName === deviceName ? c.srcPatched : c.dstPatched
+  ).length
+  const rows = circuits
+    .map((c) => {
+      const isSrc = c.srcName === deviceName
+      const mySocket = isSrc ? c.srcSocket : c.dstSocket
+      const other = isSrc ? c.dstName : c.srcName
+      const otherSkt = isSrc ? c.dstSocket : c.srcSocket
+      const myPatched = isSrc ? c.srcPatched : c.dstPatched
+      const farPatched = isSrc ? c.dstPatched : c.srcPatched
+      return `<div class="row" data-id="${c.id}" data-end="${isSrc ? 'src' : 'dst'}">
+        <span class="grow"><span class="name">${esc(mySocket || '—')}</span>
+          <span class="sub">→ ${esc(other || '—')} · ${esc(otherSkt)} · ${esc(c.signal)}${c.cableNumber ? ` · ${esc(c.cableNumber)}` : ''}</span>
+          <span class="sub far ${farPatched ? 'on' : ''}">far end ${farPatched ? 'patched ✓' : 'not patched'}</span></span>
+        <label class="muted" style="font-size:13px"><input type="checkbox" class="pp" ${myPatched ? 'checked' : ''}> patched</label>
+        <label class="muted" style="font-size:13px"><input type="checkbox" class="tt" ${c.tested ? 'checked' : ''}> tested</label>
+      </div>`
+    })
+    .join('')
+  return `<h2>Connections (patching) <span class="muted" style="font-size:13px">${thisEndPatched}/${circuits.length} patched here</span></h2>
+    <div id="conns">${rows}</div>`
+}
+
+/** Shared inline script: POST this-end patched / tested toggles on a device page.
+ *  On success it re-reads the row so tested auto-checking both ends is reflected. */
+function patchScript(): string {
+  return `<script>
+    document.querySelectorAll('#conns .row').forEach(function(row){
+      var id = +row.getAttribute('data-id');
+      var end = row.getAttribute('data-end');
+      var pp = row.querySelector('.pp'), tt = row.querySelector('.tt');
+      function send(body){
+        body.id = id;
+        fetch('/api/patch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+          .then(function(r){return r.json();})
+          .then(function(d){ if(d&&d.ok){ pp.checked=d.myPatched; tt.checked=d.tested; } else { alert((d&&d.error)||'Save failed'); } })
+          .catch(function(){ alert('Network error'); });
+      }
+      pp.addEventListener('change', function(){ send({ end:end, patched:pp.checked }); });
+      tt.addEventListener('change', function(){ send({ end:end, tested:tt.checked }); });
+    });
+  </script>`
+}
+
+async function apiPatch(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!allow(req, 'crew')) return sendJson(res, 403, { ok: false, error: 'not allowed' })
+  let p: { id?: number; end?: 'src' | 'dst'; patched?: boolean; tested?: boolean }
+  try {
+    p = JSON.parse(await readBody(req))
+  } catch {
+    return sendJson(res, 400, { ok: false, error: 'bad request' })
+  }
+  if (typeof p.id !== 'number') return sendJson(res, 400, { ok: false, error: 'bad request' })
+  const result = await serialize(() => {
+    const c = getCircuitById(p.id as number)
+    if (!c) return { ok: false, error: 'circuit not found' }
+    const next = { srcPatched: c.srcPatched, dstPatched: c.dstPatched, tested: c.tested, notes: c.notes }
+    if (typeof p.patched === 'boolean') {
+      if (p.end === 'src') next.srcPatched = p.patched
+      else if (p.end === 'dst') next.dstPatched = p.patched
+    }
+    if (typeof p.tested === 'boolean') {
+      next.tested = p.tested
+      if (p.tested) {
+        next.srcPatched = true // testing implies both ends patched
+        next.dstPatched = true
+      }
+    }
+    const saved = setCircuitStatus(c.id, next)
+    const myPatched = p.end === 'dst' ? saved.dstPatched : saved.srcPatched
+    return { ok: true, myPatched, tested: saved.tested }
+  })
+  if (result.ok) notifyDataChanged()
+  sendJson(res, result.ok ? 200 : 400, result)
 }
 
 // ---------------------------------------------------------------------------

@@ -6,9 +6,11 @@ import * as library from './library'
 import { exportDocument } from './exports'
 import { generateVlanScript } from './vlan-script'
 import { printCaseLabels, printCasesLabels } from './caselabels'
+import { importCircuitReport } from './circuit-import'
 import * as updater from './updater'
 import * as server from './server'
 import type {
+  CircuitStatusInput,
   ServerPins,
   BundleInput,
   CableInput,
@@ -192,6 +194,14 @@ export function registerIpcHandlers(): void {
     repo.updateCase(id, input)
   )
   ipcMain.handle('cases:remove', (_e, id: number) => repo.deleteCase(id))
+
+  // Patching (circuits imported from a ConnectCAD circuit report).
+  ipcMain.handle('circuits:list', () => repo.listCircuits())
+  ipcMain.handle('circuits:setStatus', (_e, id: number, input: CircuitStatusInput) =>
+    repo.setCircuitStatus(id, input)
+  )
+  ipcMain.handle('circuits:import', () => importCircuitReport())
+  ipcMain.handle('circuits:clear', () => repo.clearCircuits())
 
   // App auto-update (Settings → Updates).
   ipcMain.handle('updates:getState', () => updater.getUpdateStatus())

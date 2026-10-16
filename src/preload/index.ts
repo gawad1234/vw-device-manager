@@ -4,6 +4,7 @@ import type {
   BundleInput,
   CableInput,
   CableTypeInput,
+  CircuitStatusInput,
   DeviceInput,
   ExportOptions,
   HostConfigInput,
@@ -150,6 +151,13 @@ const api: VwDeviceManagerApi = {
     create: (input: PackCaseInput) => ipcRenderer.invoke('cases:create', input),
     update: (id: number, input: PackCaseInput) => ipcRenderer.invoke('cases:update', id, input),
     remove: (id: number) => ipcRenderer.invoke('cases:remove', id)
+  },
+  circuits: {
+    list: () => ipcRenderer.invoke('circuits:list'),
+    setStatus: (id: number, input: CircuitStatusInput) =>
+      ipcRenderer.invoke('circuits:setStatus', id, input),
+    import: () => ipcRenderer.invoke('circuits:import'),
+    clear: () => ipcRenderer.invoke('circuits:clear')
   },
   orderFormats: {
     list: () => ipcRenderer.invoke('orderFormats:list'),

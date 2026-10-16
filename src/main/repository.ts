@@ -15,6 +15,9 @@ import type {
   LabelField,
   LabelTemplate,
   LabelTemplateInput,
+  Circuit,
+  CircuitStatusInput,
+  CircuitImportResult,
   OrderColumn,
   OrderExportFormat,
   OrderExportFormatInput,
@@ -913,4 +916,130 @@ export function setProjectMeta(key: string, value: string | null): void {
       [key, value]
     )
   }
+}
+
+// ---- Patching (circuits) --------------------------------------------------
+
+/** All report fields of a circuit (no status / id / timestamps) — the shape the
+ *  importer passes to mergeCircuits. */
+export type CircuitImport = Omit<
+  Circuit,
+  'id' | 'srcPatched' | 'dstPatched' | 'tested' | 'notes' | 'createdAt' | 'updatedAt'
+>
+
+/** Stable physical-connection identity, used to merge on re-import. */
+export function circuitKey(c: Pick<CircuitImport, 'srcName' | 'srcSocket' | 'dstName' | 'dstSocket'>): string {
+  const n = (s: string): string => (s || '').trim().toLowerCase()
+  return `${n(c.srcName)}|${n(c.srcSocket)}>${n(c.dstName)}|${n(c.dstSocket)}`
+}
+
+function mapCircuit(row: Row): Circuit {
+  return {
+    id: row.id as number,
+    cableNumber: (row.cable_number as string) ?? '',
+    signal: (row.signal as string) ?? '',
+    estLength: (row.est_length as string) ?? '',
+    srcName: (row.src_name as string) ?? '',
+    srcSocket: (row.src_socket as string) ?? '',
+    srcConnector: (row.src_connector as string) ?? '',
+    srcRack: (row.src_rack as string) ?? '',
+    srcRackU: (row.src_rack_u as string) ?? '',
+    srcSlot: (row.src_slot as string) ?? '',
+    dstName: (row.dst_name as string) ?? '',
+    dstSocket: (row.dst_socket as string) ?? '',
+    dstConnector: (row.dst_connector as string) ?? '',
+    dstRack: (row.dst_rack as string) ?? '',
+    dstRackU: (row.dst_rack_u as string) ?? '',
+    dstSlot: (row.dst_slot as string) ?? '',
+    srcPatched: Boolean(row.src_patched),
+    dstPatched: Boolean(row.dst_patched),
+    tested: Boolean(row.tested),
+    notes: (row.notes as string | null) ?? null,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string
+  }
+}
+
+export function listCircuits(): Circuit[] {
+  return queryAll(
+    `SELECT * FROM circuits
+     ORDER BY src_rack COLLATE NOCASE, CAST(src_rack_u AS INTEGER), src_name COLLATE NOCASE, cable_number COLLATE NOCASE`
+  ).map(mapCircuit)
+}
+
+export function getCircuitById(id: number): Circuit | null {
+  const row = queryOne('SELECT * FROM circuits WHERE id = ?', [id])
+  return row ? mapCircuit(row) : null
+}
+
+export function setCircuitStatus(id: number, input: CircuitStatusInput): Circuit {
+  // Backstop invariant: a circuit can't be "tested" unless BOTH ends are
+  // patched. (So un-patching either end always clears tested.) The inverse —
+  // turning tested ON marking both ends patched — is applied by the caller that
+  // flips tested, so an un-patch here is never silently re-patched.
+  const { srcPatched, dstPatched } = input
+  const tested = input.tested && srcPatched && dstPatched
+  dbRun(
+    `UPDATE circuits SET src_patched = ?, dst_patched = ?, tested = ?, notes = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+    [srcPatched ? 1 : 0, dstPatched ? 1 : 0, tested ? 1 : 0, input.notes, id]
+  )
+  return getCircuitById(id) as Circuit
+}
+
+export function clearCircuits(): void {
+  dbRun('DELETE FROM circuits')
+}
+
+/** Upsert the imported circuits by connection identity, preserving patched/
+ *  tested/notes on ones that persist, and removing circuits no longer present
+ *  in the report (the drawing is authoritative for which circuits exist). */
+export function mergeCircuits(rows: CircuitImport[]): CircuitImportResult {
+  let added = 0
+  let updated = 0
+  const keys: string[] = []
+  for (const r of rows) {
+    const key = circuitKey(r)
+    keys.push(key)
+    const existing = queryOne('SELECT id FROM circuits WHERE conn_key = ?', [key])
+    const vals = [
+      r.cableNumber, r.signal, r.estLength,
+      r.srcName, r.srcSocket, r.srcConnector, r.srcRack, r.srcRackU, r.srcSlot,
+      r.dstName, r.dstSocket, r.dstConnector, r.dstRack, r.dstRackU, r.dstSlot
+    ]
+    if (existing) {
+      dbRun(
+        `UPDATE circuits SET cable_number=?, signal=?, est_length=?,
+           src_name=?, src_socket=?, src_connector=?, src_rack=?, src_rack_u=?, src_slot=?,
+           dst_name=?, dst_socket=?, dst_connector=?, dst_rack=?, dst_rack_u=?, dst_slot=?,
+           updated_at=datetime('now')
+         WHERE conn_key=?`,
+        [...vals, key]
+      )
+      updated++
+    } else {
+      dbRun(
+        `INSERT INTO circuits (conn_key, cable_number, signal, est_length,
+           src_name, src_socket, src_connector, src_rack, src_rack_u, src_slot,
+           dst_name, dst_socket, dst_connector, dst_rack, dst_rack_u, dst_slot)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [key, ...vals]
+      )
+      added++
+    }
+  }
+  // Remove circuits no longer in the report.
+  let removed = 0
+  if (keys.length) {
+    const ph = keys.map(() => '?').join(',')
+    const stale = queryOne(`SELECT count(*) AS n FROM circuits WHERE conn_key NOT IN (${ph})`, keys)
+    removed = (stale?.n as number) ?? 0
+    dbRun(`DELETE FROM circuits WHERE conn_key NOT IN (${ph})`, keys)
+  } else {
+    const all = queryOne('SELECT count(*) AS n FROM circuits')
+    removed = (all?.n as number) ?? 0
+    dbRun('DELETE FROM circuits')
+  }
+  const totalRow = queryOne('SELECT count(*) AS n FROM circuits')
+  return { added, updated, removed, total: (totalRow?.n as number) ?? 0 }
 }

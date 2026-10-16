@@ -314,6 +314,61 @@ export interface HostConfig {
 
 export type HostConfigInput = Omit<HostConfig, 'id' | 'createdAt' | 'updatedAt'>
 
+// ---- Patching (ConnectCAD circuit report) ---------------------------------
+
+/** One cable/circuit from a Vectorworks ConnectCAD "Circuit Report": a run from
+ *  a source device+socket to a destination device+socket. The geometry/identity
+ *  fields come from the imported report; patched/tested/notes are tracked here
+ *  (the drawing is the source of truth for which circuits exist). */
+export interface Circuit {
+  id: number
+  /** the report's cable Number (e.g. U9002); may be blank for some circuits */
+  cableNumber: string
+  /** signal type: LAN, 3GV, HDMI, KVM NET, PWR, USB, OPT, … */
+  signal: string
+  /** estimated length as the report gives it ("---", "150", …) */
+  estLength: string
+  srcName: string
+  srcSocket: string
+  srcConnector: string
+  srcRack: string
+  srcRackU: string
+  srcSlot: string
+  dstName: string
+  dstSocket: string
+  dstConnector: string
+  dstRack: string
+  dstRackU: string
+  dstSlot: string
+  /** source end physically patched */
+  srcPatched: boolean
+  /** destination end physically patched */
+  dstPatched: boolean
+  /** signal confirmed / verified end-to-end (implies both ends patched) */
+  tested: boolean
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** The crew-editable status on a circuit. The repository enforces the rule that
+ *  `tested` implies both ends patched, and that un-patching an end clears
+ *  `tested` — so callers can send intent and trust the normalized result. */
+export interface CircuitStatusInput {
+  srcPatched: boolean
+  dstPatched: boolean
+  tested: boolean
+  notes: string | null
+}
+
+/** Summary returned after importing a circuit report. */
+export interface CircuitImportResult {
+  added: number
+  updated: number
+  removed: number
+  total: number
+}
+
 // ---- Shop orders (equipment purchasing / receiving) -----------------------
 
 /** One line on a shop order: a piece of equipment, how many were ordered, and
@@ -598,5 +653,15 @@ export interface VwDeviceManagerApi {
     create: (input: PackCaseInput) => Promise<PackCase>
     update: (id: number, input: PackCaseInput) => Promise<PackCase>
     remove: (id: number) => Promise<void>
+  }
+  /** Patching: circuits imported from a ConnectCAD circuit report, with
+   *  per-circuit patched/tested/notes tracking. */
+  circuits: {
+    list: () => Promise<Circuit[]>
+    setStatus: (id: number, input: CircuitStatusInput) => Promise<Circuit>
+    /** open a file dialog, import a circuit-report CSV, merge, return a summary */
+    import: () => Promise<CircuitImportResult | null>
+    /** remove all circuits (start over) */
+    clear: () => Promise<void>
   }
 }
