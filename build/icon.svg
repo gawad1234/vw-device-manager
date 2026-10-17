@@ -1,0 +1,15 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="bolt">
+      <path d="M621 245 L348 573 L506 573 L397 827 L706 500 L548 500 Z"/>
+    </clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#0E1217"/>
+  <g clip-path="url(#bolt)">
+    <rect x="100" y="238" width="824" height="201" fill="#FFC53D"/>
+    <rect x="100" y="439" width="824" height="194" fill="#1DE9CE"/>
+    <rect x="100" y="633" width="824" height="200" fill="#8B6CFF"/>
+    <line x1="100" y1="439" x2="924" y2="439" stroke="#0E1217" stroke-width="15"/>
+    <line x1="100" y1="633" x2="924" y2="633" stroke="#0E1217" stroke-width="15"/>
+  </g>
+</svg>
