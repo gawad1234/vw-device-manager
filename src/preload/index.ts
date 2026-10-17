@@ -42,7 +42,9 @@ const api: VwDeviceManagerApi = {
     setPrimary: (id: number, isPrimary: boolean) =>
       ipcRenderer.invoke('ports:setPrimary', id, isPrimary),
     setUnused: (id: number, isUnused: boolean) =>
-      ipcRenderer.invoke('ports:setUnused', id, isUnused)
+      ipcRenderer.invoke('ports:setUnused', id, isUnused),
+    setLag: (id: number, lagGroup: string | null) =>
+      ipcRenderer.invoke('ports:setLag', id, lagGroup)
   },
   networkSignals: {
     list: () => ipcRenderer.invoke('signals:list'),

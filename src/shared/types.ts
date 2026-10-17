@@ -27,6 +27,8 @@ export interface Port {
   isPrimary: boolean
   /** a jack not used for the network — hidden from schedules/labels/VW sync */
   isUnused: boolean
+  /** free-text LAG name; switch ports sharing it form one logical link (manual) */
+  lagGroup: string | null
 }
 
 /** Editable port fields. deviceId is passed to create(); tagged VLANs are set
@@ -519,6 +521,8 @@ export interface VwDeviceManagerApi {
     setPrimary: (id: number, isPrimary: boolean) => Promise<void>
     /** flag this jack as not used for the network (or restore it) */
     setUnused: (id: number, isUnused: boolean) => Promise<void>
+    /** set/clear the LAG name grouping switch ports into one logical link */
+    setLag: (id: number, lagGroup: string | null) => Promise<void>
   }
   /** ConnectCAD socket "signal" values the sync scripts treat as network ports. */
   networkSignals: {

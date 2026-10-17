@@ -1,8 +1,48 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Device, DeviceWarning, Port, RowSaver, Subnet } from '../../../shared/types'
+import type { Circuit, Device, DeviceWarning, Port, RowSaver, Subnet } from '../../../shared/types'
 
 function subnetLabel(s: Subnet): string {
   return s.vlan ? `${s.name} (VLAN ${s.vlan})` : s.name
+}
+
+/** What a switch port reflects: the device patched to it and that device's port VLANs. */
+interface Reflection {
+  fromName: string
+  fromSocket: string
+  isManaged: boolean
+  untaggedSubnetId: number | null
+  taggedSubnetIds: number[]
+}
+
+function reflectionVlan(r: Reflection, subnets: Subnet[]): string {
+  if (!r.isManaged) return 'not a managed device'
+  const u = r.untaggedSubnetId != null ? subnets.find((s) => s.id === r.untaggedSubnetId) : null
+  const untagged = u ? subnetLabel(u) : 'no untagged VLAN'
+  return r.taggedSubnetIds.length ? `${untagged} · +${r.taggedSubnetIds.length} tagged` : untagged
+}
+
+/** Map each switch port label → the VLAN of whatever device the patching circuits connect to it. */
+function computeReflections(switchName: string, circuits: Circuit[], devices: Device[]): Record<string, Reflection> {
+  const byName = new Map(devices.map((d) => [d.name, d]))
+  const out: Record<string, Reflection> = {}
+  // shortcut: exact name+socket match, first circuit per jack wins — matches how the rest of the app links circuits.
+  const add = (myLabel: string, otherName: string, otherSocket: string): void => {
+    if (!myLabel || myLabel in out) return
+    const other = byName.get(otherName)
+    const port = other?.ports.find((p) => p.label === otherSocket)
+    out[myLabel] = {
+      fromName: otherName,
+      fromSocket: otherSocket,
+      isManaged: Boolean(other),
+      untaggedSubnetId: port?.untaggedSubnetId ?? null,
+      taggedSubnetIds: port?.taggedSubnetIds ?? []
+    }
+  }
+  for (const c of circuits) {
+    if (c.srcName === switchName) add(c.srcSocket, c.dstName, c.dstSocket)
+    if (c.dstName === switchName) add(c.dstSocket, c.srcName, c.srcSocket)
+  }
+  return out
 }
 
 interface PortRowProps {
@@ -10,15 +50,18 @@ interface PortRowProps {
   subnets: Subnet[]
   /** Switch ports are VLAN-only — no per-port IP (that lives on the device). */
   isSwitch: boolean
+  /** derived VLAN of the device patched to this switch port (switches only) */
+  reflection?: Reflection
   onChanged: () => void
   /** register this row's save so the modal's "Save changes" flushes it too */
   registerSaver?: (fn: RowSaver) => () => void
 }
 
-function PortRow({ port, subnets, isSwitch, onChanged, registerSaver }: PortRowProps): React.JSX.Element {
+function PortRow({ port, subnets, isSwitch, reflection, onChanged, registerSaver }: PortRowProps): React.JSX.Element {
   const [label, setLabel] = useState(port.label)
   const [ip, setIp] = useState(port.ipAddress ?? '')
   const [untagged, setUntagged] = useState<number | null>(port.untaggedSubnetId)
+  const [lag, setLag] = useState(port.lagGroup ?? '')
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<DeviceWarning[]>([])
   const [saving, setSaving] = useState(false)
@@ -82,6 +125,13 @@ function PortRow({ port, subnets, isSwitch, onChanged, registerSaver }: PortRowP
     onChanged()
   }
 
+  async function saveLag(): Promise<void> {
+    const next = lag.trim()
+    if (next === (port.lagGroup ?? '')) return
+    await window.api.ports.setLag(port.id, next || null)
+    onChanged()
+  }
+
   // A port can't tag its own untagged network; offer the rest as trunk VLANs.
   const taggableSubnets = subnets.filter((s) => s.id !== untagged)
   const taggedNames = port.taggedSubnetIds
@@ -127,6 +177,18 @@ function PortRow({ port, subnets, isSwitch, onChanged, registerSaver }: PortRowP
             ))}
           </select>
         </label>
+        {isSwitch && (
+          <label>
+            LAG
+            <input
+              value={lag}
+              placeholder="e.g. LAG1"
+              title="Group this port with others on the same switch into one logical link — give them the same LAG name."
+              onChange={(e) => setLag(e.target.value)}
+              onBlur={saveLag}
+            />
+          </label>
+        )}
         <div className="port-actions">
           <button
             type="button"
@@ -160,6 +222,12 @@ function PortRow({ port, subnets, isSwitch, onChanged, registerSaver }: PortRowP
           )}
         </div>
       </div>
+      {isSwitch && reflection && (
+        <div className="port-reflection muted">
+          ↳ patched to <strong>{reflection.fromName}</strong> · {reflection.fromSocket} →{' '}
+          {reflectionVlan(reflection, subnets)}
+        </div>
+      )}
       <div className="port-tagged">
         <button type="button" className="tag-toggle" onClick={() => setShowTags((v) => !v)}>
           <span className="caret">{showTags ? '▾' : '▸'}</span>
@@ -200,6 +268,19 @@ interface Props {
 
 function PortsSection({ device, subnets, onChanged, registerSaver }: Props): React.JSX.Element {
   const [showUnused, setShowUnused] = useState(false)
+  const [reflections, setReflections] = useState<Record<string, Reflection>>({})
+
+  // For a switch, read the patching circuits + devices once to show each port's connected VLAN.
+  useEffect(() => {
+    if (!device.isSwitch) return
+    let cancelled = false
+    Promise.all([window.api.circuits.list(), window.api.devices.list()]).then(([circuits, devices]) => {
+      if (!cancelled) setReflections(computeReflections(device.name, circuits, devices))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [device.isSwitch, device.name])
 
   const active = device.ports.filter((p) => !p.isUnused)
   const unused = device.ports.filter((p) => p.isUnused)
@@ -225,6 +306,7 @@ function PortsSection({ device, subnets, onChanged, registerSaver }: Props): Rea
           port={p}
           subnets={subnets}
           isSwitch={device.isSwitch}
+          reflection={reflections[p.label]}
           onChanged={onChanged}
           registerSaver={registerSaver}
         />
@@ -246,6 +328,7 @@ function PortsSection({ device, subnets, onChanged, registerSaver }: Props): Rea
                 port={p}
                 subnets={subnets}
                 isSwitch={device.isSwitch}
+                reflection={reflections[p.label]}
                 onChanged={onChanged}
                 registerSaver={registerSaver}
               />

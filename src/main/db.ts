@@ -424,6 +424,13 @@ function migrateAddPortUnused(database: DatabaseSync): void {
   database.exec('ALTER TABLE ports ADD COLUMN is_unused INTEGER NOT NULL DEFAULT 0')
 }
 
+/** Adds `ports.lag_group` (free-text LAG name; ports sharing it are one link). Guarded, additive. */
+function migrateAddPortLag(database: DatabaseSync): void {
+  if (!tableExists(database, 'ports')) return
+  if (tableHasColumn(database, 'ports', 'lag_group')) return
+  database.exec('ALTER TABLE ports ADD COLUMN lag_group TEXT')
+}
+
 /** Adds the shop-order export snapshot columns (change highlighting). Guarded. */
 function migrateAddOrderExportSnapshot(database: DatabaseSync): void {
   if (!tableExists(database, 'shop_orders')) return
@@ -475,6 +482,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateAddPortPrimary(database)
   migrateAddDeviceCategory(database)
   migrateAddPortUnused(database)
+  migrateAddPortLag(database)
   migrateAddOrderExportSnapshot(database)
   migrateAddOrderCables(database)
   migrateAddLabelElements(database)

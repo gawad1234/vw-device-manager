@@ -55,6 +55,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('ports:setUnused', (_e, id: number, isUnused: boolean) =>
     repo.setPortUnused(id, isUnused)
   )
+  ipcMain.handle('ports:setLag', (_e, id: number, lagGroup: string | null) =>
+    repo.setPortLag(id, lagGroup)
+  )
 
   // Network signals + cable types are the shared, cross-project library.
   ipcMain.handle('signals:list', () => library.listNetworkSignals())

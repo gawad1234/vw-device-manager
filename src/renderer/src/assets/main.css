@@ -1269,6 +1269,11 @@ input[type='checkbox'] {
   margin-left: auto;
 }
 
+.port-reflection {
+  margin-top: 8px;
+  font-size: 0.85em;
+}
+
 .port-tagged {
   display: flex;
   flex-wrap: wrap;

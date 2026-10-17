@@ -62,7 +62,8 @@ function mapPort(row: Row, taggedSubnetIds: number[]): Port {
     taggedSubnetIds,
     vwSocketKey: (row.vw_socket_key as string | null) ?? null,
     isPrimary: Boolean(row.is_primary),
-    isUnused: Boolean(row.is_unused)
+    isUnused: Boolean(row.is_unused),
+    lagGroup: (row.lag_group as string | null) ?? null
   }
 }
 
@@ -260,6 +261,11 @@ export function setPrimaryPort(portId: number, isPrimary: boolean): void {
 export function setPortUnused(portId: number, isUnused: boolean): void {
   if (isUnused) dbRun('UPDATE ports SET is_unused = 1, is_primary = 0 WHERE id = ?', [portId])
   else dbRun('UPDATE ports SET is_unused = 0 WHERE id = ?', [portId])
+}
+
+/** Set (or clear, with null) the free-text LAG name grouping switch ports into one link. */
+export function setPortLag(portId: number, lagGroup: string | null): void {
+  dbRun('UPDATE ports SET lag_group = ? WHERE id = ?', [lagGroup?.trim() || null, portId])
 }
 
 /** Replace the port's tagged-VLAN set with exactly the given subnet ids. */
