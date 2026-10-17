@@ -70,7 +70,7 @@ function DeviceConnections({ deviceName }: { deviceName: string }): React.JSX.El
               <tr key={c.id} className={myPatched && farPatched ? 'is-patched' : myPatched || farPatched ? 'is-partial' : ''}>
                 <td>
                   <span className="name">{mySocket || '—'}</span>
-                  {c.cableNumber && <span className="sub2">{c.cableNumber}</span>}
+                  {c.cableNumber && <span className="sub2 mono">{c.cableNumber}</span>}
                 </td>
                 <td className="chk">
                   <input type="checkbox" checked={myPatched} onChange={(e) => setMine(e.target.checked)} />

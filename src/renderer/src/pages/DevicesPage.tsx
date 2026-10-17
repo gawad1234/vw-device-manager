@@ -173,7 +173,7 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
                       {d.isSwitch && <span className="badge">switch</span>}
                     </td>
                     <td className="muted">{d.deviceType ?? '—'}</td>
-                    <td className="muted">{d.macAddress ?? '—'}</td>
+                    <td className="muted mono">{d.macAddress ?? '—'}</td>
                     <td className="muted">{d.location ?? '—'}</td>
                     <td className="muted">{d.ports.length}</td>
                   </tr>

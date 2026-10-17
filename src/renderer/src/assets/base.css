@@ -3,17 +3,18 @@
   --ev-c-white-soft: #f8f8f8;
   --ev-c-white-mute: #f2f2f2;
 
-  --ev-c-black: #1b1b1f;
-  --ev-c-black-soft: #222222;
-  --ev-c-black-mute: #282828;
+  /* Broadcast-console dark: cool slate, not neutral gray. */
+  --ev-c-black: #0e1217;
+  --ev-c-black-soft: #151b22;
+  --ev-c-black-mute: #1c232c;
 
-  --ev-c-gray-1: #515c67;
-  --ev-c-gray-2: #414853;
-  --ev-c-gray-3: #32363f;
+  --ev-c-gray-1: #4a5a6b;
+  --ev-c-gray-2: #3a4654;
+  --ev-c-gray-3: #2a333f;
 
-  --ev-c-text-1: rgba(255, 255, 245, 0.86);
-  --ev-c-text-2: rgba(235, 235, 245, 0.6);
-  --ev-c-text-3: rgba(235, 235, 245, 0.38);
+  --ev-c-text-1: rgba(228, 238, 247, 0.92);
+  --ev-c-text-2: rgba(196, 212, 227, 0.58);
+  --ev-c-text-3: rgba(186, 204, 221, 0.38);
 
   --ev-button-alt-border: transparent;
   --ev-button-alt-text: var(--ev-c-text-1);

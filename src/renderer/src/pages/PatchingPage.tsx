@@ -211,8 +211,8 @@ function PatchingPage(): React.JSX.Element {
                     const partial = (c.srcPatched || c.dstPatched) && !full
                     return (
                       <tr key={c.id} className={full ? 'is-patched' : partial ? 'is-partial' : ''}>
-                        <td className="muted">{c.cableNumber || '—'}</td>
-                        <td>{c.signal}</td>
+                        <td className="muted mono">{c.cableNumber || '—'}</td>
+                        <td className="mono">{c.signal}</td>
                         <td className="chk">
                           <input
                             type="checkbox"

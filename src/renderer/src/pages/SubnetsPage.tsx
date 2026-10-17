@@ -147,8 +147,8 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
               <td>
                 <code>{s.cidr}</code>
               </td>
-              <td>{s.vlan ?? '—'}</td>
-              <td>{s.gateway ?? '—'}</td>
+              <td className="mono">{s.vlan ?? '—'}</td>
+              <td className="mono">{s.gateway ?? '—'}</td>
               <td className="muted">{s.notes ?? '—'}</td>
               <td className="row-actions">
                 <button className="btn btn-small" onClick={() => startEdit(s)}>

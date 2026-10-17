@@ -13,8 +13,25 @@ import ProjectMenu from './components/ProjectMenu'
 
 type Tab = 'devices' | 'subnets' | 'cables' | 'configs' | 'orders' | 'labels' | 'cases' | 'patching' | 'settings'
 
+// Collapsible sidebar groups and the tabs they contain.
+const NAV_GROUPS: Record<string, Tab[]> = {
+  networking: ['subnets', 'configs'],
+  packing: ['labels', 'cases']
+}
+
 function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('devices')
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+
+  const toggleGroup = (key: string): void =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  // A group shows expanded if the user opened it, or it holds the active tab.
+  const groupOpen = (key: string): boolean => openGroups.has(key) || NAV_GROUPS[key].includes(tab)
   const [project, setProject] = useState<ProjectInfo | null>(null)
   const [subnets, setSubnets] = useState<Subnet[]>([])
   const [devices, setDevices] = useState<Device[]>([])
@@ -73,66 +90,99 @@ function App(): React.JSX.Element {
           <h1>Device Manager</h1>
           <ProjectMenu current={project} onSwitched={handleSwitch} />
         </div>
-        <nav className="tabs">
+      </header>
+
+      <div className="app-body">
+        <nav className="sidebar">
           <button
-            className={`tab ${tab === 'devices' ? 'active' : ''}`}
+            className={`side-item ${tab === 'devices' ? 'active' : ''}`}
             onClick={() => setTab('devices')}
           >
             Devices
           </button>
+
+          <div className="side-group">
+            <button
+              className={`side-group-head ${NAV_GROUPS.networking.includes(tab) ? 'has-active' : ''}`}
+              onClick={() => toggleGroup('networking')}
+            >
+              <span className="side-caret">{groupOpen('networking') ? '▾' : '▸'}</span>
+              Networking
+            </button>
+            {groupOpen('networking') && (
+              <div className="side-sub">
+                <button
+                  className={`side-item ${tab === 'subnets' ? 'active' : ''}`}
+                  onClick={() => setTab('subnets')}
+                >
+                  Subnets
+                </button>
+                <button
+                  className={`side-item ${tab === 'configs' ? 'active' : ''}`}
+                  onClick={() => setTab('configs')}
+                >
+                  Configs
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
-            className={`tab ${tab === 'subnets' ? 'active' : ''}`}
-            onClick={() => setTab('subnets')}
-          >
-            Subnets
-          </button>
-          <button
-            className={`tab ${tab === 'cables' ? 'active' : ''}`}
+            className={`side-item ${tab === 'cables' ? 'active' : ''}`}
             onClick={() => setTab('cables')}
           >
             Cables
           </button>
           <button
-            className={`tab ${tab === 'configs' ? 'active' : ''}`}
-            onClick={() => setTab('configs')}
-          >
-            Configs
-          </button>
-          <button
-            className={`tab ${tab === 'orders' ? 'active' : ''}`}
-            onClick={() => setTab('orders')}
-          >
-            Orders
-          </button>
-          <button
-            className={`tab ${tab === 'labels' ? 'active' : ''}`}
-            onClick={() => setTab('labels')}
-          >
-            Labels
-          </button>
-          <button
-            className={`tab ${tab === 'cases' ? 'active' : ''}`}
-            onClick={() => setTab('cases')}
-          >
-            Cases
-          </button>
-          <button
-            className={`tab ${tab === 'patching' ? 'active' : ''}`}
+            className={`side-item ${tab === 'patching' ? 'active' : ''}`}
             onClick={() => setTab('patching')}
           >
             Patching
           </button>
           <button
-            className={`tab ${tab === 'settings' ? 'active' : ''}`}
+            className={`side-item ${tab === 'orders' ? 'active' : ''}`}
+            onClick={() => setTab('orders')}
+          >
+            Orders
+          </button>
+
+          <div className="side-group">
+            <button
+              className={`side-group-head ${NAV_GROUPS.packing.includes(tab) ? 'has-active' : ''}`}
+              onClick={() => toggleGroup('packing')}
+            >
+              <span className="side-caret">{groupOpen('packing') ? '▾' : '▸'}</span>
+              Packing
+            </button>
+            {groupOpen('packing') && (
+              <div className="side-sub">
+                <button
+                  className={`side-item ${tab === 'labels' ? 'active' : ''}`}
+                  onClick={() => setTab('labels')}
+                >
+                  Labels
+                </button>
+                <button
+                  className={`side-item ${tab === 'cases' ? 'active' : ''}`}
+                  onClick={() => setTab('cases')}
+                >
+                  Cases
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="side-spacer" />
+          <button
+            className={`side-item ${tab === 'settings' ? 'active' : ''}`}
             onClick={() => setTab('settings')}
           >
             Settings
             {updateReady && <span className="tab-dot" title="An update is available" />}
           </button>
         </nav>
-      </header>
 
-      <main className="app-main">
+        <main className="app-main">
         {loading ? (
           <p className="muted">Loading…</p>
         ) : tab === 'devices' ? (
@@ -169,7 +219,8 @@ function App(): React.JSX.Element {
             onChanged={refresh}
           />
         )}
-      </main>
+        </main>
+      </div>
     </div>
   )
 }

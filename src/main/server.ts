@@ -276,7 +276,8 @@ function layout(title: string, body: string, role: Role | null, active = ''): st
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} · ${esc(show)}</title>
 <style>
-  :root { --bg:#0f1115; --card:#191c22; --line:#2a2e37; --text:#e8eaed; --muted:#9aa0aa; --accent:#3b6fe0; --ok:#2e9e5b; }
+  :root { --bg:#0e1217; --card:#151b22; --line:#2a3440; --text:#e4eef7; --muted:#9aacbd; --accent:#22c7b8; --ink:#052421; --ok:#2e9e5b; }
+  .mono, code { font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif; font-size:16px; }
   header.top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); }
@@ -309,7 +310,7 @@ function layout(title: string, body: string, role: Role | null, active = ''): st
   input,button,select { font:inherit; }
   input[type=number], input[type=text], input[type=password] { background:#0c0e12; border:1px solid var(--line); color:var(--text); border-radius:8px; padding:9px 10px; width:100%; }
   .qty { width:72px; text-align:center; }
-  .btn { background:var(--accent); color:#fff; border:none; border-radius:9px; padding:10px 14px; font-weight:600; cursor:pointer; }
+  .btn { background:var(--accent); color:var(--ink); border:none; border-radius:9px; padding:10px 14px; font-weight:600; cursor:pointer; }
   .btn.sec { background:#242a33; color:var(--text); }
   .muted { color:var(--muted); }
   .err { color:#f0877f; }
