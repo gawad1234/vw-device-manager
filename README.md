@@ -66,6 +66,11 @@ Device Manager is the database; a set of Python scripts run **inside Vectorworks
 
 Found a bug or have an idea? **[Open an issue »](https://github.com/gawad1234/vw-device-manager/issues/new)** — include what you did, what you expected, and what happened (a screenshot helps). Or just message Gabe.
 
+## Legal
+
+Device Manager is local-first and collects no data about you. See the
+[Privacy Policy](docs/PRIVACY.md) and [Terms of Service](docs/TERMS.md).
+
 ---
 
 <details>

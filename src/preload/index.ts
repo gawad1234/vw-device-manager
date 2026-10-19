@@ -100,6 +100,14 @@ const api: VwDeviceManagerApi = {
     get: () => ipcRenderer.invoke('showName:get'),
     set: (name: string | null) => ipcRenderer.invoke('showName:set', name)
   },
+  companyLogo: {
+    get: () => ipcRenderer.invoke('companyLogo:get'),
+    set: (dataUrl: string | null) => ipcRenderer.invoke('companyLogo:set', dataUrl)
+  },
+  companyName: {
+    get: () => ipcRenderer.invoke('companyName:get'),
+    set: (name: string | null) => ipcRenderer.invoke('companyName:set', name)
+  },
   updates: {
     getState: () => ipcRenderer.invoke('updates:getState'),
     check: () => ipcRenderer.invoke('updates:check'),

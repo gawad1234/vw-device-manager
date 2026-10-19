@@ -12,16 +12,23 @@ import ExportMenu, { type ExportSection } from './ExportMenu'
 import OrderFormatModal from './OrderFormatModal'
 import CategoryInput from './CategoryInput'
 
-/** A kit whose trigger matches this item by name OR model (case-insensitive). */
-function matchKit(kits: OrderKit[], item: OrderItem): OrderKit | null {
-  const name = item.name.trim().toLowerCase()
-  const model = (item.modelNumber ?? '').trim().toLowerCase()
-  return (
-    kits.find((k) => {
-      const t = k.trigger.trim().toLowerCase()
-      return t !== '' && (t === name || t === model)
-    }) ?? null
+/** Case-insensitive match of a kit trigger against one field value. A trigger with
+ *  no "*" matches exactly; "*" is a wildcard (e.g. *M4350* = contains, M4350* = starts with). */
+function kitMatches(trigger: string, value: string): boolean {
+  const p = trigger.trim().toLowerCase()
+  const v = value.trim().toLowerCase()
+  if (!p || !v) return false
+  if (!p.includes('*')) return p === v
+  const rx = new RegExp(
+    '^' + p.replace(/[.*+?^${}()|[\]\\]/g, (c) => (c === '*' ? '.*' : '\\' + c)) + '$'
   )
+  return rx.test(v)
+}
+
+/** All kits whose trigger matches the item's name, model, or manufacturer. */
+function matchingKits(kits: OrderKit[], item: OrderItem): OrderKit[] {
+  const fields = [item.name, item.modelNumber ?? '', item.manufacturer ?? '']
+  return kits.filter((k) => k.trigger.trim() !== '' && fields.some((f) => kitMatches(k.trigger, f)))
 }
 
 /** Fold a kit's companions into the item/cable lists, scaled by `qty`, merging
@@ -185,17 +192,26 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   function maybeApplyKit(i: number): void {
     const it = items[i]
     if (!it) return
-    const kit = matchKit(kits, it)
-    if (!kit) return
+    const matched = matchingKits(kits, it)
+    if (!matched.length) return
     const rowSet = appliedRef.current[i] ?? (appliedRef.current[i] = new Set())
-    const key = kit.trigger.trim().toLowerCase()
-    if (rowSet.has(key)) return
-    rowSet.add(key)
     const qty = Math.max(1, Math.trunc(Number(it.quantity) || 0))
-    const next = applyKitToLines(items, cables, kit, qty)
-    setItems(next.items)
-    setCables(next.cables)
-    setImportNote(`Added ${kit.addons.length} companion line(s) for "${kit.trigger}".`)
+    let nextItems = items
+    let nextCables = cables
+    const applied: string[] = []
+    for (const kit of matched) {
+      const key = kit.trigger.trim().toLowerCase()
+      if (rowSet.has(key)) continue
+      rowSet.add(key)
+      const r = applyKitToLines(nextItems, nextCables, kit, qty)
+      nextItems = r.items
+      nextCables = r.cables
+      applied.push(kit.trigger)
+    }
+    if (!applied.length) return
+    setItems(nextItems)
+    setCables(nextCables)
+    setImportNote(`Added companions for ${applied.map((t) => `"${t}"`).join(', ')}.`)
   }
 
   async function importFromDrawing(): Promise<void> {

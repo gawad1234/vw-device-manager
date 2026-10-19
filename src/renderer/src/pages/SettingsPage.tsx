@@ -47,11 +47,15 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
   const [managingKits, setManagingKits] = useState(false)
   const [logo, setLogo] = useState<string | null>(null)
   const [showName, setShowName] = useState('')
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null)
+  const [companyName, setCompanyName] = useState('')
 
   useEffect(() => {
     window.api.networkSignals.list().then(setSignals)
     window.api.showLogo.get().then(setLogo)
     window.api.showName.get().then((n) => setShowName(n ?? ''))
+    window.api.companyLogo.get().then(setCompanyLogo)
+    window.api.companyName.get().then((n) => setCompanyName(n ?? ''))
   }, [])
 
   async function saveShowName(): Promise<void> {
@@ -70,6 +74,24 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
   async function removeLogo(): Promise<void> {
     await window.api.showLogo.set(null)
     setLogo(null)
+  }
+
+  async function saveCompanyName(): Promise<void> {
+    await window.api.companyName.set(companyName.trim() || null)
+  }
+
+  async function onCompanyLogoFile(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const dataUrl = await downscaleImage(file, 500)
+    await window.api.companyLogo.set(dataUrl)
+    setCompanyLogo(dataUrl)
+  }
+
+  async function removeCompanyLogo(): Promise<void> {
+    await window.api.companyLogo.set(null)
+    setCompanyLogo(null)
   }
 
   async function addSignal(e: React.FormEvent): Promise<void> {
@@ -156,6 +178,41 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
             </label>
             {logo && (
               <button className="btn btn-small btn-danger" onClick={removeLogo}>
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h3>Company branding</h3>
+        <p className="muted">
+          Your company&rsquo;s name and logo, stamped on <em>every</em> project&rsquo;s paperwork as
+          the letterhead (above the show name). Shared across all projects and machines.
+        </p>
+        <label className="show-name-field">
+          Company name
+          <input
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            onBlur={saveCompanyName}
+            placeholder="e.g. Acme AV Productions"
+          />
+        </label>
+        <div className="logo-row">
+          {companyLogo && (
+            <div className="logo-preview">
+              <img src={companyLogo} alt="Company logo" />
+            </div>
+          )}
+          <div className="signal-add">
+            <label className="btn btn-small btn-primary file-btn">
+              {companyLogo ? 'Replace…' : 'Choose image…'}
+              <input type="file" accept="image/png,image/jpeg" hidden onChange={onCompanyLogoFile} />
+            </label>
+            {companyLogo && (
+              <button className="btn btn-small btn-danger" onClick={removeCompanyLogo}>
                 Remove
               </button>
             )}

@@ -610,6 +610,15 @@ export interface VwDeviceManagerApi {
     get: () => Promise<string | null>
     set: (name: string | null) => Promise<void>
   }
+  /** Your company's letterhead (shared across all projects), stamped on paperwork. */
+  companyLogo: {
+    get: () => Promise<string | null>
+    set: (dataUrl: string | null) => Promise<void>
+  }
+  companyName: {
+    get: () => Promise<string | null>
+    set: (name: string | null) => Promise<void>
+  }
   /** App auto-update, surfaced in Settings → Updates. `check` triggers a check
    *  and resolves with the resulting status; live changes also arrive via
    *  onUpdateStatus. `download` self-downloads on Windows / opens the Releases

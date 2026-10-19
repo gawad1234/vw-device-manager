@@ -12,6 +12,7 @@ import {
   markOrderExported
 } from './repository'
 import { ipInCidr } from './ip-utils'
+import { getCompanyName, getCompanyLogo } from './library'
 import type {
   Bundle,
   CableEndpoint,
@@ -194,7 +195,16 @@ function page(title: string, body: string, logo: string | null, density: Density
   const titleBlock = docShowName
     ? `<div class="show">${esc(docShowName)}</div><div class="doctitle">${esc(title)}</div>`
     : `<div class="show">${esc(title)}</div>`
-  const header = `<header class="ph"><div class="ph-l">${titleBlock}</div>${
+  // Company letterhead (shared across projects) sits above the show name.
+  const companyName = getCompanyName()
+  const companyLogo = getCompanyLogo()
+  const companyBlock =
+    companyName || companyLogo
+      ? `<div class="company">${companyLogo ? `<img class="clogo" src="${companyLogo}" alt="">` : ''}${
+          companyName ? `<span class="cname">${esc(companyName)}</span>` : ''
+        }</div>`
+      : ''
+  const header = `<header class="ph"><div class="ph-l">${companyBlock}${titleBlock}</div>${
     logo ? `<img class="logo" src="${logo}" alt="logo">` : ''
   }</header>`
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
@@ -204,6 +214,9 @@ function page(title: string, body: string, logo: string | null, density: Density
     .ph { display: flex; align-items: center; justify-content: space-between; gap: 16px;
           border-bottom: 2px solid #dddddd; padding-bottom: 10px; margin-bottom: 16px; }
     .ph-l { display: flex; flex-direction: column; gap: 2px; }
+    .company { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .company .clogo { max-height: 34px; max-width: 170px; object-fit: contain; }
+    .company .cname { font-size: 13px; font-weight: 700; color: #333; }
     .show { font-size: 18px; font-weight: 700; }
     .doctitle { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
     .logo { max-height: 62px; max-width: 260px; object-fit: contain; }

@@ -108,6 +108,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('showName:set', (_e, name: string | null) =>
     repo.setProjectMeta('showName', name)
   )
+  // Company branding — shared across all projects (library), unlike the per-show branding above.
+  ipcMain.handle('companyLogo:get', () => library.getCompanyLogo())
+  ipcMain.handle('companyLogo:set', (_e, dataUrl: string | null) => library.setCompanyLogo(dataUrl))
+  ipcMain.handle('companyName:get', () => library.getCompanyName())
+  ipcMain.handle('companyName:set', (_e, name: string | null) => library.setCompanyName(name))
 
   // Host VLAN configs → PowerShell script generation (Configs tab).
   ipcMain.handle('configs:list', () => repo.listHostConfigs())

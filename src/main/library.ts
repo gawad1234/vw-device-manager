@@ -22,6 +22,9 @@ interface Library {
   deviceCategories: string[]
   /** Auto-add kits — shared across all projects, like the catalogs above. */
   orderKits: OrderKit[]
+  /** Your company's letterhead, stamped on every project's paperwork. */
+  companyName: string
+  companyLogo: string | null
 }
 
 function readLibrary(): Library {
@@ -31,10 +34,19 @@ function readLibrary(): Library {
       networkSignals: raw.networkSignals ?? [],
       cableTypes: raw.cableTypes ?? [],
       deviceCategories: raw.deviceCategories ?? [],
-      orderKits: raw.orderKits ?? []
+      orderKits: raw.orderKits ?? [],
+      companyName: raw.companyName ?? '',
+      companyLogo: raw.companyLogo ?? null
     }
   } catch {
-    return { networkSignals: [], cableTypes: [], deviceCategories: [], orderKits: [] }
+    return {
+      networkSignals: [],
+      cableTypes: [],
+      deviceCategories: [],
+      orderKits: [],
+      companyName: '',
+      companyLogo: null
+    }
   }
 }
 
@@ -57,8 +69,32 @@ export async function ensureLibrary(): Promise<void> {
     networkSignals: seed.networkSignals.length ? seed.networkSignals : ['LAN'],
     cableTypes: seed.cableTypes,
     deviceCategories: [],
-    orderKits: []
+    orderKits: [],
+    companyName: '',
+    companyLogo: null
   })
+}
+
+// ---- Company branding (shared letterhead) -------------------------------
+
+export function getCompanyName(): string | null {
+  return readLibrary().companyName || null
+}
+
+export function setCompanyName(name: string | null): void {
+  const lib = readLibrary()
+  lib.companyName = (name ?? '').trim()
+  writeLibrary(lib)
+}
+
+export function getCompanyLogo(): string | null {
+  return readLibrary().companyLogo
+}
+
+export function setCompanyLogo(dataUrl: string | null): void {
+  const lib = readLibrary()
+  lib.companyLogo = dataUrl
+  writeLibrary(lib)
 }
 
 // ---- Network signals ----------------------------------------------------

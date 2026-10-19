@@ -28,6 +28,12 @@ function draftFrom(k: OrderKit | null): Draft {
   return { trigger: k.trigger, addons: k.addons.length ? k.addons : [{ ...BLANK_ADDON }] }
 }
 
+/** One-line summary of what a kit adds, for the list view. */
+function addonSummary(k: OrderKit): string {
+  const names = k.addons.map((a) => (a.kind === 'equipment' ? a.name : a.cableType)).filter(Boolean)
+  return names.length ? names.join(', ') : 'no companions'
+}
+
 function KitModal({ categories, onClose, onChanged }: Props): React.JSX.Element {
   const [kits, setKits] = useState<OrderKit[]>([])
   const [activeId, setActiveId] = useState<number | 'new'>('new')
@@ -128,37 +134,44 @@ function KitModal({ categories, onClose, onChanged }: Props): React.JSX.Element 
 
   return (
     <Modal title="Auto-add kits" onClose={onClose} footer={footer} wide>
-      <div className="fmt-tabs">
+      <div className="kit-layout">
+      <div className="kit-list">
         {kits.map((k) => (
           <button
             key={k.id}
             type="button"
-            className={`fmt-tab${activeId === k.id ? ' active' : ''}`}
+            className={`kit-list-row${activeId === k.id ? ' active' : ''}`}
             onClick={() => setActiveId(k.id)}
           >
-            {k.trigger}
+            <span className="kit-trigger">{k.trigger}</span>
+            <span className="muted kit-summary">→ {addonSummary(k)}</span>
           </button>
         ))}
         <button
           type="button"
-          className={`fmt-tab fmt-new${activeId === 'new' ? ' active' : ''}`}
+          className={`kit-list-row kit-new${activeId === 'new' ? ' active' : ''}`}
           onClick={() => setActiveId('new')}
         >
-          + New
+          + New kit
         </button>
       </div>
 
-      <form id="kit-form" className="form-grid" onSubmit={save}>
+      <form id="kit-form" className="form-grid kit-form" onSubmit={save}>
         {error && <div className="banner banner-error span-2">{error}</div>}
         <label className="span-2">
-          When an item named (or modelled) …
+          When an item matches …
           <input
             value={draft.trigger}
             onChange={(e) => setDraft((d) => ({ ...d, trigger: e.target.value }))}
-            placeholder="e.g. MDLX"
+            placeholder="e.g. MDLX, *M4350*, Netgear"
             autoFocus
           />
         </label>
+        <p className="muted span-2" style={{ margin: '-6px 0 0' }}>
+          Matched against the item’s name, model, or manufacturer. Use <code>*</code> as a wildcard:{' '}
+          <code>MDLX</code> is exact, <code>*M4350*</code> matches anything containing “M4350”, and a
+          manufacturer name adds to everything by that maker.
+        </p>
 
         <div className="span-2">
           <div className="field-row-head">
@@ -232,6 +245,7 @@ function KitModal({ categories, onClose, onChanged }: Props): React.JSX.Element 
           </button>
         </div>
       </form>
+      </div>
     </Modal>
   )
 }

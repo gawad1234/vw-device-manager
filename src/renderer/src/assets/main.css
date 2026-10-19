@@ -1626,6 +1626,61 @@ input[type='checkbox'] {
 .kit-addon .kit-per {
   flex: 0 0 64px;
 }
+
+/* Two-pane kit manager: list on the left, editor on the right. */
+.kit-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 18px;
+}
+.kit-form {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+/* Kit list view (scan all kits at a glance, click one to edit). */
+.kit-list {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.kit-list-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+}
+.kit-list-row.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.kit-list-row .kit-trigger {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.kit-list-row .kit-summary {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.kit-list-row.kit-new {
+  justify-content: center;
+  color: var(--muted);
+}
 .fmt-tab {
   padding: 5px 12px;
   border-radius: 6px;
