@@ -2,6 +2,8 @@ import { app, dialog, shell } from 'electron'
 import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'fs'
 import { basename, dirname, extname, join } from 'path'
 import { openDb, getCurrentDbPath } from './db'
+import { drainOrderKits } from './repository'
+import { importOrderKits } from './library'
 import { getDbPath } from './paths'
 import type { ProjectInfo } from '../shared/types'
 
@@ -111,6 +113,9 @@ export function resolveStartupProject(): string {
 
 async function switchTo(path: string): Promise<ProjectInfo> {
   await openDb(path)
+  // One-time carry-over: kits used to live in the project DB; move any into the
+  // shared library so they travel across projects from now on.
+  importOrderKits(drainOrderKits())
   rememberProject(path)
   return toInfo(path)
 }

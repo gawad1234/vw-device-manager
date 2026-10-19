@@ -22,7 +22,6 @@ import type {
   OrderExportFormat,
   OrderExportFormatInput,
   OrderKit,
-  OrderKitInput,
   KitAddon,
   OrderItem,
   PackCase,
@@ -927,33 +926,13 @@ function mapOrderKit(row: Row): OrderKit {
   }
 }
 
-export function listOrderKits(): OrderKit[] {
-  return queryAll('SELECT * FROM order_kits ORDER BY trigger COLLATE NOCASE').map(mapOrderKit)
-}
-
-export function getOrderKitById(id: number): OrderKit | null {
-  const row = queryOne('SELECT * FROM order_kits WHERE id = ?', [id])
-  return row ? mapOrderKit(row) : null
-}
-
-export function createOrderKit(input: OrderKitInput): OrderKit {
-  dbRun('INSERT INTO order_kits (trigger, addons_json) VALUES (?, ?)', [
-    input.trigger,
-    JSON.stringify(input.addons)
-  ])
-  return getOrderKitById(lastInsertRowId()) as OrderKit
-}
-
-export function updateOrderKit(id: number, input: OrderKitInput): OrderKit {
-  dbRun(
-    `UPDATE order_kits SET trigger = ?, addons_json = ?, updated_at = datetime('now') WHERE id = ?`,
-    [input.trigger, JSON.stringify(input.addons), id]
-  )
-  return getOrderKitById(id) as OrderKit
-}
-
-export function deleteOrderKit(id: number): void {
-  dbRun('DELETE FROM order_kits WHERE id = ?', [id])
+/** Kits are now stored in the shared library. Pull any that were saved in this
+ *  project's DB (older versions) and delete them, so switchTo() can move them
+ *  into the library once. */
+export function drainOrderKits(): OrderKit[] {
+  const rows = queryAll('SELECT * FROM order_kits ORDER BY id').map(mapOrderKit)
+  if (rows.length) dbRun('DELETE FROM order_kits')
+  return rows
 }
 
 export function getProjectMeta(key: string): string | null {

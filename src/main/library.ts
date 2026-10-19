@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { readCatalogsFromFile } from './db'
 import { getDbPath } from './paths'
-import type { CableType, CableTypeInput } from '../shared/types'
+import type { CableType, CableTypeInput, OrderKit, OrderKitInput } from '../shared/types'
 
 /**
  * The universal library — network signals + cable types — is shared across ALL
@@ -20,6 +20,8 @@ interface Library {
   networkSignals: string[]
   cableTypes: CableType[]
   deviceCategories: string[]
+  /** Auto-add kits — shared across all projects, like the catalogs above. */
+  orderKits: OrderKit[]
 }
 
 function readLibrary(): Library {
@@ -28,10 +30,11 @@ function readLibrary(): Library {
     return {
       networkSignals: raw.networkSignals ?? [],
       cableTypes: raw.cableTypes ?? [],
-      deviceCategories: raw.deviceCategories ?? []
+      deviceCategories: raw.deviceCategories ?? [],
+      orderKits: raw.orderKits ?? []
     }
   } catch {
-    return { networkSignals: [], cableTypes: [], deviceCategories: [] }
+    return { networkSignals: [], cableTypes: [], deviceCategories: [], orderKits: [] }
   }
 }
 
@@ -53,7 +56,8 @@ export async function ensureLibrary(): Promise<void> {
   writeLibrary({
     networkSignals: seed.networkSignals.length ? seed.networkSignals : ['LAN'],
     cableTypes: seed.cableTypes,
-    deviceCategories: []
+    deviceCategories: [],
+    orderKits: []
   })
 }
 
@@ -131,4 +135,64 @@ export function removeDeviceCategory(name: string): string[] {
   lib.deviceCategories = lib.deviceCategories.filter((x) => x !== name)
   writeLibrary(lib)
   return lib.deviceCategories
+}
+
+// ---- Auto-add kits (shared) ---------------------------------------------
+
+function nextKitId(kits: OrderKit[]): number {
+  return kits.reduce((m, k) => Math.max(m, k.id), 0) + 1
+}
+
+export function listOrderKits(): OrderKit[] {
+  return readLibrary().orderKits
+}
+
+export function createOrderKit(input: OrderKitInput): OrderKit {
+  const lib = readLibrary()
+  const now = new Date().toISOString()
+  const kit: OrderKit = {
+    id: nextKitId(lib.orderKits),
+    trigger: input.trigger,
+    addons: input.addons,
+    createdAt: now,
+    updatedAt: now
+  }
+  lib.orderKits.push(kit)
+  lib.orderKits.sort((a, b) => a.trigger.localeCompare(b.trigger))
+  writeLibrary(lib)
+  return kit
+}
+
+export function updateOrderKit(id: number, input: OrderKitInput): OrderKit {
+  const lib = readLibrary()
+  const kit = lib.orderKits.find((k) => k.id === id)
+  if (!kit) throw new Error(`Kit ${id} not found.`)
+  kit.trigger = input.trigger
+  kit.addons = input.addons
+  kit.updatedAt = new Date().toISOString()
+  lib.orderKits.sort((a, b) => a.trigger.localeCompare(b.trigger))
+  writeLibrary(lib)
+  return kit
+}
+
+export function deleteOrderKit(id: number): void {
+  const lib = readLibrary()
+  lib.orderKits = lib.orderKits.filter((k) => k.id !== id)
+  writeLibrary(lib)
+}
+
+/** Carry kits that were saved in a project's DB (before kits were shared) into the
+ *  shared library, skipping any trigger that's already there. */
+export function importOrderKits(kits: OrderKitInput[]): void {
+  if (!kits.length) return
+  const lib = readLibrary()
+  let id = nextKitId(lib.orderKits)
+  const now = new Date().toISOString()
+  for (const k of kits) {
+    const t = k.trigger.trim()
+    if (!t || lib.orderKits.some((x) => x.trigger.toLowerCase() === t.toLowerCase())) continue
+    lib.orderKits.push({ id: id++, trigger: t, addons: k.addons, createdAt: now, updatedAt: now })
+  }
+  lib.orderKits.sort((a, b) => a.trigger.localeCompare(b.trigger))
+  writeLibrary(lib)
 }

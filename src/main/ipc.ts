@@ -191,13 +191,13 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle('orderFormats:remove', (_e, id: number) => repo.deleteOrderExportFormat(id))
 
-  // Auto-add kits.
-  ipcMain.handle('orderKits:list', () => repo.listOrderKits())
-  ipcMain.handle('orderKits:create', (_e, input: OrderKitInput) => repo.createOrderKit(input))
+  // Auto-add kits — shared library, like categories/cable types/signals.
+  ipcMain.handle('orderKits:list', () => library.listOrderKits())
+  ipcMain.handle('orderKits:create', (_e, input: OrderKitInput) => library.createOrderKit(input))
   ipcMain.handle('orderKits:update', (_e, id: number, input: OrderKitInput) =>
-    repo.updateOrderKit(id, input)
+    library.updateOrderKit(id, input)
   )
-  ipcMain.handle('orderKits:remove', (_e, id: number) => repo.deleteOrderKit(id))
+  ipcMain.handle('orderKits:remove', (_e, id: number) => library.deleteOrderKit(id))
 
   // Cases (packing manager).
   ipcMain.handle('cases:list', () => repo.listCases())
