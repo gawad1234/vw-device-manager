@@ -1034,17 +1034,16 @@ export function mergeCircuits(rows: CircuitImport[]): CircuitImportResult {
       added++
     }
   }
-  // Remove circuits no longer in the report.
+  // Remove circuits no longer in the report. An empty parse almost always means
+  // the wrong file was picked, not an emptied drawing — so DON'T wipe on zero
+  // rows (that would destroy the crew's patch status). Deliberate wiping is the
+  // Clear button (clearCircuits).
   let removed = 0
   if (keys.length) {
     const ph = keys.map(() => '?').join(',')
     const stale = queryOne(`SELECT count(*) AS n FROM circuits WHERE conn_key NOT IN (${ph})`, keys)
     removed = (stale?.n as number) ?? 0
     dbRun(`DELETE FROM circuits WHERE conn_key NOT IN (${ph})`, keys)
-  } else {
-    const all = queryOne('SELECT count(*) AS n FROM circuits')
-    removed = (all?.n as number) ?? 0
-    dbRun('DELETE FROM circuits')
   }
   const totalRow = queryOne('SELECT count(*) AS n FROM circuits')
   return { added, updated, removed, total: (totalRow?.n as number) ?? 0 }

@@ -79,7 +79,11 @@ function PatchingPage(): React.JSX.Element {
       const res = await window.api.circuits.import()
       if (res) {
         await refresh()
-        setNote(`Imported: ${res.added} added, ${res.updated} updated, ${res.removed} removed — ${res.total} circuits total.`)
+        setNote(
+          res.added === 0 && res.updated === 0
+            ? 'No circuits were recognized in that file — nothing changed. Check it is a ConnectCAD circuit report CSV.'
+            : `Imported: ${res.added} added, ${res.updated} updated, ${res.removed} removed — ${res.total} circuits total.`
+        )
       }
     } finally {
       setBusy(false)
