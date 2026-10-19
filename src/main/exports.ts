@@ -218,6 +218,10 @@ function page(title: string, body: string, logo: string | null, density: Density
     .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid #0003; }
     .meta { color: #666; font-size: 11px; margin-bottom: 6px; }
     table { width: 100%; border-collapse: collapse; }
+    /* Order tables: honor the <colgroup> widths exactly so every category section
+       lines its columns up identically (long text wraps instead of widening a cell). */
+    table.fixed { table-layout: fixed; }
+    table.fixed td { overflow-wrap: anywhere; }
     th, td { border: 1px solid #cfcfcf; padding: 5px 7px; text-align: left; vertical-align: top; }
     th { background: #f2f2f2; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
     td.chk, th.chk { text-align: center; width: 58px; font-size: 15px; }
@@ -889,12 +893,12 @@ function shopOrderHtml(
     bodyHtml = groups
       .map((g) => {
         const body = g.items.map((it) => bodyRow(it, cols, receiving, prevMap)).join('')
-        return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table>${colg}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
+        return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table class="fixed">${colg}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
       })
       .join('')
   } else {
     const body = items.map((it) => bodyRow(it, cols, receiving, prevMap)).join('')
-    bodyHtml = `<section><table>${colg}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
+    bodyHtml = `<section><table class="fixed">${colg}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
   }
 
   const meta = [order.vendor, order.orderDate].filter(Boolean).map((x) => esc(x as string)).join(' · ')

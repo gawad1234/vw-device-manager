@@ -194,6 +194,32 @@ export interface OrderExportFormat {
 
 export type OrderExportFormatInput = Omit<OrderExportFormat, 'id' | 'createdAt' | 'updatedAt'>
 
+/** One companion line a kit adds. Equipment add-ons use name/manufacturer/model/
+ *  category; cable add-ons use cableType/length. `perUnit` is how many to add per
+ *  matched unit of the trigger item. */
+export interface KitAddon {
+  kind: 'equipment' | 'cable'
+  name: string
+  manufacturer: string | null
+  modelNumber: string | null
+  category: string | null
+  cableType: string
+  length: string
+  perUnit: number
+}
+
+/** A reusable "when you add X, also add these" rule for shop orders. The trigger
+ *  is matched (case-insensitive) against an order item's name OR model number. */
+export interface OrderKit {
+  id: number
+  trigger: string
+  addons: KitAddon[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type OrderKitInput = Omit<OrderKit, 'id' | 'createdAt' | 'updatedAt'>
+
 /** Display label + default width for each order column (shared by the editor). */
 export const ORDER_COLUMN_META: Record<OrderColumnKey, { label: string; width: number }> = {
   category: { label: 'Category', width: 16 },
@@ -638,6 +664,13 @@ export interface VwDeviceManagerApi {
     list: () => Promise<OrderExportFormat[]>
     create: (input: OrderExportFormatInput) => Promise<OrderExportFormat>
     update: (id: number, input: OrderExportFormatInput) => Promise<OrderExportFormat>
+    remove: (id: number) => Promise<void>
+  }
+  /** Auto-add kits: adding an item matching a kit's trigger pulls its companions. */
+  orderKits: {
+    list: () => Promise<OrderKit[]>
+    create: (input: OrderKitInput) => Promise<OrderKit>
+    update: (id: number, input: OrderKitInput) => Promise<OrderKit>
     remove: (id: number) => Promise<void>
   }
   /** Case label templates → printed 2-up on Uline S-19323 (8.5"x5.5") sheets. */

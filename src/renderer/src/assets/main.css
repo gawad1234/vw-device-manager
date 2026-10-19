@@ -1104,6 +1104,16 @@ input[type='checkbox'] {
   max-width: 960px;
 }
 
+/* The order "spreadsheet" dialog: fill the window so rows/columns are readable and
+   editable. Uses .modal.modal-tall so it beats the base .modal max-width/height,
+   which is defined later in this file at equal single-class specificity. */
+.modal.modal-tall {
+  max-width: 100%;
+  width: 100%;
+  height: calc(100vh - 56px);
+  max-height: calc(100vh - 56px);
+}
+
 .sheet-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
@@ -1393,6 +1403,17 @@ input[type='checkbox'] {
   border-radius: 8px;
 }
 
+/* "Still waiting on": let the label fill the row so every quantity box + Receive
+   button lines up in a consistent right-hand column. */
+.waiting-list li > span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.waiting-list li input {
+  flex: none;
+  width: 64px;
+}
+
 /* ---- Bundle color coding --------------------------------------------- */
 
 .swatch-picker {
@@ -1502,6 +1523,8 @@ input[type='checkbox'] {
   padding: 22px;
   overflow-y: auto;
   overflow-x: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .modal-footer {
@@ -1585,6 +1608,23 @@ input[type='checkbox'] {
   margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--line);
+}
+
+/* Auto-add kit editor: one companion per row. */
+.kit-addon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.kit-addon > input,
+.kit-addon > select {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+.kit-addon .kit-per {
+  flex: 0 0 64px;
 }
 .fmt-tab {
   padding: 5px 12px;

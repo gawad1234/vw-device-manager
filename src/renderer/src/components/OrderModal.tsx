@@ -1,14 +1,80 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type {
   CableOrderItem,
   OrderExportFormat,
   OrderItem,
+  OrderKit,
   ShopOrder,
   ShopOrderInput
 } from '../../../shared/types'
 import Modal from './Modal'
 import ExportMenu, { type ExportSection } from './ExportMenu'
 import OrderFormatModal from './OrderFormatModal'
+import CategoryInput from './CategoryInput'
+
+/** A kit whose trigger matches this item by name OR model (case-insensitive). */
+function matchKit(kits: OrderKit[], item: OrderItem): OrderKit | null {
+  const name = item.name.trim().toLowerCase()
+  const model = (item.modelNumber ?? '').trim().toLowerCase()
+  return (
+    kits.find((k) => {
+      const t = k.trigger.trim().toLowerCase()
+      return t !== '' && (t === name || t === model)
+    }) ?? null
+  )
+}
+
+/** Fold a kit's companions into the item/cable lists, scaled by `qty`, merging
+ *  into an existing matching line rather than duplicating. */
+function applyKitToLines(
+  items: OrderItem[],
+  cables: CableOrderItem[],
+  kit: OrderKit,
+  qty: number
+): { items: OrderItem[]; cables: CableOrderItem[] } {
+  let outItems = items
+  let outCables = cables
+  for (const a of kit.addons) {
+    const addQty = Math.max(0, Math.trunc(Number(a.perUnit) || 0)) * qty
+    if (addQty <= 0) continue
+    if (a.kind === 'equipment') {
+      const key = a.name.trim().toLowerCase()
+      if (!key) continue
+      const idx = outItems.findIndex((it) => it.name.trim().toLowerCase() === key)
+      outItems =
+        idx >= 0
+          ? outItems.map((it, j) =>
+              j === idx ? { ...it, quantity: (Number(it.quantity) || 0) + addQty } : it
+            )
+          : [
+              ...outItems,
+              {
+                name: a.name,
+                manufacturer: a.manufacturer,
+                modelNumber: a.modelNumber,
+                category: a.category,
+                quantity: addQty,
+                received: 0,
+                notes: null
+              }
+            ]
+    } else {
+      const kt = a.cableType.trim().toLowerCase()
+      if (!kt) continue
+      const kl = a.length.trim().toLowerCase()
+      const idx = outCables.findIndex(
+        (c) => c.cableType.trim().toLowerCase() === kt && c.length.trim().toLowerCase() === kl
+      )
+      outCables =
+        idx >= 0
+          ? outCables.map((c, j) =>
+              j === idx ? { ...c, quantity: (Number(c.quantity) || 0) + addQty } : c
+            )
+          : [...outCables, { cableType: a.cableType, length: a.length, quantity: addQty, received: 0, notes: null }]
+    }
+  }
+  return { items: outItems, cables: outCables }
+}
 
 const ORDER_SECTIONS: ExportSection[] = [
   {
@@ -67,6 +133,11 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   const [formats, setFormats] = useState<OrderExportFormat[]>([])
   const [formatId, setFormatId] = useState<number | null>(null)
   const [managingFormats, setManagingFormats] = useState(false)
+  const [kits, setKits] = useState<OrderKit[]>([])
+  // Which kit triggers have already been expanded for each row, so re-blurring a
+  // row doesn't keep stacking its companions.
+  // shortcut: tracked by row index; deleting/reordering rows can misalign it, when that bites, switch to a per-row id.
+  const appliedRef = useRef<Record<number, Set<string>>>({})
 
   const refreshFormats = (): void => {
     window.api.orderFormats.list().then((list) => {
@@ -78,6 +149,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
 
   useEffect(() => {
     window.api.deviceCategories.list().then(setCategories)
+    window.api.orderKits.list().then(setKits)
     refreshFormats()
   }, [])
 
@@ -91,6 +163,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     setError(null)
     setImportNote(null)
     setSection('equipment')
+    appliedRef.current = {}
   }, [order?.id])
 
   // ---- equipment items ----
@@ -105,6 +178,24 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   }
   function receiveAllItems(): void {
     setItems((prev) => prev.map((it) => ({ ...it, received: it.quantity })))
+  }
+
+  // When a row's name/model is committed and matches a kit, auto-add its companions
+  // (once per row+trigger), scaled by the row's quantity.
+  function maybeApplyKit(i: number): void {
+    const it = items[i]
+    if (!it) return
+    const kit = matchKit(kits, it)
+    if (!kit) return
+    const rowSet = appliedRef.current[i] ?? (appliedRef.current[i] = new Set())
+    const key = kit.trigger.trim().toLowerCase()
+    if (rowSet.has(key)) return
+    rowSet.add(key)
+    const qty = Math.max(1, Math.trunc(Number(it.quantity) || 0))
+    const next = applyKitToLines(items, cables, kit, qty)
+    setItems(next.items)
+    setCables(next.cables)
+    setImportNote(`Added ${kit.addons.length} companion line(s) for "${kit.trigger}".`)
   }
 
   async function importFromDrawing(): Promise<void> {
@@ -360,7 +451,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
 
   return (
     <>
-    <Modal title={order ? order.name : 'New order'} onClose={onClose} footer={footer} wide>
+    <Modal title={order ? order.name : 'New order'} onClose={onClose} footer={footer} tall>
       <form id="order-form" className="form-grid" onSubmit={save}>
         {error && <div className="banner banner-error">{error}</div>}
         <label>
@@ -441,26 +532,21 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
                     return (
                       <tr key={i} className={done ? 'item-received' : ''}>
                         <td>
-                          <input value={it.name} placeholder="Item / description" onChange={(e) => patchItem(i, { name: e.target.value })} />
+                          <input value={it.name} placeholder="Item / description" onChange={(e) => patchItem(i, { name: e.target.value })} onBlur={() => maybeApplyKit(i)} />
                         </td>
                         <td>
                           <input value={it.manufacturer ?? ''} onChange={(e) => patchItem(i, { manufacturer: e.target.value || null })} />
                         </td>
                         <td>
-                          <input value={it.modelNumber ?? ''} onChange={(e) => patchItem(i, { modelNumber: e.target.value || null })} />
+                          <input value={it.modelNumber ?? ''} onChange={(e) => patchItem(i, { modelNumber: e.target.value || null })} onBlur={() => maybeApplyKit(i)} />
                         </td>
                         <td>
-                          <select value={it.category ?? ''} onChange={(e) => patchItem(i, { category: e.target.value || null })}>
-                            <option value="">—</option>
-                            {it.category && !categories.includes(it.category) && (
-                              <option value={it.category}>{it.category}</option>
-                            )}
-                            {categories.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
+                          <CategoryInput
+                            value={it.category}
+                            categories={categories}
+                            onChange={(v) => patchItem(i, { category: v })}
+                            placeholder="—"
+                          />
                         </td>
                         <td className="num">
                           <input type="number" min={0} value={it.quantity} onChange={(e) => patchItem(i, { quantity: Number(e.target.value) })} />

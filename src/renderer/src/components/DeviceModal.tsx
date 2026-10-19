@@ -3,6 +3,7 @@ import type { Device, DeviceInput, DeviceWarning, RowSaver, Subnet } from '../..
 import Modal from './Modal'
 import PortsSection from './PortsSection'
 import DeviceConnections from './DeviceConnections'
+import CategoryInput from './CategoryInput'
 
 const EMPTY_FORM: DeviceInput = {
   name: '',
@@ -189,21 +190,12 @@ function DeviceModal({
         </label>
         <label>
           Category
-          <select
-            value={form.category ?? ''}
-            onChange={(e) => setForm({ ...form, category: e.target.value || null })}
-          >
-            <option value="">— none —</option>
-            {form.category && !categories.includes(form.category) && (
-              <option value={form.category}>{form.category}</option>
-            )}
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <small className="muted">Manage the list in Settings → Device categories.</small>
+          <CategoryInput
+            value={form.category}
+            categories={categories}
+            onChange={(v) => setForm({ ...form, category: v })}
+          />
+          <small className="muted">Type to filter; a new name creates a group.</small>
         </label>
         <label className="checkbox-field span-2">
           <input

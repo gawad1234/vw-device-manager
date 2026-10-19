@@ -21,6 +21,9 @@ import type {
   OrderColumn,
   OrderExportFormat,
   OrderExportFormatInput,
+  OrderKit,
+  OrderKitInput,
+  KitAddon,
   OrderItem,
   PackCase,
   PackCaseInput,
@@ -906,6 +909,51 @@ export function updateOrderExportFormat(
 
 export function deleteOrderExportFormat(id: number): void {
   dbRun('DELETE FROM order_export_formats WHERE id = ?', [id])
+}
+
+function mapOrderKit(row: Row): OrderKit {
+  let addons: KitAddon[] = []
+  try {
+    addons = JSON.parse((row.addons_json as string) || '[]') as KitAddon[]
+  } catch {
+    addons = []
+  }
+  return {
+    id: row.id as number,
+    trigger: row.trigger as string,
+    addons,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string
+  }
+}
+
+export function listOrderKits(): OrderKit[] {
+  return queryAll('SELECT * FROM order_kits ORDER BY trigger COLLATE NOCASE').map(mapOrderKit)
+}
+
+export function getOrderKitById(id: number): OrderKit | null {
+  const row = queryOne('SELECT * FROM order_kits WHERE id = ?', [id])
+  return row ? mapOrderKit(row) : null
+}
+
+export function createOrderKit(input: OrderKitInput): OrderKit {
+  dbRun('INSERT INTO order_kits (trigger, addons_json) VALUES (?, ?)', [
+    input.trigger,
+    JSON.stringify(input.addons)
+  ])
+  return getOrderKitById(lastInsertRowId()) as OrderKit
+}
+
+export function updateOrderKit(id: number, input: OrderKitInput): OrderKit {
+  dbRun(
+    `UPDATE order_kits SET trigger = ?, addons_json = ?, updated_at = datetime('now') WHERE id = ?`,
+    [input.trigger, JSON.stringify(input.addons), id]
+  )
+  return getOrderKitById(id) as OrderKit
+}
+
+export function deleteOrderKit(id: number): void {
+  dbRun('DELETE FROM order_kits WHERE id = ?', [id])
 }
 
 export function getProjectMeta(key: string): string | null {

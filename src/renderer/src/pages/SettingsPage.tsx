@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { CableType } from '../../../shared/types'
 import UpdatesPanel from '../components/UpdatesPanel'
 import ServerPanel from '../components/ServerPanel'
+import KitModal from '../components/KitModal'
 
 interface Props {
   cableTypes: CableType[]
@@ -43,6 +44,7 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
   const [typeNotes, setTypeNotes] = useState('')
   const [typeError, setTypeError] = useState<string | null>(null)
   const [categoryInput, setCategoryInput] = useState('')
+  const [managingKits, setManagingKits] = useState(false)
   const [logo, setLogo] = useState<string | null>(null)
   const [showName, setShowName] = useState('')
 
@@ -267,6 +269,27 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           ))}
         </ul>
       </div>
+
+      <div className="panel">
+        <h3>Auto-add kits</h3>
+        <p className="muted">
+          Define “when I add <em>X</em>, also add these” rules for shop orders — e.g. adding an{' '}
+          <code>MDLX</code> automatically adds a USB-C-to-USB-A cable and a USB power brick. Matched
+          (case-insensitive) against an order item’s name or model; companions scale with the item’s
+          quantity. Saved with this project.
+        </p>
+        <button className="btn btn-primary" onClick={() => setManagingKits(true)}>
+          Manage kits…
+        </button>
+      </div>
+
+      {managingKits && (
+        <KitModal
+          categories={categories}
+          onClose={() => setManagingKits(false)}
+          onChanged={onChanged}
+        />
+      )}
     </div>
   )
 }

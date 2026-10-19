@@ -165,6 +165,16 @@ CREATE TABLE IF NOT EXISTS order_export_formats (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Auto-add kits: "when an order item matches <trigger>, also add these companions."
+-- addons_json is a KitAddon[] (equipment or cable lines, each with a per-unit count).
+CREATE TABLE IF NOT EXISTS order_kits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  trigger TEXT NOT NULL,
+  addons_json TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Patching: circuits imported from a ConnectCAD circuit report. conn_key is the
 -- stable physical-connection identity (src dev+socket → dst dev+socket), used to
 -- merge on re-import while preserving patched/tested/notes. The drawing owns

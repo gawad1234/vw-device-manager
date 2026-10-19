@@ -20,6 +20,7 @@ import type {
   HostConfigInput,
   LabelTemplateInput,
   OrderExportFormatInput,
+  OrderKitInput,
   PackCaseInput,
   PortInput,
   ShopOrderInput,
@@ -189,6 +190,14 @@ export function registerIpcHandlers(): void {
     repo.updateOrderExportFormat(id, input)
   )
   ipcMain.handle('orderFormats:remove', (_e, id: number) => repo.deleteOrderExportFormat(id))
+
+  // Auto-add kits.
+  ipcMain.handle('orderKits:list', () => repo.listOrderKits())
+  ipcMain.handle('orderKits:create', (_e, input: OrderKitInput) => repo.createOrderKit(input))
+  ipcMain.handle('orderKits:update', (_e, id: number, input: OrderKitInput) =>
+    repo.updateOrderKit(id, input)
+  )
+  ipcMain.handle('orderKits:remove', (_e, id: number) => repo.deleteOrderKit(id))
 
   // Cases (packing manager).
   ipcMain.handle('cases:list', () => repo.listCases())

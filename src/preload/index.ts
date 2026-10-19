@@ -10,6 +10,7 @@ import type {
   HostConfigInput,
   LabelTemplateInput,
   OrderExportFormatInput,
+  OrderKitInput,
   PackCaseInput,
   PortInput,
   ServerPins,
@@ -167,6 +168,12 @@ const api: VwDeviceManagerApi = {
     update: (id: number, input: OrderExportFormatInput) =>
       ipcRenderer.invoke('orderFormats:update', id, input),
     remove: (id: number) => ipcRenderer.invoke('orderFormats:remove', id)
+  },
+  orderKits: {
+    list: () => ipcRenderer.invoke('orderKits:list'),
+    create: (input: OrderKitInput) => ipcRenderer.invoke('orderKits:create', input),
+    update: (id: number, input: OrderKitInput) => ipcRenderer.invoke('orderKits:update', id, input),
+    remove: (id: number) => ipcRenderer.invoke('orderKits:remove', id)
   }
 }
 

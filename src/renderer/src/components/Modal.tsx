@@ -7,10 +7,12 @@ interface Props {
   footer?: React.ReactNode
   /** wider dialog (for spreadsheet-style editors) */
   wide?: boolean
+  /** large dialog that fills most of the viewport (for the order spreadsheet) */
+  tall?: boolean
 }
 
 /** A centered overlay dialog. Closes on Escape, backdrop click, or the ✕. */
-function Modal({ title, onClose, children, footer, wide }: Props): React.JSX.Element {
+function Modal({ title, onClose, children, footer, wide, tall }: Props): React.JSX.Element {
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
       if (e.key === 'Escape') onClose()
@@ -21,7 +23,10 @@ function Modal({ title, onClose, children, footer, wide }: Props): React.JSX.Ele
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={`modal${wide ? ' modal-wide' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`modal${wide ? ' modal-wide' : ''}${tall ? ' modal-tall' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <h2>{title}</h2>
           <button className="modal-close" onClick={onClose} aria-label="Close">

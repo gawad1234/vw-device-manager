@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ShopOrder } from '../../../shared/types'
+import type { ShopOrder, ShopOrderInput } from '../../../shared/types'
 import OrderModal from '../components/OrderModal'
 
 type Filter = 'all' | 'open' | 'complete'
@@ -48,6 +48,8 @@ function OrdersPage(): React.JSX.Element {
   const [openId, setOpenId] = useState<number | 'new' | null>(null)
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<Filter>('all')
+  // How many to receive per waiting line (keyed order:kind:index); defaults to the full outstanding.
+  const [recvQty, setRecvQty] = useState<Record<string, number>>({})
 
   const refresh = useCallback(async () => {
     setOrders(await window.api.orders.list())
@@ -73,22 +75,60 @@ function OrdersPage(): React.JSX.Element {
     () =>
       orders.flatMap((o) => [
         ...o.items
-          .map((i) => ({
+          .map((i, index) => ({
+            orderId: o.id,
             order: o.name,
             label: i.name,
-            waiting: Math.max(0, (Number(i.quantity) || 0) - (Number(i.received) || 0))
+            waiting: Math.max(0, (Number(i.quantity) || 0) - (Number(i.received) || 0)),
+            kind: 'item' as const,
+            index
           }))
           .filter((w) => w.waiting > 0 && w.label.trim()),
         ...(o.cables ?? [])
-          .map((c) => ({
+          .map((c, index) => ({
+            orderId: o.id,
             order: o.name,
             label: `${c.cableType} ${c.length}`.trim(),
-            waiting: Math.max(0, (Number(c.quantity) || 0) - (Number(c.received) || 0))
+            waiting: Math.max(0, (Number(c.quantity) || 0) - (Number(c.received) || 0)),
+            kind: 'cable' as const,
+            index
           }))
           .filter((w) => w.waiting > 0 && w.label.trim())
       ]),
     [orders]
   )
+
+  const lineKey = (w: (typeof waiting)[number]): string => `${w.orderId}:${w.kind}:${w.index}`
+
+  // Receive `amount` more of one waiting line (received += amount, capped at quantity).
+  async function receiveLine(w: (typeof waiting)[number], amount: number): Promise<void> {
+    const o = orders.find((x) => x.id === w.orderId)
+    if (!o) return
+    const add = Math.max(0, Math.trunc(amount))
+    const bump = (q: number, r: number): number => Math.min(q, (Number(r) || 0) + add)
+    const input: ShopOrderInput = {
+      name: o.name,
+      vendor: o.vendor,
+      orderDate: o.orderDate,
+      notes: o.notes,
+      items: o.items.map((it, idx) =>
+        w.kind === 'item' && idx === w.index
+          ? { ...it, received: bump(Number(it.quantity) || 0, it.received) }
+          : it
+      ),
+      cables: (o.cables ?? []).map((c, idx) =>
+        w.kind === 'cable' && idx === w.index
+          ? { ...c, received: bump(Number(c.quantity) || 0, c.received) }
+          : c
+      )
+    }
+    setRecvQty((m) => {
+      const { [lineKey(w)]: _drop, ...rest } = m
+      return rest
+    })
+    await window.api.orders.update(o.id, input)
+    await refresh()
+  }
 
   const visible = orders.filter((o) => {
     if (filter === 'all') return true
@@ -124,15 +164,38 @@ function OrdersPage(): React.JSX.Element {
               {waiting.reduce((s, w) => s + w.waiting, 0)} item(s)
             </span>
           </h3>
-          <ul className="signal-list" style={{ maxWidth: 620 }}>
-            {waiting.map((w, i) => (
-              <li key={i}>
-                <span>
-                  <strong>{w.waiting}×</strong> {w.label}
-                  <span className="muted"> — {w.order}</span>
-                </span>
-              </li>
-            ))}
+          <ul className="signal-list waiting-list" style={{ maxWidth: 620 }}>
+            {waiting.map((w, i) => {
+              const qty = recvQty[lineKey(w)] ?? w.waiting
+              return (
+                <li key={i}>
+                  <span>
+                    <strong>{w.waiting}×</strong> {w.label}
+                    <span className="muted"> — {w.order}</span>
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={w.waiting}
+                    value={qty}
+                    title="How many to receive"
+                    onChange={(e) =>
+                      setRecvQty((m) => ({
+                        ...m,
+                        [lineKey(w)]: Math.max(1, Math.min(w.waiting, Number(e.target.value) || 1))
+                      }))
+                    }
+                  />
+                  <button
+                    className="btn btn-small"
+                    title={qty >= w.waiting ? 'Receive all outstanding' : `Receive ${qty}`}
+                    onClick={() => receiveLine(w, qty)}
+                  >
+                    Receive
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
