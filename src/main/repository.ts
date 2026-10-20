@@ -23,6 +23,7 @@ import type {
   OrderExportFormatInput,
   OrderKit,
   KitAddon,
+  WallpaperConfig,
   OrderItem,
   PackCase,
   PackCaseInput,
@@ -81,10 +82,27 @@ function mapDevice(row: Row, ports: Port[]): Device {
     isSwitch: Boolean(row.is_switch),
     managementIp: (row.management_ip as string | null) ?? null,
     oobIp: (row.oob_ip as string | null) ?? null,
+    wallpaper: parseWallpaper(row.wallpaper_json as string | null),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     ports
   }
+}
+
+function parseWallpaper(json: string | null): WallpaperConfig | null {
+  if (!json) return null
+  try {
+    return JSON.parse(json) as WallpaperConfig
+  } catch {
+    return null
+  }
+}
+
+export function setDeviceWallpaper(id: number, config: WallpaperConfig | null): void {
+  dbRun(`UPDATE devices SET wallpaper_json = ?, updated_at = datetime('now') WHERE id = ?`, [
+    config ? JSON.stringify(config) : null,
+    id
+  ])
 }
 
 function queryAll(sql: string, params: SqlValue[] = []): Row[] {

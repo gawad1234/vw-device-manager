@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { CableType } from '../../../shared/types'
+import type { CableType, SwitchConfigSettings } from '../../../shared/types'
 import UpdatesPanel from '../components/UpdatesPanel'
 import ServerPanel from '../components/ServerPanel'
 import KitModal from '../components/KitModal'
@@ -49,6 +49,7 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
   const [showName, setShowName] = useState('')
   const [companyLogo, setCompanyLogo] = useState<string | null>(null)
   const [companyName, setCompanyName] = useState('')
+  const [swCfg, setSwCfg] = useState<SwitchConfigSettings | null>(null)
 
   useEffect(() => {
     window.api.networkSignals.list().then(setSignals)
@@ -56,7 +57,15 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
     window.api.showName.get().then((n) => setShowName(n ?? ''))
     window.api.companyLogo.get().then(setCompanyLogo)
     window.api.companyName.get().then((n) => setCompanyName(n ?? ''))
+    window.api.switchConfig.get().then(setSwCfg)
   }, [])
+
+  function patchSw(patch: Partial<SwitchConfigSettings>): void {
+    setSwCfg((prev) => (prev ? { ...prev, ...patch } : prev))
+  }
+  async function flushSw(): Promise<void> {
+    if (swCfg) await window.api.switchConfig.set(swCfg)
+  }
 
   async function saveShowName(): Promise<void> {
     await window.api.showName.set(showName.trim() || null)
@@ -326,6 +335,54 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           ))}
         </ul>
       </div>
+
+      {swCfg && (
+        <div className="panel">
+          <h3>Switch config generator</h3>
+          <p className="muted">
+            The base NETGEAR M4350 config + admin login used to generate each switch&rsquo;s full,
+            uploadable config (shown on the Show Server device page with Download/Copy). Shared across
+            all projects. <strong>The admin password is stored here and written into the generated
+            config in plaintext</strong> so the upload is turn-key.
+          </p>
+          <div className="form-grid">
+            <label>
+              Admin username
+              <input
+                value={swCfg.adminUser}
+                placeholder="admin"
+                onChange={(e) => patchSw({ adminUser: e.target.value })}
+                onBlur={flushSw}
+              />
+            </label>
+            <label>
+              Admin password
+              <input
+                value={swCfg.adminPassword}
+                placeholder="(set a password)"
+                onChange={(e) => patchSw({ adminPassword: e.target.value })}
+                onBlur={flushSw}
+              />
+            </label>
+          </div>
+          <label className="switch-tpl">
+            Base config template
+            <textarea
+              value={swCfg.baseTemplate}
+              rows={14}
+              spellCheck={false}
+              onChange={(e) => patchSw({ baseTemplate: e.target.value })}
+              onBlur={flushSw}
+            />
+          </label>
+          <p className="muted">
+            Tokens the generator fills: <code>{'{{VLANS}}'}</code> <code>{'{{USERS}}'}</code>{' '}
+            <code>{'{{LAGS}}'}</code> <code>{'{{SYSNAME}}'}</code> <code>{'{{INTERFACES}}'}</code>{' '}
+            <code>{'{{MGMT}}'}</code>. Everything else is kept as-is. Per-VLAN multicast and L3/SVI
+            routing aren&rsquo;t generated yet — keep those in the template if you need them.
+          </p>
+        </div>
+      )}
 
       <div className="panel">
         <h3>Auto-add kits</h3>

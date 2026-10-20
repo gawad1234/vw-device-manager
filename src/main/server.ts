@@ -31,6 +31,8 @@ import type { Circuit } from '../shared/types'
 import { getCurrentProject } from './projects'
 import { ipSchedulePageHtml, deviceListPageHtml } from './exports'
 import { renderTemplateSheetHtml, renderCasesSheetHtml } from './caselabels'
+import { generateSwitchConfig } from './switch-config'
+import { getSwitchConfig } from './library'
 
 // ---------------------------------------------------------------------------
 // Module state
@@ -316,6 +318,7 @@ function layout(title: string, body: string, role: Role | null, active = ''): st
   .err { color:#f0877f; }
   .saved { color:var(--ok); font-size:13px; }
   .qr { background:#fff; padding:10px; border-radius:12px; display:inline-block; }
+  pre.cfg { font-family: ui-monospace,'SF Mono','Cascadia Code',Menlo,Consolas,monospace; font-size:12px; line-height:1.45; background:#0c0e12; border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow-x:auto; white-space:pre; margin-top:10px; }
   .center { text-align:center; }
   form.login { max-width:320px; margin:12vh auto 0; }
   @media (max-width:520px){ .cards{grid-template-columns:1fr;} }
@@ -360,6 +363,19 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
   if (path === '/api/receive' && method === 'POST') return apiReceive(req, res)
 
   if (path === '/devices') return sendHtml(res, 200, devicesListPage())
+  if (path.startsWith('/device/') && path.endsWith('/config.cfg')) {
+    const d = getDeviceById(Number(path.slice(8, -'/config.cfg'.length)))
+    if (!d || !d.isSwitch) {
+      return sendHtml(res, 404, layout('Not found', '<h1>Not a switch</h1>', roleOf(req)))
+    }
+    const cfg = generateSwitchConfig(d, listSubnets(), getSwitchConfig())
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${cfgFilename(d.name)}"`
+    })
+    res.end(cfg)
+    return
+  }
   if (path.startsWith('/device/')) return sendHtml(res, 200, await devicePage(Number(path.slice(8))))
   if (path === '/api/patch' && method === 'POST') return apiPatch(req, res)
 
@@ -577,7 +593,8 @@ function subnetLabel(subnets: Map<number, Subnet>, id: number | null): string {
 async function devicePage(id: number): Promise<string> {
   const d = getDeviceById(id)
   if (!d) return layout('Device', '<h1>Device not found</h1><p><a href="/devices">Back</a></p>', 'crew', 'devices')
-  const subnets = new Map(listSubnets().map((s) => [s.id, s]))
+  const subnetList = listSubnets()
+  const subnets = new Map(subnetList.map((s) => [s.id, s]))
   const meta: string[] = []
   if (d.deviceType) meta.push(`<tr><th>Type</th><td>${esc(d.deviceType)}</td></tr>`)
   if (d.location) meta.push(`<tr><th>Location</th><td>${esc(d.location)}</td></tr>`)
@@ -605,7 +622,7 @@ async function devicePage(id: number): Promise<string> {
        portRows || '<tr><td colspan="4" class="muted">No ports.</td></tr>'
      }</table>
      ${connectionsSection(d.name, circuits)}
-     ${d.isSwitch ? '<h2>Switch config</h2><p class="muted">A generated switch configuration will appear here once that feature ships.</p>' : ''}
+     ${d.isSwitch ? switchConfigSection(generateSwitchConfig(d, subnetList, getSwitchConfig()), d.id) : ''}
      ${d.notes ? `<h2>Notes</h2><p>${esc(d.notes).replace(/\n/g, '<br>')}</p>` : ''}
      <h2>This device’s QR</h2><div class="qr">${qr}</div>
      <p><a href="/devices">← all devices</a></p>
@@ -613,6 +630,22 @@ async function devicePage(id: number): Promise<string> {
     'crew',
     'devices'
   )
+}
+
+function cfgFilename(name: string): string {
+  const base = name.trim().replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'switch'
+  return base + '.cfg'
+}
+
+/** The generated full switch config, with copy + download. */
+function switchConfigSection(config: string, deviceId: number): string {
+  return `<h2>Switch config</h2>
+    <p class="muted">Full NETGEAR M4350 config for this switch — ports numbered in order (1/0/1, 1/0/2, …). Upload it to the switch as its startup-config.</p>
+    <p>
+      <a class="btn" href="/device/${deviceId}/config.cfg">Download .cfg</a>
+      <button class="btn sec" type="button" onclick="(function(b){navigator.clipboard.writeText(document.getElementById('swcfg').textContent).then(function(){var t=b.textContent;b.textContent='Copied ✓';setTimeout(function(){b.textContent=t;},1500);});})(this)">Copy</button>
+    </p>
+    <pre id="swcfg" class="cfg">${esc(config)}</pre>`
 }
 
 /** The connections/patching list for a device page — crew tick THIS end patched

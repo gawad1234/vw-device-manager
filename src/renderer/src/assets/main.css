@@ -1284,6 +1284,54 @@ input[type='checkbox'] {
   font-size: 0.85em;
 }
 
+/* LAG: several switch ports edited as one logical link. */
+.lag-row {
+  border-left: 3px solid var(--accent);
+}
+.lag-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.lag-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent-ink, #052421);
+  background: var(--accent);
+  border-radius: 5px;
+  padding: 2px 8px;
+}
+.lag-name {
+  width: 140px;
+  font-weight: 600;
+}
+.lag-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.lag-member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.lag-member-jack {
+  font-weight: 600;
+  min-width: 70px;
+}
+.lag-member-refl {
+  flex: 1 1 auto;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .port-tagged {
   display: flex;
   flex-wrap: wrap;
@@ -1680,6 +1728,56 @@ input[type='checkbox'] {
 .kit-list-row.kit-new {
   justify-content: center;
   color: var(--muted);
+}
+
+/* Per-computer wallpaper setup */
+.wallpaper-section .wp-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.wallpaper-section .wp-color input[type='color'] {
+  width: 46px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+}
+.wp-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.wp-display .wp-n {
+  min-width: 72px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.wp-display label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.wp-display input[type='number'] {
+  width: 84px;
+}
+
+.switch-tpl {
+  display: block;
+  margin-top: 10px;
+}
+.switch-tpl textarea {
+  width: 100%;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre;
+  overflow-wrap: normal;
 }
 .fmt-tab {
   padding: 5px 12px;

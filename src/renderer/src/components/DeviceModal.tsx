@@ -4,6 +4,7 @@ import Modal from './Modal'
 import PortsSection from './PortsSection'
 import DeviceConnections from './DeviceConnections'
 import CategoryInput from './CategoryInput'
+import WallpaperSection from './WallpaperSection'
 
 const EMPTY_FORM: DeviceInput = {
   name: '',
@@ -256,6 +257,13 @@ function DeviceModal({
         <div className="modal-section">
           <h3>Connections (patching)</h3>
           <DeviceConnections deviceName={device.name} />
+        </div>
+      )}
+
+      {device && !device.isSwitch && (
+        <div className="modal-section">
+          <h3>Wallpaper</h3>
+          <WallpaperSection device={device} onChanged={onChanged} />
         </div>
       )}
     </Modal>

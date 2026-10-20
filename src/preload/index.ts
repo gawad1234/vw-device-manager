@@ -6,11 +6,13 @@ import type {
   CableTypeInput,
   CircuitStatusInput,
   DeviceInput,
+  WallpaperConfig,
   ExportOptions,
   HostConfigInput,
   LabelTemplateInput,
   OrderExportFormatInput,
   OrderKitInput,
+  SwitchConfigSettings,
   PackCaseInput,
   PortInput,
   ServerPins,
@@ -31,7 +33,13 @@ const api: VwDeviceManagerApi = {
     list: () => ipcRenderer.invoke('devices:list'),
     create: (input: DeviceInput) => ipcRenderer.invoke('devices:create', input),
     update: (id: number, input: DeviceInput) => ipcRenderer.invoke('devices:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('devices:remove', id)
+    remove: (id: number) => ipcRenderer.invoke('devices:remove', id),
+    setWallpaper: (id: number, config: WallpaperConfig | null) =>
+      ipcRenderer.invoke('devices:setWallpaper', id, config)
+  },
+  wallpapers: {
+    save: (files: { name: string; dataUrl: string }[]) =>
+      ipcRenderer.invoke('wallpapers:save', files)
   },
   ports: {
     create: (deviceId: number, input: PortInput) =>
@@ -107,6 +115,10 @@ const api: VwDeviceManagerApi = {
   companyName: {
     get: () => ipcRenderer.invoke('companyName:get'),
     set: (name: string | null) => ipcRenderer.invoke('companyName:set', name)
+  },
+  switchConfig: {
+    get: () => ipcRenderer.invoke('switchConfig:get'),
+    set: (input: SwitchConfigSettings) => ipcRenderer.invoke('switchConfig:set', input)
   },
   updates: {
     getState: () => ipcRenderer.invoke('updates:getState'),

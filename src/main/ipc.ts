@@ -1,5 +1,6 @@
 import { ipcMain, dialog, shell } from 'electron'
 import { writeFileSync } from 'fs'
+import { join } from 'path'
 import * as repo from './repository'
 import * as projects from './projects'
 import * as library from './library'
@@ -16,11 +17,13 @@ import type {
   CableInput,
   CableTypeInput,
   DeviceInput,
+  WallpaperConfig,
   ExportOptions,
   HostConfigInput,
   LabelTemplateInput,
   OrderExportFormatInput,
   OrderKitInput,
+  SwitchConfigSettings,
   PackCaseInput,
   PortInput,
   ShopOrderInput,
@@ -41,6 +44,29 @@ export function registerIpcHandlers(): void {
     repo.updateDevice(id, input)
   )
   ipcMain.handle('devices:remove', (_e, id: number) => repo.deleteDevice(id))
+  ipcMain.handle('devices:setWallpaper', (_e, id: number, config: WallpaperConfig | null) =>
+    repo.setDeviceWallpaper(id, config)
+  )
+
+  // Save generated wallpaper PNGs to a folder the user picks.
+  ipcMain.handle(
+    'wallpapers:save',
+    async (_e, files: { name: string; dataUrl: string }[]): Promise<number> => {
+      const res = await dialog.showOpenDialog({
+        title: 'Save wallpapers to folder',
+        properties: ['openDirectory', 'createDirectory']
+      })
+      if (res.canceled || !res.filePaths[0]) return -1
+      const dir = res.filePaths[0]
+      let n = 0
+      for (const f of files) {
+        const base64 = f.dataUrl.replace(/^data:image\/png;base64,/, '')
+        writeFileSync(join(dir, f.name), Buffer.from(base64, 'base64'))
+        n++
+      }
+      return n
+    }
+  )
 
   ipcMain.handle('ports:create', (_e, deviceId: number, input: PortInput) =>
     repo.createPort(deviceId, input)
@@ -113,6 +139,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('companyLogo:set', (_e, dataUrl: string | null) => library.setCompanyLogo(dataUrl))
   ipcMain.handle('companyName:get', () => library.getCompanyName())
   ipcMain.handle('companyName:set', (_e, name: string | null) => library.setCompanyName(name))
+  ipcMain.handle('switchConfig:get', () => library.getSwitchConfig())
+  ipcMain.handle('switchConfig:set', (_e, input: SwitchConfigSettings) =>
+    library.setSwitchConfig(input)
+  )
 
   // Host VLAN configs → PowerShell script generation (Configs tab).
   ipcMain.handle('configs:list', () => repo.listHostConfigs())

@@ -427,6 +427,13 @@ function migrateAddDeviceCategory(database: DatabaseSync): void {
   database.exec('ALTER TABLE devices ADD COLUMN category TEXT')
 }
 
+/** Adds `devices.wallpaper_json` (per-computer wallpaper setup). Guarded, additive. */
+function migrateAddDeviceWallpaper(database: DatabaseSync): void {
+  if (!tableExists(database, 'devices')) return
+  if (tableHasColumn(database, 'devices', 'wallpaper_json')) return
+  database.exec('ALTER TABLE devices ADD COLUMN wallpaper_json TEXT')
+}
+
 /** Adds `ports.is_unused` (jacks not used for the network). Guarded, additive. */
 function migrateAddPortUnused(database: DatabaseSync): void {
   if (!tableExists(database, 'ports')) return
@@ -491,6 +498,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateCableTypeToName(database)
   migrateAddPortPrimary(database)
   migrateAddDeviceCategory(database)
+  migrateAddDeviceWallpaper(database)
   migrateAddPortUnused(database)
   migrateAddPortLag(database)
   migrateAddOrderExportSnapshot(database)

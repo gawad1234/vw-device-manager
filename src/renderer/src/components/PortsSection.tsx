@@ -258,6 +258,189 @@ function PortRow({ port, subnets, isSwitch, reflection, onChanged, registerSaver
   )
 }
 
+/** A switch-port list item: either a standalone port, or a LAG of 2+ ports that
+ *  share a name and are edited as one logical interface. */
+type PortEntry = { kind: 'port'; port: Port } | { kind: 'lag'; name: string; ports: Port[] }
+
+function lagKey(p: Port): string {
+  return (p.lagGroup ?? '').trim()
+}
+
+/** Collapse switch ports sharing a LAG name (2+) into a single LAG entry, in place. */
+function buildEntries(ports: Port[], isSwitch: boolean): PortEntry[] {
+  if (!isSwitch) return ports.map((port) => ({ kind: 'port', port }))
+  const counts = new Map<string, number>()
+  for (const p of ports) {
+    const k = lagKey(p).toLowerCase()
+    if (k) counts.set(k, (counts.get(k) ?? 0) + 1)
+  }
+  const out: PortEntry[] = []
+  const seen = new Set<string>()
+  for (const p of ports) {
+    const k = lagKey(p).toLowerCase()
+    if (k && (counts.get(k) ?? 0) >= 2) {
+      if (seen.has(k)) continue
+      seen.add(k)
+      out.push({ kind: 'lag', name: lagKey(p), ports: ports.filter((x) => lagKey(x).toLowerCase() === k) })
+    } else {
+      out.push({ kind: 'port', port: p })
+    }
+  }
+  return out
+}
+
+interface LagRowProps {
+  name: string
+  ports: Port[]
+  subnets: Subnet[]
+  reflections: Record<string, Reflection>
+  onChanged: () => void
+  registerSaver?: (fn: RowSaver) => () => void
+}
+
+/** One LAG = several switch ports edited as a single logical link: set the untagged
+ *  network + tagged VLANs once and Save applies them to every member. */
+function LagRow({ name, ports, subnets, reflections, onChanged, registerSaver }: LagRowProps): React.JSX.Element {
+  const first = ports[0]
+  const [lagName, setLagName] = useState(name)
+  const [untagged, setUntagged] = useState<number | null>(first.untaggedSubnetId)
+  const [tagged, setTagged] = useState<number[]>(first.taggedSubnetIds)
+  const [showTags, setShowTags] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // Apply the shared config to every member (each keeps its own jack label).
+  async function persist(): Promise<{ ok: boolean }> {
+    setSaving(true)
+    const nm = lagName.trim() || null
+    for (const p of ports) {
+      await window.api.ports.update(p.id, { label: p.label, ipAddress: null, untaggedSubnetId: untagged })
+      await window.api.ports.setTaggedVlans(p.id, tagged)
+      if ((p.lagGroup ?? '') !== (nm ?? '')) await window.api.ports.setLag(p.id, nm)
+    }
+    setSaving(false)
+    return { ok: true }
+  }
+  const persistRef = useRef<RowSaver>(persist)
+  persistRef.current = persist
+  useEffect(() => {
+    if (!registerSaver) return
+    return registerSaver(() => persistRef.current())
+  }, [registerSaver])
+
+  async function save(): Promise<void> {
+    await persist()
+    onChanged()
+  }
+  async function ungroup(): Promise<void> {
+    if (!window.confirm(`Ungroup LAG "${name}" back into separate ports?`)) return
+    for (const p of ports) await window.api.ports.setLag(p.id, null)
+    onChanged()
+  }
+  async function removeMember(id: number): Promise<void> {
+    await window.api.ports.setLag(id, null)
+    onChanged()
+  }
+  function toggleTag(subnetId: number, checked: boolean): void {
+    setTagged((prev) => (checked ? [...prev, subnetId] : prev.filter((x) => x !== subnetId)))
+  }
+
+  const taggable = subnets.filter((s) => s.id !== untagged)
+  const taggedNames = tagged
+    .map((id) => subnets.find((s) => s.id === id))
+    .filter((s): s is Subnet => Boolean(s))
+    .map(subnetLabel)
+
+  return (
+    <div className="port-row lag-row">
+      <div className="lag-head">
+        <span className="lag-badge">LAG</span>
+        <input
+          className="lag-name"
+          value={lagName}
+          title="LAG name (clear it, or Ungroup, to split these back into separate ports)"
+          onChange={(e) => setLagName(e.target.value)}
+        />
+        <span className="muted">
+          {ports.length} ports — one logical link
+        </span>
+      </div>
+      <div className="lag-members-list">
+        {ports.map((p) => {
+          const r = reflections[p.label]
+          return (
+            <div className="lag-member" key={p.id}>
+              <span className="lag-member-jack">{p.label}</span>
+              {r && (
+                <span className="muted lag-member-refl">
+                  ↳ {r.fromName} · {reflectionVlan(r, subnets)}
+                </span>
+              )}
+              <button
+                type="button"
+                className="btn btn-small"
+                title="Remove this port from the LAG"
+                onClick={() => removeMember(p.id)}
+              >
+                ✕
+              </button>
+            </div>
+          )
+        })}
+      </div>
+      <div className="port-fields">
+        <label>
+          Untagged network (all members)
+          <select
+            value={untagged ?? ''}
+            onChange={(e) => setUntagged(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">— none —</option>
+            {subnets.map((s) => (
+              <option key={s.id} value={s.id}>
+                {subnetLabel(s)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="port-actions">
+          <button type="button" className="btn btn-small" onClick={ungroup}>
+            Ungroup
+          </button>
+          <button className="btn btn-small btn-primary" onClick={save} disabled={saving}>
+            Save LAG
+          </button>
+        </div>
+      </div>
+      <div className="port-tagged">
+        <button type="button" className="tag-toggle" onClick={() => setShowTags((v) => !v)}>
+          <span className="caret">{showTags ? '▾' : '▸'}</span>
+          Tagged VLANs{tagged.length ? ` (${tagged.length})` : ''}
+        </button>
+        {!showTags && (
+          <span className="tag-summary muted">{taggedNames.length ? taggedNames.join(', ') : 'none'}</span>
+        )}
+        {showTags &&
+          (taggable.length === 0 ? (
+            <span className="muted">none available</span>
+          ) : (
+            <div className="tag-options">
+              {taggable.map((s) => (
+                <label key={s.id} className="chk">
+                  <input
+                    type="checkbox"
+                    checked={tagged.includes(s.id)}
+                    onChange={(e) => toggleTag(s.id, e.target.checked)}
+                  />
+                  {subnetLabel(s)}
+                </label>
+              ))}
+            </div>
+          ))}
+      </div>
+    </div>
+  )
+}
+
 interface Props {
   device: Device
   subnets: Subnet[]
@@ -300,17 +483,29 @@ function PortsSection({ device, subnets, onChanged, registerSaver }: Props): Rea
         <p className="muted">Switch ports are VLAN-only — set the untagged network and any tagged (trunk) VLANs.</p>
       )}
       {device.ports.length === 0 && <p className="muted">No ports yet.</p>}
-      {active.map((p) => (
-        <PortRow
-          key={p.id}
-          port={p}
-          subnets={subnets}
-          isSwitch={device.isSwitch}
-          reflection={reflections[p.label]}
-          onChanged={onChanged}
-          registerSaver={registerSaver}
-        />
-      ))}
+      {buildEntries(active, device.isSwitch).map((e) =>
+        e.kind === 'lag' ? (
+          <LagRow
+            key={`lag:${e.name.toLowerCase()}`}
+            name={e.name}
+            ports={e.ports}
+            subnets={subnets}
+            reflections={reflections}
+            onChanged={onChanged}
+            registerSaver={registerSaver}
+          />
+        ) : (
+          <PortRow
+            key={e.port.id}
+            port={e.port}
+            subnets={subnets}
+            isSwitch={device.isSwitch}
+            reflection={reflections[e.port.label]}
+            onChanged={onChanged}
+            registerSaver={registerSaver}
+          />
+        )
+      )}
       <button className="btn btn-small" onClick={addPort}>
         + Add port
       </button>

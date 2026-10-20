@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { readCatalogsFromFile } from './db'
 import { getDbPath } from './paths'
-import type { CableType, CableTypeInput, OrderKit, OrderKitInput } from '../shared/types'
+import { DEFAULT_SWITCH_BASE_CONFIG } from './switch-config'
+import type { CableType, CableTypeInput, OrderKit, OrderKitInput, SwitchConfigSettings } from '../shared/types'
 
 /**
  * The universal library — network signals + cable types — is shared across ALL
@@ -25,6 +26,12 @@ interface Library {
   /** Your company's letterhead, stamped on every project's paperwork. */
   companyName: string
   companyLogo: string | null
+  /** Switch-config generator settings (base template + admin login), shared. */
+  switchConfig: SwitchConfigSettings
+}
+
+function defaultSwitchConfig(): SwitchConfigSettings {
+  return { baseTemplate: DEFAULT_SWITCH_BASE_CONFIG, adminUser: 'admin', adminPassword: '' }
 }
 
 function readLibrary(): Library {
@@ -36,7 +43,8 @@ function readLibrary(): Library {
       deviceCategories: raw.deviceCategories ?? [],
       orderKits: raw.orderKits ?? [],
       companyName: raw.companyName ?? '',
-      companyLogo: raw.companyLogo ?? null
+      companyLogo: raw.companyLogo ?? null,
+      switchConfig: { ...defaultSwitchConfig(), ...(raw.switchConfig ?? {}) }
     }
   } catch {
     return {
@@ -45,7 +53,8 @@ function readLibrary(): Library {
       deviceCategories: [],
       orderKits: [],
       companyName: '',
-      companyLogo: null
+      companyLogo: null,
+      switchConfig: defaultSwitchConfig()
     }
   }
 }
@@ -71,8 +80,25 @@ export async function ensureLibrary(): Promise<void> {
     deviceCategories: [],
     orderKits: [],
     companyName: '',
-    companyLogo: null
+    companyLogo: null,
+    switchConfig: defaultSwitchConfig()
   })
+}
+
+// ---- Switch-config generator settings (shared) --------------------------
+
+export function getSwitchConfig(): SwitchConfigSettings {
+  return readLibrary().switchConfig
+}
+
+export function setSwitchConfig(input: SwitchConfigSettings): void {
+  const lib = readLibrary()
+  lib.switchConfig = {
+    baseTemplate: input.baseTemplate,
+    adminUser: (input.adminUser ?? '').trim() || 'admin',
+    adminPassword: input.adminPassword ?? ''
+  }
+  writeLibrary(lib)
 }
 
 // ---- Company branding (shared letterhead) -------------------------------

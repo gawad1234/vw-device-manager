@@ -39,6 +39,23 @@ export interface PortInput {
   untaggedSubnetId: number | null
 }
 
+/** One display attached to a computer, for wallpaper generation. */
+export interface WallpaperDisplay {
+  width: number
+  height: number
+  /** this display gets a plain black wallpaper (no logos/name) */
+  black: boolean
+}
+
+/** A computer's wallpaper setup: its accent color + its attached displays. */
+export interface WallpaperConfig {
+  /** background color (hex) for the branded displays */
+  color: string
+  displays: WallpaperDisplay[]
+  /** one combined image spanning all displays (Windows) vs one PNG per display (Mac) */
+  combined: boolean
+}
+
 export interface Device {
   id: number
   name: string
@@ -55,12 +72,17 @@ export interface Device {
   managementIp: string | null
   /** device-level out-of-band (OOB) IP (switches only) */
   oobIp: string | null
+  /** per-computer wallpaper setup (displays + color); null = not set */
+  wallpaper: WallpaperConfig | null
   createdAt: string
   updatedAt: string
   ports: Port[]
 }
 
-export type DeviceInput = Omit<Device, 'id' | 'createdAt' | 'updatedAt' | 'ports'>
+export type DeviceInput = Omit<
+  Device,
+  'id' | 'createdAt' | 'updatedAt' | 'ports' | 'wallpaper'
+>
 
 export interface DeviceWarning {
   type: 'ip-conflict' | 'ip-outside-subnet' | 'invalid-ip'
@@ -219,6 +241,14 @@ export interface OrderKit {
 }
 
 export type OrderKitInput = Omit<OrderKit, 'id' | 'createdAt' | 'updatedAt'>
+
+/** Shared switch-config generator settings: the house base-config template (with
+ *  {{TOKENS}}) + the admin login baked into every generated config. */
+export interface SwitchConfigSettings {
+  baseTemplate: string
+  adminUser: string
+  adminPassword: string
+}
 
 /** Display label + default width for each order column (shared by the editor). */
 export const ORDER_COLUMN_META: Record<OrderColumnKey, { label: string; width: number }> = {
@@ -537,6 +567,13 @@ export interface VwDeviceManagerApi {
     create: (input: DeviceInput) => Promise<SaveDeviceResult>
     update: (id: number, input: DeviceInput) => Promise<SaveDeviceResult>
     remove: (id: number) => Promise<void>
+    /** save (or clear, with null) a computer's wallpaper setup */
+    setWallpaper: (id: number, config: WallpaperConfig | null) => Promise<void>
+  }
+  /** Save generated wallpaper PNGs to a folder the user picks. Returns how many
+   *  were written, or -1 if they cancelled. */
+  wallpapers: {
+    save: (files: { name: string; dataUrl: string }[]) => Promise<number>
   }
   ports: {
     create: (deviceId: number, input: PortInput) => Promise<SavePortResult>
@@ -618,6 +655,11 @@ export interface VwDeviceManagerApi {
   companyName: {
     get: () => Promise<string | null>
     set: (name: string | null) => Promise<void>
+  }
+  /** Shared switch-config generator settings (base template + admin login). */
+  switchConfig: {
+    get: () => Promise<SwitchConfigSettings>
+    set: (input: SwitchConfigSettings) => Promise<void>
   }
   /** App auto-update, surfaced in Settings → Updates. `check` triggers a check
    *  and resolves with the resulting status; live changes also arrive via
