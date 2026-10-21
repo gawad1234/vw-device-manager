@@ -74,6 +74,8 @@ export interface Device {
   oobIp: string | null
   /** per-computer wallpaper setup (displays + color); null = not set */
   wallpaper: WallpaperConfig | null
+  /** Panasonic projector settings; null = not a projector */
+  projector: ProjectorConfig | null
   createdAt: string
   updatedAt: string
   ports: Port[]
@@ -81,8 +83,16 @@ export interface Device {
 
 export type DeviceInput = Omit<
   Device,
-  'id' | 'createdAt' | 'updatedAt' | 'ports' | 'wallpaper'
+  'id' | 'createdAt' | 'updatedAt' | 'ports' | 'wallpaper' | 'projector'
 >
+
+/** A Panasonic projector's chosen settings (catalog in `projector-settings.ts`).
+ *  `values` holds only the settings the user ticked to change, keyed by setting
+ *  key; a choice's value is its exact command. */
+export interface ProjectorConfig {
+  model: string
+  values: Record<string, string>
+}
 
 export interface DeviceWarning {
   type: 'ip-conflict' | 'ip-outside-subnet' | 'invalid-ip'
@@ -170,7 +180,15 @@ export interface ExportOptions {
   bundleId?: number
   /** required for `order` / `receiving` docs */
   orderId?: number
-  doc: 'pullsheet' | 'schedule' | 'labels' | 'ipschedule' | 'devicelist' | 'order' | 'receiving'
+  doc:
+    | 'pullsheet'
+    | 'schedule'
+    | 'labels'
+    | 'ipschedule'
+    | 'devicelist'
+    | 'projectorsheet'
+    | 'order'
+    | 'receiving'
   format: 'pdf' | 'xlsx' | 'csv'
   labelStyle?: 'cards' | 'flag'
   /** order/receiving: color new/changed rows vs. the last export + add a Change column */
@@ -569,6 +587,12 @@ export interface VwDeviceManagerApi {
     remove: (id: number) => Promise<void>
     /** save (or clear, with null) a computer's wallpaper setup */
     setWallpaper: (id: number, config: WallpaperConfig | null) => Promise<void>
+    /** save (or clear, with null) a projector's settings */
+    setProjector: (id: number, config: ProjectorConfig | null) => Promise<void>
+  }
+  /** Save a projector's MMCS command list CSV. Returns the path, or null if cancelled. */
+  projector: {
+    saveCommands: (deviceId: number) => Promise<string | null>
   }
   /** Save generated wallpaper PNGs to a folder the user picks. Returns how many
    *  were written, or -1 if they cancelled. */

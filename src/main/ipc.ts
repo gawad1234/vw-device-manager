@@ -10,7 +10,9 @@ import { printCaseLabels, printCasesLabels } from './caselabels'
 import { importCircuitReport } from './circuit-import'
 import * as updater from './updater'
 import * as server from './server'
+import { projectorCommandsCsv } from '../shared/projector-settings'
 import type {
+  ProjectorConfig,
   CircuitStatusInput,
   ServerPins,
   BundleInput,
@@ -47,6 +49,24 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('devices:setWallpaper', (_e, id: number, config: WallpaperConfig | null) =>
     repo.setDeviceWallpaper(id, config)
   )
+  ipcMain.handle('devices:setProjector', (_e, id: number, config: ProjectorConfig | null) =>
+    repo.setDeviceProjector(id, config)
+  )
+
+  // Save a projector's command list CSV for Panasonic Multi Monitoring & Control.
+  ipcMain.handle('projector:saveCommands', async (_e, deviceId: number) => {
+    const device = repo.getDeviceById(deviceId)
+    if (!device?.projector) return null
+    const safe = (device.name || 'projector').replace(/[/\\:*?"<>|]/g, '-')
+    const res = await dialog.showSaveDialog({
+      defaultPath: `${safe}-commands.csv`,
+      filters: [{ name: 'CSV', extensions: ['csv'] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    writeFileSync(res.filePath, projectorCommandsCsv(device.projector), 'utf-8')
+    shell.showItemInFolder(res.filePath)
+    return res.filePath
+  })
 
   // Save generated wallpaper PNGs to a folder the user picks.
   ipcMain.handle(

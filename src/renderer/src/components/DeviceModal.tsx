@@ -5,6 +5,7 @@ import PortsSection from './PortsSection'
 import DeviceConnections from './DeviceConnections'
 import CategoryInput from './CategoryInput'
 import WallpaperSection from './WallpaperSection'
+import ProjectorSection from './ProjectorSection'
 
 const EMPTY_FORM: DeviceInput = {
   name: '',
@@ -123,6 +124,7 @@ function DeviceModal({
     <>
       {device ? device.name : 'New device'}
       {device?.isSwitch && <span className="badge">switch</span>}
+      {device?.projector && <span className="badge">projector</span>}
     </>
   )
 
@@ -264,6 +266,13 @@ function DeviceModal({
         <div className="modal-section">
           <h3>Wallpaper</h3>
           <WallpaperSection device={device} onChanged={onChanged} />
+        </div>
+      )}
+
+      {device && !device.isSwitch && (
+        <div className="modal-section">
+          <h3>Projector setup</h3>
+          <ProjectorSection device={device} onChanged={onChanged} />
         </div>
       )}
     </Modal>

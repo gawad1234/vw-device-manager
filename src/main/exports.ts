@@ -12,6 +12,8 @@ import {
   markOrderExported
 } from './repository'
 import { ipInCidr } from './ip-utils'
+import { maskFromCidr } from './switch-config'
+import { PROJECTOR_SETTINGS, projectorValueLabel } from '../shared/projector-settings'
 import { getCompanyName, getCompanyLogo } from './library'
 import type {
   Bundle,
@@ -525,6 +527,74 @@ function deviceListHtml(logo: string | null): string {
   return page('Device List', sections, logo)
 }
 
+// ---- Projector setup sheet ----------------------------------------------
+interface ProjectorSheetEntry {
+  name: string
+  model: string
+  location: string
+  /** [setting, value, how] — how = 'Command' or '✋ At projector' */
+  rows: [string, string, string][]
+}
+
+/** One entry per Panasonic projector: its network address (always hand-set —
+ *  no command exists) then every setting the user ticked, in catalog order. */
+function projectorSheetEntries(): ProjectorSheetEntry[] {
+  const subnets = listSubnets()
+  const byId = new Map(subnets.map((s) => [s.id, s]))
+  const HAND = '✋ At projector'
+  return listDevices()
+    .filter((d) => d.projector)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((d) => {
+      const cfg = d.projector!
+      const usable = d.ports.filter((p) => !p.isUnused)
+      const port = usable.find((p) => p.isPrimary) ?? usable.find((p) => p.ipAddress)
+      const ip = port?.ipAddress ?? ''
+      const sub =
+        (port?.untaggedSubnetId != null ? byId.get(port.untaggedSubnetId) : undefined) ??
+        (ip ? subnets.find((s) => s.cidr && ipInCidr(ip, s.cidr) === true) : undefined)
+      const rows: [string, string, string][] = [
+        ['IP address (DHCP off)', ip, HAND],
+        ['Subnet mask', sub ? maskFromCidr(sub.cidr) : '', HAND],
+        ['Gateway', sub?.gateway ?? '', HAND]
+      ]
+      for (const s of PROJECTOR_SETTINGS) {
+        const v = cfg.values[s.key]
+        if (v === undefined || s.key === 'networkSetup') continue // network shown above
+        rows.push([s.label, projectorValueLabel(s, v), s.kind === 'manual' ? HAND : 'Command'])
+      }
+      return { name: d.name, model: cfg.model, location: d.location ?? '', rows }
+    })
+}
+
+function projectorSheetTable(): Table {
+  return {
+    headers: ['Projector', 'Model', 'Location', 'Setting', 'Value', 'How'],
+    rows: projectorSheetEntries().flatMap((e) =>
+      e.rows.map(([setting, value, how]) => [e.name, e.model, e.location, setting, value, how])
+    )
+  }
+}
+
+/** Setup-sheet PDF: a section per projector. */
+function projectorSheetHtml(logo: string | null): string {
+  const entries = projectorSheetEntries()
+  const title = 'Projector Setup Sheet'
+  if (!entries.length) return page(title, '<p>No devices are marked as projectors.</p>', logo)
+  const sections = entries
+    .map((e) => {
+      const body = e.rows
+        .map(([s, v, how]) => `<tr><td>${esc(s)}</td><td>${esc(v)}</td><td>${esc(how)}</td></tr>`)
+        .join('')
+      const meta = [e.model, e.location].filter(Boolean).map(esc).join(' · ')
+      return `<section><h2>${esc(e.name)} <span class="meta">${meta}</span></h2><table><thead><tr><th>Setting</th><th>Value</th><th>How</th></tr></thead><tbody>${body}</tbody></table></section>`
+    })
+    .join('')
+  const intro =
+    '<p class="meta">“Command” rows are in each projector’s command list CSV (load it in Panasonic Multi Monitoring &amp; Control). ✋ rows are set at the projector menu or with Panasonic Network Setup Software.</p>'
+  return page(title, intro + sections, logo)
+}
+
 function tableCsv(t: Table): string {
   return [t.headers, ...t.rows].map((r) => r.map((c) => csvCell(String(c))).join(',')).join('\r\n')
 }
@@ -993,6 +1063,7 @@ const DOC_LABEL: Record<ExportOptions['doc'], string> = {
   labels: 'labels',
   ipschedule: 'IP schedule',
   devicelist: 'device list',
+  projectorsheet: 'projector setup sheet',
   order: 'pull order',
   receiving: 'receiving checklist'
 }
@@ -1037,6 +1108,22 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
       )
     // Snapshot the current items as the new baseline for the next export's diff.
     markOrderExported(order.id, order.items)
+    shell.openPath(outPath)
+    return outPath
+  }
+
+  // Projector setup sheet (project-wide, portrait).
+  if (opts.doc === 'projectorsheet') {
+    const res = await dialog.showSaveDialog({
+      defaultPath: `Projector setup sheet.${opts.format}`,
+      filters: [{ name: opts.format.toUpperCase(), extensions: [opts.format] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    const outPath = res.filePath
+    if (opts.format === 'csv') writeFileSync(outPath, tableCsv(projectorSheetTable()), 'utf-8')
+    else if (opts.format === 'xlsx')
+      writeFileSync(outPath, await tableXlsx(projectorSheetTable(), logo, 'Projectors'))
+    else writeFileSync(outPath, await htmlToPdf(projectorSheetHtml(logo), false))
     shell.openPath(outPath)
     return outPath
   }

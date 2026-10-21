@@ -434,6 +434,13 @@ function migrateAddDeviceWallpaper(database: DatabaseSync): void {
   database.exec('ALTER TABLE devices ADD COLUMN wallpaper_json TEXT')
 }
 
+/** Adds `devices.projector_json` (Panasonic projector settings). Guarded, additive. */
+function migrateAddDeviceProjector(database: DatabaseSync): void {
+  if (!tableExists(database, 'devices')) return
+  if (tableHasColumn(database, 'devices', 'projector_json')) return
+  database.exec('ALTER TABLE devices ADD COLUMN projector_json TEXT')
+}
+
 /** Adds `ports.is_unused` (jacks not used for the network). Guarded, additive. */
 function migrateAddPortUnused(database: DatabaseSync): void {
   if (!tableExists(database, 'ports')) return
@@ -505,6 +512,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateAddOrderCables(database)
   migrateAddLabelElements(database)
   migrateCircuitEnds(database)
+  migrateAddDeviceProjector(database)
 }
 
 /**

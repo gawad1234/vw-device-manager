@@ -24,6 +24,7 @@ import type {
   OrderKit,
   KitAddon,
   WallpaperConfig,
+  ProjectorConfig,
   OrderItem,
   PackCase,
   PackCaseInput,
@@ -83,19 +84,29 @@ function mapDevice(row: Row, ports: Port[]): Device {
     managementIp: (row.management_ip as string | null) ?? null,
     oobIp: (row.oob_ip as string | null) ?? null,
     wallpaper: parseWallpaper(row.wallpaper_json as string | null),
+    projector: parseJson<ProjectorConfig>(row.projector_json as string | null),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     ports
   }
 }
 
-function parseWallpaper(json: string | null): WallpaperConfig | null {
+function parseJson<T>(json: string | null): T | null {
   if (!json) return null
   try {
-    return JSON.parse(json) as WallpaperConfig
+    return JSON.parse(json) as T
   } catch {
     return null
   }
+}
+
+const parseWallpaper = parseJson<WallpaperConfig>
+
+export function setDeviceProjector(id: number, config: ProjectorConfig | null): void {
+  dbRun(`UPDATE devices SET projector_json = ?, updated_at = datetime('now') WHERE id = ?`, [
+    config ? JSON.stringify(config) : null,
+    id
+  ])
 }
 
 export function setDeviceWallpaper(id: number, config: WallpaperConfig | null): void {

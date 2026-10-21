@@ -105,7 +105,7 @@ classofservice trust dot1p
 {{MGMT}}
 exit`
 
-function maskFromCidr(cidr: string | null): string {
+export function maskFromCidr(cidr: string | null): string {
   const prefix = Number((cidr ?? '').split('/')[1])
   if (!(prefix >= 0 && prefix <= 32)) return '255.255.255.0'
   const m = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0

@@ -7,6 +7,7 @@ import type {
   CircuitStatusInput,
   DeviceInput,
   WallpaperConfig,
+  ProjectorConfig,
   ExportOptions,
   HostConfigInput,
   LabelTemplateInput,
@@ -35,7 +36,12 @@ const api: VwDeviceManagerApi = {
     update: (id: number, input: DeviceInput) => ipcRenderer.invoke('devices:update', id, input),
     remove: (id: number) => ipcRenderer.invoke('devices:remove', id),
     setWallpaper: (id: number, config: WallpaperConfig | null) =>
-      ipcRenderer.invoke('devices:setWallpaper', id, config)
+      ipcRenderer.invoke('devices:setWallpaper', id, config),
+    setProjector: (id: number, config: ProjectorConfig | null) =>
+      ipcRenderer.invoke('devices:setProjector', id, config)
+  },
+  projector: {
+    saveCommands: (deviceId: number) => ipcRenderer.invoke('projector:saveCommands', deviceId)
   },
   wallpapers: {
     save: (files: { name: string; dataUrl: string }[]) =>
