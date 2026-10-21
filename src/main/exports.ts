@@ -13,7 +13,11 @@ import {
 } from './repository'
 import { ipInCidr } from './ip-utils'
 import { maskFromCidr } from './switch-config'
-import { PROJECTOR_SETTINGS, projectorValueLabel } from '../shared/projector-settings'
+import {
+  PROJECTOR_GROUPS,
+  PROJECTOR_SETTINGS,
+  projectorValueLabel
+} from '../shared/projector-settings'
 import { getCompanyName, getCompanyLogo } from './library'
 import type {
   Bundle,
@@ -528,20 +532,24 @@ function deviceListHtml(logo: string | null): string {
 }
 
 // ---- Projector setup sheet ----------------------------------------------
+// One page per projector: model + name on top, then a banner + Setting/Value
+// table per section (Network Settings first, always; other sections only when
+// something in them is ticked). Layout follows the user's mock-up.
+interface ProjectorSheetSection {
+  title: string
+  note?: string
+  rows: [string, string][]
+}
 interface ProjectorSheetEntry {
   name: string
   model: string
   location: string
-  /** [setting, value, how] — how = 'Command' or '✋ At projector' */
-  rows: [string, string, string][]
+  sections: ProjectorSheetSection[]
 }
 
-/** One entry per Panasonic projector: its network address (always hand-set —
- *  no command exists) then every setting the user ticked, in catalog order. */
 function projectorSheetEntries(): ProjectorSheetEntry[] {
   const subnets = listSubnets()
   const byId = new Map(subnets.map((s) => [s.id, s]))
-  const HAND = '✋ At projector'
   return listDevices()
     .filter((d) => d.projector)
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -553,46 +561,185 @@ function projectorSheetEntries(): ProjectorSheetEntry[] {
       const sub =
         (port?.untaggedSubnetId != null ? byId.get(port.untaggedSubnetId) : undefined) ??
         (ip ? subnets.find((s) => s.cidr && ipInCidr(ip, s.cidr) === true) : undefined)
-      const rows: [string, string, string][] = [
-        ['IP address (DHCP off)', ip, HAND],
-        ['Subnet mask', sub ? maskFromCidr(sub.cidr) : '', HAND],
-        ['Gateway', sub?.gateway ?? '', HAND]
-      ]
-      for (const s of PROJECTOR_SETTINGS) {
-        const v = cfg.values[s.key]
-        if (v === undefined || s.key === 'networkSetup') continue // network shown above
-        rows.push([s.label, projectorValueLabel(s, v), s.kind === 'manual' ? HAND : 'Command'])
+      const sections: ProjectorSheetSection[] = PROJECTOR_GROUPS.map((title) => ({
+        title,
+        rows: PROJECTOR_SETTINGS.filter(
+          (s) => s.group === title && s.key !== 'projectorName' && cfg.values[s.key] !== undefined
+        ).map((s): [string, string] => [s.label, projectorValueLabel(s, cfg.values[s.key])])
+      }))
+      // The network address is always hand-set (no command exists), so it always prints.
+      sections[0] = {
+        ...sections[0],
+        note: 'Set at the projector menu or with Panasonic Network Setup Software (DHCP off).',
+        rows: [
+          ['IP Address', ip],
+          ['Subnet', sub ? maskFromCidr(sub.cidr) : ''],
+          ['Router', sub?.gateway ?? ''],
+          ...sections[0].rows
+        ]
       }
-      return { name: d.name, model: cfg.model, location: d.location ?? '', rows }
+      return {
+        name: cfg.values.projectorName?.trim() || d.name,
+        model: cfg.model,
+        location: d.location ?? '',
+        sections: sections.filter((s) => s.rows.length)
+      }
     })
 }
 
+/** Flat table (CSV): one row per projector setting. */
 function projectorSheetTable(): Table {
   return {
-    headers: ['Projector', 'Model', 'Location', 'Setting', 'Value', 'How'],
+    headers: ['Projector', 'Model', 'Location', 'Section', 'Setting', 'Value'],
     rows: projectorSheetEntries().flatMap((e) =>
-      e.rows.map(([setting, value, how]) => [e.name, e.model, e.location, setting, value, how])
+      e.sections.flatMap((s) =>
+        s.rows.map(([k, v]) => [e.name, e.model, e.location, s.title, k, v])
+      )
     )
   }
 }
 
-/** Setup-sheet PDF: a section per projector. */
+/** Excel: one worksheet (= one printed page) per projector. */
+async function projectorSheetXlsx(logo: string | null): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook()
+  const entries = projectorSheetEntries()
+  const img = parseImageDataUrl(logo)
+  const imgId = img ? wb.addImage({ base64: img.base64, extension: img.extension }) : null
+  const thin = { style: 'thin' as const, color: { argb: 'FFCFCFCF' } }
+  const box = { top: thin, bottom: thin, left: thin, right: thin }
+  const used = new Set<string>()
+  for (const e of entries.length ? entries : [null]) {
+    // Sheet names: max 31 chars, no []:*?/\ and unique.
+    let sheetName =
+      (e?.name ?? 'Projectors').replace(/[[\]:*?/\\]/g, '-').slice(0, 31) || 'Projector'
+    for (let n = 2; used.has(sheetName.toLowerCase()); n++)
+      sheetName = `${sheetName.slice(0, 27)} (${n})`
+    used.add(sheetName.toLowerCase())
+    const ws = wb.addWorksheet(sheetName, {
+      pageSetup: {
+        orientation: 'portrait',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        horizontalCentered: true
+      }
+    })
+    ws.columns = [{ width: 3 }, { width: 30 }, { width: 40 }, { width: 3 }]
+    let r = 1
+    if (imgId != null) {
+      ws.addImage(imgId, { tl: { col: 1, row: 0 }, ext: { width: 170, height: 60 } })
+      r = 5
+    }
+    if (docShowName) {
+      ws.getCell(r, 2).value = docShowName
+      ws.getCell(r, 2).font = { bold: true, size: 12, color: { argb: 'FF666666' } }
+      r += 2
+    }
+    if (!e) {
+      ws.getCell(r, 2).value = 'No devices are marked as projectors.'
+      continue
+    }
+    const head = (label: string, value: string, size: number): void => {
+      ws.getCell(r, 2).value = label
+      ws.getCell(r, 2).font = { bold: true, size }
+      ws.getCell(r, 2).alignment = { horizontal: 'right' }
+      ws.getCell(r, 3).value = value
+      ws.getCell(r, 3).font = { bold: true, size }
+      ws.getRow(r).height = size + 8
+      r++
+    }
+    head('Projector Model:', e.model, 14)
+    head('Projector Name:', e.name, 14)
+    if (e.location) head('Location:', e.location, 11)
+    for (const s of e.sections) {
+      r++
+      ws.mergeCells(r, 2, r, 3)
+      const banner = ws.getCell(r, 2)
+      banner.value = s.title
+      banner.font = { bold: true, size: 18, color: { argb: 'FFFFFFFF' } }
+      banner.alignment = { horizontal: 'center', vertical: 'middle' }
+      banner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2A37' } }
+      ws.getRow(r).height = 32
+      r++
+      if (s.note) {
+        ws.mergeCells(r, 2, r, 3)
+        ws.getCell(r, 2).value = s.note
+        ws.getCell(r, 2).font = { italic: true, size: 9, color: { argb: 'FF666666' } }
+        ws.getCell(r, 2).alignment = { horizontal: 'center' }
+        r++
+      }
+      for (const [c, text] of [
+        [2, 'Setting'],
+        [3, 'Value']
+      ] as const) {
+        const cell = ws.getCell(r, c)
+        cell.value = text
+        cell.font = { bold: true, size: 12 }
+        cell.alignment = { horizontal: 'center' }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E9EF' } }
+        cell.border = box
+      }
+      r++
+      s.rows.forEach(([k, v], i) => {
+        const label = ws.getCell(r, 2)
+        const value = ws.getCell(r, 3)
+        label.value = `${k}:`
+        label.alignment = { horizontal: 'right' }
+        value.value = v
+        value.font = { bold: true }
+        for (const cell of [label, value]) {
+          cell.border = box
+          if (i % 2)
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7F8FA' } }
+        }
+        r++
+      })
+    }
+    ws.pageSetup.printArea = `A1:D${r}`
+  }
+  return (await wb.xlsx.writeBuffer()) as unknown as Buffer
+}
+
+/** Setup-sheet PDF: same layout, each projector starting on a new page. */
 function projectorSheetHtml(logo: string | null): string {
   const entries = projectorSheetEntries()
   const title = 'Projector Setup Sheet'
   if (!entries.length) return page(title, '<p>No devices are marked as projectors.</p>', logo)
-  const sections = entries
+  const css = `<style>
+    .pj + .pj { page-break-before: always; }
+    .pj-head { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px;
+               font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+    .pj-head .k { text-align: right; }
+    .pj-head .loc { font-size: 12px; font-weight: 400; color: #555; }
+    .pj-sec { margin: 14px 0 0; page-break-inside: avoid; }
+    .pj-banner { background: #1f2a37; color: #fff; font-size: 17px; font-weight: 700;
+                 text-align: center; padding: 6px; }
+    .pj-note { text-align: center; font-style: italic; color: #666; font-size: 10px; margin: 3px 0; }
+    .pj-sec td.k { width: 42%; text-align: right; }
+    .pj-sec td.v { font-weight: 600; }
+    .pj-sec th { text-align: center; font-size: 11px; }
+  </style>`
+  const body = entries
     .map((e) => {
-      const body = e.rows
-        .map(([s, v, how]) => `<tr><td>${esc(s)}</td><td>${esc(v)}</td><td>${esc(how)}</td></tr>`)
+      const head = `<div class="pj-head"><span class="k">Projector Model:</span><span>${esc(e.model)}</span><span class="k">Projector Name:</span><span>${esc(e.name)}</span>${
+        e.location
+          ? `<span class="k loc">Location:</span><span class="loc">${esc(e.location)}</span>`
+          : ''
+      }</div>`
+      const secs = e.sections
+        .map(
+          (s) =>
+            `<div class="pj-sec"><div class="pj-banner">${esc(s.title)}</div>${
+              s.note ? `<div class="pj-note">${esc(s.note)}</div>` : ''
+            }<table><thead><tr><th>Setting</th><th>Value</th></tr></thead><tbody>${s.rows
+              .map(([k, v]) => `<tr><td class="k">${esc(k)}:</td><td class="v">${esc(v)}</td></tr>`)
+              .join('')}</tbody></table></div>`
+        )
         .join('')
-      const meta = [e.model, e.location].filter(Boolean).map(esc).join(' · ')
-      return `<section><h2>${esc(e.name)} <span class="meta">${meta}</span></h2><table><thead><tr><th>Setting</th><th>Value</th><th>How</th></tr></thead><tbody>${body}</tbody></table></section>`
+      return `<div class="pj">${head}${secs}</div>`
     })
     .join('')
-  const intro =
-    '<p class="meta">“Command” rows are in each projector’s command list CSV (load it in Panasonic Multi Monitoring &amp; Control). ✋ rows are set at the projector menu or with Panasonic Network Setup Software.</p>'
-  return page(title, intro + sections, logo)
+  return page(title, css + body, logo)
 }
 
 function tableCsv(t: Table): string {
@@ -1121,8 +1268,7 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     if (res.canceled || !res.filePath) return null
     const outPath = res.filePath
     if (opts.format === 'csv') writeFileSync(outPath, tableCsv(projectorSheetTable()), 'utf-8')
-    else if (opts.format === 'xlsx')
-      writeFileSync(outPath, await tableXlsx(projectorSheetTable(), logo, 'Projectors'))
+    else if (opts.format === 'xlsx') writeFileSync(outPath, await projectorSheetXlsx(logo))
     else writeFileSync(outPath, await htmlToPdf(projectorSheetHtml(logo), false))
     shell.openPath(outPath)
     return outPath

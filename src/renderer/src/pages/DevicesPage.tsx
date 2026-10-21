@@ -19,14 +19,6 @@ const EXPORT_SECTIONS: ExportSection[] = [
       { label: 'Excel', doc: 'ipschedule', format: 'xlsx' },
       { label: 'CSV', doc: 'ipschedule', format: 'csv' }
     ]
-  },
-  {
-    label: 'Projector setup sheet (Panasonic)',
-    items: [
-      { label: 'PDF', doc: 'projectorsheet', format: 'pdf' },
-      { label: 'Excel', doc: 'projectorsheet', format: 'xlsx' },
-      { label: 'CSV', doc: 'projectorsheet', format: 'csv' }
-    ]
   }
 ]
 

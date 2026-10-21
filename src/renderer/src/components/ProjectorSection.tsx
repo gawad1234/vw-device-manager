@@ -25,7 +25,7 @@ function defaultValue(s: ProjectorSetting, deviceName: string): string {
 /** Panasonic RZ/RQ projector setup: tick the settings to change, pick values,
  *  then save a command list CSV for Multi Monitoring & Control. The same
  *  choices print on the "Projector setup sheet" export. */
-function ProjectorSection({ device, onChanged }: Props): React.JSX.Element {
+function ProjectorSection({ device, onChanged }: Props): React.JSX.Element | null {
   const [config, setConfig] = useState<ProjectorConfig | null>(device.projector)
   const [note, setNote] = useState<string | null>(null)
 
@@ -50,44 +50,35 @@ function ProjectorSection({ device, onChanged }: Props): React.JSX.Element {
     if (path) setNote(`Saved ${path}`)
   }
 
-  if (!config) {
-    return (
-      <label className="chk">
-        <input
-          type="checkbox"
-          checked={false}
-          onChange={() => persist({ model: PROJECTOR_MODELS[0], values: {} })}
-        />
-        This is a Panasonic PT-RZ / PT-RQ projector
-      </label>
-    )
-  }
+  // Adding a projector happens on the Projectors page; after "Remove" the page drops it.
+  if (!config) return null
 
   const commandCount = projectorCommands(config).length
 
   return (
     <div className="projector-section">
-      <label className="chk">
-        <input
-          type="checkbox"
-          checked
-          onChange={() => {
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+        <label>
+          Model{' '}
+          <select
+            value={config.model}
+            onChange={(e) => persist({ ...config, model: e.target.value })}
+          >
+            {PROJECTOR_MODELS.map((m) => (
+              <option key={m}>{m}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="btn btn-small btn-danger"
+          onClick={() => {
             if (window.confirm('Remove this device’s projector settings?')) persist(null)
           }}
-        />
-        This is a Panasonic PT-RZ / PT-RQ projector
-      </label>
-      <label>
-        Model{' '}
-        <select
-          value={config.model}
-          onChange={(e) => persist({ ...config, model: e.target.value })}
         >
-          {PROJECTOR_MODELS.map((m) => (
-            <option key={m}>{m}</option>
-          ))}
-        </select>
-      </label>
+          Remove projector setup
+        </button>
+      </div>
       <p className="muted">
         Tick the settings you want changed. Commands come from Panasonic’s PT-RQ32K / RQ22K /
         RQ13K-family command list — not every option exists on every model. ✋ = set at the

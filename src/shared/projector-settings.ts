@@ -89,24 +89,17 @@ const INPUTS: [string, string][] = [
 const LENS_NAME_CODES = ['5', '6', '7', '9', 'A', 'B', 'C', 'D', 'E', 'F']
 
 export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
-  // ---- Network & ID ------------------------------------------------------
+  // ---- Network Settings (IP/subnet/router come from the device's ports) ----
   {
     key: 'projectorName',
-    group: 'Network & ID',
+    group: 'Network Settings',
     label: 'Projector name',
     kind: 'manual',
     note: 'Set in the menu or Panasonic Network Setup Software — no command exists.'
   },
   {
-    key: 'networkSetup',
-    group: 'Network & ID',
-    label: 'IP / subnet / gateway (from this device’s ports)',
-    kind: 'manual',
-    note: 'Set DHCP off and enter the address shown on the sheet — no command exists.'
-  },
-  {
     key: 'projectorId',
-    group: 'Network & ID',
+    group: 'Network Settings',
     label: 'Projector ID',
     kind: 'number',
     min: 0,
@@ -114,17 +107,17 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
     note: '0 = ALL',
     cmd: (v) => `RIS:${String(Number(v)).padStart(2, '0')}`
   },
-  // ---- Input & startup ---------------------------------------------------
+  // ---- Signal Settings -------------------------------------------------
   {
     key: 'input',
-    group: 'Input & startup',
+    group: 'Signal Settings',
     label: 'Input (switch now)',
     kind: 'choice',
     options: INPUTS.map(([label, code]) => ({ label, cmd: `IIS:${code}` }))
   },
   {
     key: 'startupInput',
-    group: 'Input & startup',
+    group: 'Signal Settings',
     label: 'Startup input',
     kind: 'choice',
     options: [
@@ -133,8 +126,57 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
     ]
   },
   {
+    key: 'backupInput',
+    group: 'Signal Settings',
+    label: 'Backup input',
+    kind: 'choice',
+    options: [
+      { label: 'Off', cmd: 'VXX:BACI2=+00000' },
+      ...[1, 2, 3, 4].map((n) => ({ label: `Mode ${n}`, cmd: `VXX:BACI2=${pad5(n)}` }))
+    ],
+    note: 'RQ22K / RQ13K family — each mode is an input pair; see the projector menu.'
+  },
+  {
+    key: 'backupInputSlot',
+    group: 'Signal Settings',
+    label: 'Backup input (option slots)',
+    kind: 'choice',
+    options: (
+      [
+        ['Off', 0],
+        ['SDI1 / SDI2', 1],
+        ['SDI1 (Slot 1) / SDI2 (Slot 1)', 11],
+        ['HDMI1 (Slot 1) / HDMI2 (Slot 1)', 12],
+        ['DVI1 (Slot 1) / DVI2 (Slot 1)', 13],
+        ['SDI1 (Slot 1) / SDI3 (Slot 1)', 14],
+        ['SDI3 (Slot 2) / SDI4 (Slot 2)', 21],
+        ['HDMI3 (Slot 2) / HDMI4 (Slot 2)', 22],
+        ['DVI3 (Slot 2) / DVI4 (Slot 2)', 23],
+        ['SDI1 (Slot 2) / SDI3 (Slot 2)', 24],
+        ['SDI1-2 / SDI3-4', 100],
+        ['SDI1-2 (Slot 1) / SDI3-4 (Slot 2)', 101],
+        ['HDMI1-2 (Slot 1) / HDMI3-4 (Slot 2)', 102],
+        ['DVI1-2 (Slot 1) / DVI3-4 (Slot 2)', 103],
+        ['SDI1-4 (on board) / SDI1-4 (slot)', 1000],
+        ['SDI1-4 (on board) / SDI1-4 (Slot 1)', 1001],
+        ['SDI1-4 (on board) / SDI1-4 (Slot 2)', 1002]
+      ] as const
+    ).map(([label, n]) => ({ label, cmd: `VXX:BACI6=${pad5(n)}` })),
+    note: 'RQ32K family.'
+  },
+  {
+    key: 'autoSwitch',
+    group: 'Signal Settings',
+    label: 'Auto switch (to backup)',
+    kind: 'choice',
+    options: [
+      { label: 'Disable', cmd: 'VXX:BACI3=+00001' },
+      { label: 'Enable', cmd: 'VXX:BACI3=+00002' }
+    ]
+  },
+  {
     key: 'startupLogo',
-    group: 'Input & startup',
+    group: 'Signal Settings',
     label: 'Startup logo',
     kind: 'choice',
     options: [
@@ -145,7 +187,7 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
   },
   {
     key: 'backColor',
-    group: 'Input & startup',
+    group: 'Signal Settings',
     label: 'Back color (no signal)',
     kind: 'choice',
     options: [
@@ -157,7 +199,7 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
   },
   {
     key: 'projectionMethod',
-    group: 'Input & startup',
+    group: 'Installation & Lens',
     label: 'Projection method',
     kind: 'choice',
     options: [
@@ -169,10 +211,10 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
       { label: 'Rear / auto', cmd: 'OIL:5' }
     ]
   },
-  // ---- Light & mode ------------------------------------------------------
+  // ---- Light Settings --------------------------------------------------
   {
     key: 'operatingMode',
-    group: 'Light & mode',
+    group: 'Light Settings',
     label: 'Operating mode',
     kind: 'choice',
     options: [
@@ -189,7 +231,7 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
   },
   {
     key: 'lightOutput',
-    group: 'Light & mode',
+    group: 'Light Settings',
     label: 'Light output',
     kind: 'number',
     min: 10,
@@ -200,7 +242,7 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
   },
   {
     key: 'standbyMode',
-    group: 'Light & mode',
+    group: 'Light Settings',
     label: 'Standby mode',
     kind: 'choice',
     options: [
@@ -211,7 +253,7 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
   },
   {
     key: 'brightnessConstant',
-    group: 'Light & mode',
+    group: 'Light Settings',
     label: 'Brightness control — constant mode',
     kind: 'choice',
     options: [
@@ -222,7 +264,7 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
   },
   {
     key: 'brightnessLink',
-    group: 'Light & mode',
+    group: 'Light Settings',
     label: 'Brightness control — link group',
     kind: 'choice',
     options: [
@@ -233,10 +275,10 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
       { label: 'Group D', cmd: 'VXX:BCLI0=+00004' }
     ]
   },
-  // ---- Picture -----------------------------------------------------------
+  // ---- Picture Settings ------------------------------------------------
   {
     key: 'pictureMode',
-    group: 'Picture',
+    group: 'Picture Settings',
     label: 'Picture mode',
     kind: 'choice',
     options: [
@@ -249,26 +291,26 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
       { label: 'User', cmd: 'VPM:USR' }
     ]
   },
-  // ---- Shutter -----------------------------------------------------------
+  // ---- Shutter Settings ------------------------------------------------
   // shortcut: SEFS1/SEFS2/SEFI3 → fade-in/fade-out/startup follows the menu order
   // (the PDF's row labels didn't extract cleanly); confirm on the first real projector.
   {
     key: 'fadeIn',
-    group: 'Shutter',
+    group: 'Shutter Settings',
     label: 'Shutter fade-in',
     kind: 'choice',
     options: fade('SEFS1')
   },
   {
     key: 'fadeOut',
-    group: 'Shutter',
+    group: 'Shutter Settings',
     label: 'Shutter fade-out',
     kind: 'choice',
     options: fade('SEFS2')
   },
   {
     key: 'shutterStartup',
-    group: 'Shutter',
+    group: 'Shutter Settings',
     label: 'Shutter at startup',
     kind: 'choice',
     options: [
@@ -276,10 +318,10 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
       { label: 'Close', cmd: 'VXX:SEFI3=+00001' }
     ]
   },
-  // ---- Blending & lens ---------------------------------------------------
+  // ---- Edge Blending + Installation & Lens -----------------------------
   {
     key: 'edgeBlend',
-    group: 'Blending & lens',
+    group: 'Edge Blending',
     label: 'Edge blending',
     kind: 'choice',
     options: [
@@ -298,14 +340,14 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
   ).flatMap(([side, onCode, widthCode]): ProjectorSetting[] => [
     {
       key: `blend${side}`,
-      group: 'Blending & lens',
+      group: 'Edge Blending',
       label: `Edge blend — ${side.toLowerCase()} side`,
       kind: 'choice',
       options: onOff(onCode)
     },
     {
       key: `blend${side}Width`,
-      group: 'Blending & lens',
+      group: 'Edge Blending',
       label: `Edge blend — ${side.toLowerCase()} width`,
       kind: 'number',
       min: 0,
@@ -315,11 +357,16 @@ export const PROJECTOR_SETTINGS: ProjectorSetting[] = [
       cmd: (v) => `VXX:${widthCode}=${pad5(Number(v))}`
     }
   ]),
-  { key: 'lensModel', group: 'Blending & lens', label: 'Lens model', kind: 'manual' },
-  { key: 'blendRole', group: 'Blending & lens', label: 'Position in the array', kind: 'manual' },
+  { key: 'lensModel', group: 'Installation & Lens', label: 'Lens model', kind: 'manual' },
+  {
+    key: 'blendRole',
+    group: 'Installation & Lens',
+    label: 'Position in the array',
+    kind: 'manual'
+  },
   ...LENS_NAME_CODES.map((code, i): ProjectorSetting => ({
     key: `lensMemory${i + 1}Name`,
-    group: 'Blending & lens',
+    group: 'Installation & Lens',
     label: `Lens memory ${i + 1} name`,
     kind: 'text',
     cmd: (v) => `VXX:NCGS${code}=${cleanText(v)}`

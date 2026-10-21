@@ -8,10 +8,23 @@ import OrdersPage from './pages/OrdersPage'
 import LabelsPage from './pages/LabelsPage'
 import CasesPage from './pages/CasesPage'
 import PatchingPage from './pages/PatchingPage'
+import ProjectorsPage from './pages/ProjectorsPage'
+import WallpapersPage from './pages/WallpapersPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjectMenu from './components/ProjectMenu'
 
-type Tab = 'devices' | 'subnets' | 'cables' | 'configs' | 'orders' | 'labels' | 'cases' | 'patching' | 'settings'
+type Tab =
+  | 'devices'
+  | 'projectors'
+  | 'wallpapers'
+  | 'subnets'
+  | 'cables'
+  | 'configs'
+  | 'orders'
+  | 'labels'
+  | 'cases'
+  | 'patching'
+  | 'settings'
 
 // Collapsible sidebar groups and the tabs they contain.
 const NAV_GROUPS: Record<string, Tab[]> = {
@@ -100,6 +113,20 @@ function App(): React.JSX.Element {
           >
             Devices
           </button>
+          <div className="side-sub">
+            <button
+              className={`side-item ${tab === 'projectors' ? 'active' : ''}`}
+              onClick={() => setTab('projectors')}
+            >
+              Projectors
+            </button>
+            <button
+              className={`side-item ${tab === 'wallpapers' ? 'active' : ''}`}
+              onClick={() => setTab('wallpapers')}
+            >
+              Wallpapers
+            </button>
+          </div>
 
           <div className="side-group">
             <button
@@ -192,6 +219,10 @@ function App(): React.JSX.Element {
             categories={categories}
             onChanged={refresh}
           />
+        ) : tab === 'projectors' ? (
+          <ProjectorsPage devices={devices} onChanged={refresh} />
+        ) : tab === 'wallpapers' ? (
+          <WallpapersPage devices={devices} onChanged={refresh} />
         ) : tab === 'subnets' ? (
           <SubnetsPage subnets={subnets} onChanged={refresh} />
         ) : tab === 'cables' ? (
