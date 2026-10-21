@@ -1,6 +1,6 @@
 {
   "name": "vw-device-manager",
-  "version": "2.3.3",
+  "version": "2.4.0",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
