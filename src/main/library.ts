@@ -13,6 +13,10 @@ import type {
   OrderKit,
   OrderKitInput,
   SoftwarePackage,
+  StickerDesign,
+  StickerDesignInput,
+  StickerSheet,
+  StickerSheetInput,
   SoftwarePackageInput,
   SwitchConfigSettings
 } from '../shared/types'
@@ -43,6 +47,9 @@ interface Library {
   /** Crew directory (names, contacts, default rates). library.json lives in
    *  the gitignored data/ folder, so this never reaches GitHub. */
   crew: CrewMember[]
+  /** Cable loom sticker sheet types + designs. */
+  stickerSheets: StickerSheet[]
+  stickerDesigns: StickerDesign[]
 }
 
 function defaultSwitchConfig(): SwitchConfigSettings {
@@ -61,7 +68,9 @@ function readLibrary(): Library {
       companyLogo: raw.companyLogo ?? null,
       switchConfig: { ...defaultSwitchConfig(), ...(raw.switchConfig ?? {}) },
       software: raw.software ?? [],
-      crew: raw.crew ?? []
+      crew: raw.crew ?? [],
+      stickerSheets: raw.stickerSheets ?? [],
+      stickerDesigns: raw.stickerDesigns ?? []
     }
   } catch {
     return {
@@ -73,7 +82,9 @@ function readLibrary(): Library {
       companyLogo: null,
       switchConfig: defaultSwitchConfig(),
       software: [],
-      crew: []
+      crew: [],
+      stickerSheets: [],
+      stickerDesigns: []
     }
   }
 }
@@ -102,7 +113,9 @@ export async function ensureLibrary(): Promise<void> {
     companyLogo: null,
     switchConfig: defaultSwitchConfig(),
     software: [],
-    crew: []
+    crew: [],
+    stickerSheets: [],
+    stickerDesigns: []
   })
 }
 
@@ -345,5 +358,49 @@ export function updateCrewMember(id: number, input: CrewMemberInput): CrewMember
 export function deleteCrewMember(id: number): void {
   const lib = readLibrary()
   lib.crew = lib.crew.filter((c) => c.id !== id)
+  writeLibrary(lib)
+}
+
+// ---- Cable loom stickers (shared) -------------------------------------------
+
+type Keyed = { id: number; name: string }
+const nextId = (rows: Keyed[]): number => rows.reduce((m, r) => Math.max(m, r.id), 0) + 1
+const byName = (a: Keyed, b: Keyed): number => a.name.localeCompare(b.name)
+
+export function listStickerSheets(): StickerSheet[] {
+  return readLibrary().stickerSheets
+}
+
+export function saveStickerSheet(id: number | null, input: StickerSheetInput): StickerSheet {
+  const lib = readLibrary()
+  const sheet: StickerSheet = { ...input, id: id ?? nextId(lib.stickerSheets) }
+  lib.stickerSheets = [...lib.stickerSheets.filter((s) => s.id !== sheet.id), sheet].sort(byName)
+  writeLibrary(lib)
+  return sheet
+}
+
+/** Deleting a sheet type also deletes the designs made for it. */
+export function deleteStickerSheet(id: number): void {
+  const lib = readLibrary()
+  lib.stickerSheets = lib.stickerSheets.filter((s) => s.id !== id)
+  lib.stickerDesigns = lib.stickerDesigns.filter((d) => d.sheetId !== id)
+  writeLibrary(lib)
+}
+
+export function listStickerDesigns(): StickerDesign[] {
+  return readLibrary().stickerDesigns
+}
+
+export function saveStickerDesign(id: number | null, input: StickerDesignInput): StickerDesign {
+  const lib = readLibrary()
+  const design: StickerDesign = { ...input, id: id ?? nextId(lib.stickerDesigns) }
+  lib.stickerDesigns = [...lib.stickerDesigns.filter((d) => d.id !== design.id), design].sort(byName)
+  writeLibrary(lib)
+  return design
+}
+
+export function deleteStickerDesign(id: number): void {
+  const lib = readLibrary()
+  lib.stickerDesigns = lib.stickerDesigns.filter((d) => d.id !== id)
   writeLibrary(lib)
 }

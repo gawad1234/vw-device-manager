@@ -16,6 +16,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Schedule — Trucking](#trucking)
   - [Truck load sheets](#truck-load-sheets)
 - [Cables](#cables)
+  - [Loom labels (sticker sheets)](#loom-labels)
 - [Patching](#patching)
 - [Orders](#orders)
   - [Auto-add kits](#auto-add-kits)
@@ -183,6 +184,16 @@ Manage cable bundles and the individual cables inside them.
 - **Pull sheet** — PDF/Excel/CSV checklist for pulling cable.
 - **Cable schedule** — the full run list.
 - **Cable labels** — printable labels in two styles: **cards** and wrap-around **flags**.
+
+### Loom labels
+
+**Cables → Loom labels** prints a sticker for each end of every cable in the looms you pick, straight onto manufacturer sticker sheets (e.g. OnlineLabels, Avery).
+
+1. **Import sticker template…** — pick the manufacturer's **Word (.docx)** or **PDF** template for your sheet. The app reads every label's exact position and size (e.g. *OL25: 80 labels, 1.75″ × 0.5″*) and shows the sheet. Sheet types are shared by every show.
+2. **Design** — each new sheet type gets a starting design (a bundle-color bar, the cable name, and *this end → other end*). **Edit design…** opens the same freeform designer as case labels, sized to the sticker. Type fields into text: `{Cable}`, `{This end}`, `{Other end}`, `{From}`, `{To}`, `{Type}`, `{Length}`, `{Bundle}`, `{End}` (A or B), `{Notes}`, `{Show}`. Any color can be set to **Bundle color** so stickers match the loom.
+3. **Print** — tick the looms, choose **stickers per cable** (2 = one for each end: the first sticker's `{This end}` is the cable's From end, the second's is its To end), and click a sticker in the sheet preview to **start there** (so half-used sheets aren't wasted). **Print stickers…** saves a PDF at the sheet's exact size; tick **Mark these cables Labeled** to check them off.
+
+**Lining up with your printer:** **Print test page…** prints the label outlines (numbered) on plain paper. Hold it over a sticker sheet against the light; if it's off, set **Nudge right / Nudge down** (in inches) and test again. The nudge is saved per sheet type. When printing the PDF, choose **Actual size / 100%** (not "fit to page").
 
 ---
 

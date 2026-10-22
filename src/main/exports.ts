@@ -44,7 +44,7 @@ let docShowName: string | null = null
 // readable string using the current device list.
 type DeviceIndex = Map<number, { name: string; ports: Map<number, string> }>
 
-function buildDeviceIndex(): DeviceIndex {
+export function buildDeviceIndex(): DeviceIndex {
   const idx: DeviceIndex = new Map()
   for (const d of listDevices()) {
     idx.set(d.id, { name: d.name, ports: new Map(d.ports.map((p) => [p.id, p.label])) })
@@ -76,7 +76,7 @@ interface Row {
   notes: string
 }
 
-function bundleToRows(bundle: Bundle, idx: DeviceIndex): Row[] {
+export function bundleToRows(bundle: Bundle, idx: DeviceIndex): Row[] {
   return bundle.cables.map((c) => ({
     bundle: bundle.name,
     cable: c.name,

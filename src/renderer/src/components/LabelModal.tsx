@@ -1,16 +1,30 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { LabelElement, LabelTemplate, LabelTemplateInput } from '../../../shared/types'
+import { BUNDLE_COLOR } from '../../../shared/sticker-sheet'
 import Modal from './Modal'
 
+// Case labels are 8.5" x 5.5"; sticker designs pass their own size.
 const LABEL_W = 8.5
 const LABEL_H = 5.5
-const SCALE = 68 // px per inch in the editor canvas
+const CASE_SCALE = 68 // px per inch in the editor canvas for case labels
+
+/** The editor preview shows a sticker's "bundle color" as a neutral grey. */
+const previewColor = (c: string | null | undefined): string | undefined =>
+  c === BUNDLE_COLOR ? '#8a8a8a' : (c ?? undefined)
 
 /** Text rendered inside its box, matching the print renderer: wrap, and a live
  *  shrink-to-fit when auto-size is on (so the preview tracks what prints). */
-function CanvasText({ el, text }: { el: LabelElement; text: string }): React.JSX.Element {
+function CanvasText({
+  el,
+  text,
+  scale
+}: {
+  el: LabelElement
+  text: string
+  scale: number
+}): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
-  const baseFs = (el.fontSize || 18) * (SCALE / 72)
+  const baseFs = (el.fontSize || 18) * (scale / 72)
   const [fs, setFs] = useState(baseFs)
 
   useLayoutEffect(() => {
@@ -43,7 +57,7 @@ function CanvasText({ el, text }: { el: LabelElement; text: string }): React.JSX
         fontSize: fs,
         fontWeight: el.bold ? 800 : 400,
         textAlign: el.align || 'left',
-        color: el.color || '#111',
+        color: previewColor(el.color) || '#111',
         lineHeight: 1.1,
         wordBreak: 'break-word',
         whiteSpace: el.wrap === false ? 'pre' : 'pre-wrap'
@@ -58,7 +72,16 @@ const uid = (): string => Math.random().toString(36).slice(2, 10)
 const round2 = (v: number): number => Math.round(v * 100) / 100
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v))
 
-function defaultElement(type: LabelElement['type']): LabelElement {
+function defaultElement(type: LabelElement['type'], w: number, h: number): LabelElement {
+  // Small labels (stickers): fit the new element inside the label instead.
+  if (w < 4) {
+    const base = { id: uid(), x: 0.04, y: 0.04 }
+    if (type === 'text' || type === 'showname')
+      return { ...base, type, w: w - 0.08, h: Math.min(0.3, h - 0.08), text: type === 'text' ? '{Cable}' : undefined, fontSize: 10, bold: true, align: 'left', color: '#111111', autoSize: true }
+    if (type === 'logo') return { ...base, type, w: Math.min(0.6, w / 3), h: h - 0.08 }
+    if (type === 'line') return { ...base, type, w: w - 0.08, h: 0.02, color: '#111111' }
+    return { ...base, type: 'rect', x: 0, y: 0, w, h, fill: null, color: '#111111', borderWidth: 1 }
+  }
   const base = { id: uid(), x: 0.5, y: 0.5 }
   if (type === 'text')
     return { ...base, type, w: 4, h: 0.8, text: 'Text', fontSize: 28, bold: true, align: 'left', color: '#111111' }
@@ -91,8 +114,24 @@ function legacyToElements(t: LabelTemplate, showText: string): LabelElement[] {
   return els
 }
 
+/** Sticker mode: design a cable-loom sticker of the given size instead of a case label. */
+export interface StickerEditing {
+  name: string
+  elements: LabelElement[]
+  size: { w: number; h: number }
+  /** shown under the title, e.g. the sheet type */
+  subtitle: string
+  /** save; returns false to stay open (e.g. on error) */
+  onSave: (name: string, elements: LabelElement[]) => Promise<boolean>
+  /** delete; resolves true if it went ahead (the editor then closes) */
+  onDelete?: () => Promise<boolean>
+}
+
+const STICKER_TOKENS = ['{Cable}', '{This end}', '{Other end}', '{From}', '{To}', '{Type}', '{Length}', '{Bundle}', '{End}', '{Notes}', '{Show}']
+
 interface Props {
   template: LabelTemplate | null
+  sticker?: StickerEditing
   /** for a new template seeded from a preset */
   initialName?: string
   initialElements?: LabelElement[]
@@ -103,13 +142,18 @@ interface Props {
 
 function LabelModal({
   template,
+  sticker,
   initialName,
   initialElements,
   onClose,
   onChanged,
   onCreated
 }: Props): React.JSX.Element {
-  const [name, setName] = useState(template?.name ?? '')
+  const W = sticker?.size.w ?? LABEL_W
+  const H = sticker?.size.h ?? LABEL_H
+  // fit a small sticker to a ~640 x 400 px canvas; case labels keep their usual zoom
+  const SCALE = sticker ? Math.min(640 / W, 400 / H) : CASE_SCALE
+  const [name, setName] = useState(sticker?.name ?? template?.name ?? '')
   const [elements, setElements] = useState<LabelElement[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -127,7 +171,9 @@ function LabelModal({
   useEffect(() => {
     let cancelled = false
     async function seed(): Promise<void> {
-      if (template?.elements && template.elements.length) {
+      if (sticker) {
+        if (!cancelled) setElements(sticker.elements)
+      } else if (template?.elements && template.elements.length) {
         if (!cancelled) setElements(template.elements)
       } else if (template) {
         const showText = (await window.api.showName.get()) ?? ''
@@ -142,7 +188,7 @@ function LabelModal({
           ])
       }
     }
-    setName(template?.name ?? initialName ?? '')
+    setName(sticker?.name ?? template?.name ?? initialName ?? '')
     setSelectedId(null)
     setError(null)
     seed()
@@ -153,11 +199,39 @@ function LabelModal({
 
   const selected = elements.find((e) => e.id === selectedId) ?? null
 
+  /** A color picker for the selected element; stickers can also use the cable's bundle color. */
+  const colorInput = (key: 'color' | 'fill', fallback: string): React.JSX.Element => {
+    const v = selected?.[key]
+    const isBundle = v === BUNDLE_COLOR
+    return (
+      <>
+        <input
+          type="color"
+          value={v && !isBundle ? v : fallback}
+          disabled={isBundle}
+          onChange={(e) => selected && patchEl(selected.id, { [key]: e.target.value })}
+        />
+        {sticker && (
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={isBundle}
+              onChange={(e) =>
+                selected && patchEl(selected.id, { [key]: e.target.checked ? BUNDLE_COLOR : fallback })
+              }
+            />
+            Bundle color
+          </label>
+        )}
+      </>
+    )
+  }
+
   function patchEl(id: string, patch: Partial<LabelElement>): void {
     setElements((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
   }
   function addEl(type: LabelElement['type']): void {
-    const el = defaultElement(type)
+    const el = defaultElement(type, W, H)
     setElements((prev) => [...prev, el])
     setSelectedId(el.id)
   }
@@ -168,7 +242,7 @@ function LabelModal({
   function duplicateEl(id: string): void {
     const el = elements.find((e) => e.id === id)
     if (!el) return
-    const copy = { ...el, id: uid(), x: round2(clamp(el.x + 0.2, 0, LABEL_W - el.w)), y: round2(clamp(el.y + 0.2, 0, LABEL_H - el.h)) }
+    const copy = { ...el, id: uid(), x: round2(clamp(el.x + 0.2, 0, W - el.w)), y: round2(clamp(el.y + 0.2, 0, H - el.h)) }
     setElements((prev) => [...prev, copy])
     setSelectedId(copy.id)
   }
@@ -195,11 +269,11 @@ function LabelModal({
       prev.map((p) => {
         if (p.id !== selectedId) return p
         if (where === 'left') return { ...p, x: 0 }
-        if (where === 'hcenter') return { ...p, x: round2(clamp((LABEL_W - p.w) / 2, 0, LABEL_W)) }
-        if (where === 'right') return { ...p, x: round2(clamp(LABEL_W - p.w, 0, LABEL_W)) }
+        if (where === 'hcenter') return { ...p, x: round2(clamp((W - p.w) / 2, 0, W)) }
+        if (where === 'right') return { ...p, x: round2(clamp(W - p.w, 0, W)) }
         if (where === 'top') return { ...p, y: 0 }
-        if (where === 'vcenter') return { ...p, y: round2(clamp((LABEL_H - p.h) / 2, 0, LABEL_H)) }
-        return { ...p, y: round2(clamp(LABEL_H - p.h, 0, LABEL_H)) }
+        if (where === 'vcenter') return { ...p, y: round2(clamp((H - p.h) / 2, 0, H)) }
+        return { ...p, y: round2(clamp(H - p.h, 0, H)) }
       })
     )
   }
@@ -218,8 +292,8 @@ function LabelModal({
         prev.map((p) => {
           if (p.id !== id) return p
           if (mode === 'move')
-            return { ...p, x: round2(clamp(start.x + dx, 0, LABEL_W - p.w)), y: round2(clamp(start.y + dy, 0, LABEL_H - p.h)) }
-          return { ...p, w: round2(clamp(start.w + dx, 0.1, LABEL_W - p.x)), h: round2(clamp(start.h + dy, 0.04, LABEL_H - p.y)) }
+            return { ...p, x: round2(clamp(start.x + dx, 0, W - p.w)), y: round2(clamp(start.y + dy, 0, H - p.h)) }
+          return { ...p, w: round2(clamp(start.w + dx, 0.1, W - p.x)), h: round2(clamp(start.h + dy, 0.04, H - p.y)) }
         })
       )
     }
@@ -249,6 +323,11 @@ function LabelModal({
 
   async function save(e: React.FormEvent): Promise<void> {
     e.preventDefault()
+    if (sticker) {
+      if (!name.trim()) return setError('Design name is required.')
+      if (await sticker.onSave(name.trim(), elements)) onClose()
+      return
+    }
     const saved = await persist()
     if (!saved) return
     onChanged()
@@ -272,7 +351,22 @@ function LabelModal({
     onClose()
   }
 
-  const footer = (
+  const footer = sticker ? (
+    <>
+      {sticker.onDelete && (
+        <button className="btn btn-danger" onClick={() => sticker.onDelete?.().then((ok) => ok && onClose())}>
+          Delete
+        </button>
+      )}
+      <span className="footer-spacer" />
+      <button className="btn" type="button" onClick={onClose}>
+        Close
+      </button>
+      <button className="btn btn-primary" type="submit" form="label-form">
+        Save design
+      </button>
+    </>
+  ) : (
     <>
       {template && (
         <button className="btn btn-danger" onClick={handleDelete}>
@@ -297,14 +391,26 @@ function LabelModal({
   )
 
   return (
-    <Modal title={template ? template.name : 'New label template'} onClose={onClose} footer={footer} wide>
+    <Modal
+      title={sticker ? sticker.name || 'New sticker design' : template ? template.name : 'New label template'}
+      onClose={onClose}
+      footer={footer}
+      wide
+    >
       <form id="label-form" onSubmit={save} style={{ marginBottom: 14, maxWidth: 360 }}>
         {error && <div className="banner banner-error">{error}</div>}
         <label className="label-name-field">
-          Template name
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Road case" autoFocus />
+          {sticker ? 'Design name' : 'Template name'}
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={sticker ? 'e.g. Loom — 2 line' : 'e.g. Road case'} autoFocus />
         </label>
+        {sticker && <small className="muted">{sticker.subtitle}</small>}
       </form>
+      {sticker && (
+        <p className="muted" style={{ fontSize: 12.5, marginTop: -6 }}>
+          Fields you can type into text: {STICKER_TOKENS.join(' ')} — {'{This end}'} is the end the
+          sticker goes on (each cable prints one sticker per end).
+        </p>
+      )}
 
       <div className="lc-toolbar">
         <button type="button" className="btn btn-small" onClick={() => addEl('text')}>
@@ -376,12 +482,12 @@ function LabelModal({
       <div className="label-editor">
         <div>
           <div className="muted" style={{ fontSize: 12.5, marginBottom: 8 }}>
-            Canvas · 8.5&quot; × 5.5&quot; — drag to move, drag the corner to resize
+            Canvas · {W}&quot; × {H}&quot; — drag to move, drag the corner to resize
           </div>
           <div className="label-preview-wrap">
             <div
               className="lc-canvas"
-              style={{ width: LABEL_W * SCALE, height: LABEL_H * SCALE }}
+              style={{ width: W * SCALE, height: H * SCALE }}
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) setSelectedId(null)
               }}
@@ -401,16 +507,16 @@ function LabelModal({
                     el.valign === 'middle' ? 'center' : el.valign === 'bottom' ? 'flex-end' : 'flex-start'
                   style.overflow = 'hidden'
                 } else if (el.type === 'line') {
-                  style.background = el.color || '#111'
+                  style.background = previewColor(el.color) || '#111'
                 } else if (el.type === 'rect') {
-                  if (el.fill) style.background = el.fill
-                  if (el.borderWidth) style.border = `${(el.borderWidth || 0) * (SCALE / 72)}px solid ${el.color || '#111'}`
+                  if (el.fill) style.background = previewColor(el.fill)
+                  if (el.borderWidth) style.border = `${(el.borderWidth || 0) * (SCALE / 72)}px solid ${previewColor(el.color) || '#111'}`
                 }
                 const content =
                   el.type === 'showname' ? (
-                    <CanvasText el={el} text={projectShow || '{Show name}'} />
+                    <CanvasText el={el} text={projectShow || '{Show name}'} scale={SCALE} />
                   ) : el.type === 'text' ? (
-                    <CanvasText el={el} text={el.text ?? ''} />
+                    <CanvasText el={el} text={el.text ?? ''} scale={SCALE} />
                   ) : el.type === 'logo' ? (
                     logo ? (
                       <img src={logo} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'left center' }} />
@@ -477,7 +583,7 @@ function LabelModal({
                     </label>
                     <label>
                       Color
-                      <input type="color" value={selected.color ?? '#111111'} onChange={(e) => patchEl(selected.id, { color: e.target.value })} />
+                      {colorInput('color', '#111111')}
                     </label>
                   </div>
                   <div className="lc-prop-row">
@@ -533,7 +639,7 @@ function LabelModal({
                     </label>
                     <label>
                       Color
-                      <input type="color" value={selected.color ?? '#111111'} onChange={(e) => patchEl(selected.id, { color: e.target.value })} />
+                      {colorInput('color', '#111111')}
                     </label>
                   </div>
                   <div className="lc-prop-row">
@@ -560,7 +666,7 @@ function LabelModal({
                 <div className="lc-prop-row">
                   <label>
                     Color
-                    <input type="color" value={selected.color ?? '#111111'} onChange={(e) => patchEl(selected.id, { color: e.target.value })} />
+                    {colorInput('color', '#111111')}
                   </label>
                   <label>
                     Thickness (pt)
@@ -578,14 +684,14 @@ function LabelModal({
                     {selected.fill && (
                       <label>
                         Fill
-                        <input type="color" value={selected.fill ?? '#cccccc'} onChange={(e) => patchEl(selected.id, { fill: e.target.value })} />
+                        {colorInput('fill', '#cccccc')}
                       </label>
                     )}
                   </div>
                   <div className="lc-prop-row">
                     <label>
                       Border color
-                      <input type="color" value={selected.color ?? '#111111'} onChange={(e) => patchEl(selected.id, { color: e.target.value })} />
+                      {colorInput('color', '#111111')}
                     </label>
                     <label>
                       Border (pt)
@@ -597,21 +703,21 @@ function LabelModal({
               <div className="lc-prop-row">
                 <label>
                   X (in)
-                  <input type="number" step={0.1} value={selected.x} onChange={(e) => patchEl(selected.id, { x: round2(clamp(Number(e.target.value) || 0, 0, LABEL_W)) })} />
+                  <input type="number" step={0.1} value={selected.x} onChange={(e) => patchEl(selected.id, { x: round2(clamp(Number(e.target.value) || 0, 0, W)) })} />
                 </label>
                 <label>
                   Y (in)
-                  <input type="number" step={0.1} value={selected.y} onChange={(e) => patchEl(selected.id, { y: round2(clamp(Number(e.target.value) || 0, 0, LABEL_H)) })} />
+                  <input type="number" step={0.1} value={selected.y} onChange={(e) => patchEl(selected.id, { y: round2(clamp(Number(e.target.value) || 0, 0, H)) })} />
                 </label>
               </div>
               <div className="lc-prop-row">
                 <label>
                   W (in)
-                  <input type="number" step={0.1} value={selected.w} onChange={(e) => patchEl(selected.id, { w: round2(clamp(Number(e.target.value) || 0.1, 0.1, LABEL_W)) })} />
+                  <input type="number" step={0.1} value={selected.w} onChange={(e) => patchEl(selected.id, { w: round2(clamp(Number(e.target.value) || 0.1, 0.1, W)) })} />
                 </label>
                 <label>
                   H (in)
-                  <input type="number" step={0.1} value={selected.h} onChange={(e) => patchEl(selected.id, { h: round2(clamp(Number(e.target.value) || 0.04, 0.04, LABEL_H)) })} />
+                  <input type="number" step={0.1} value={selected.h} onChange={(e) => patchEl(selected.id, { h: round2(clamp(Number(e.target.value) || 0.04, 0.04, H)) })} />
                 </label>
               </div>
             </>

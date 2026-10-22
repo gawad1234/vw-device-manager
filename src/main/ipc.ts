@@ -13,8 +13,12 @@ import * as updater from './updater'
 import * as server from './server'
 import { projectorCommandsCsv } from '../shared/projector-settings'
 import { generateInstallScript, INSTALL_BAT, kitFileNames } from './software-kit'
+import { printStickers, printStickerTest } from './stickers'
 import type {
   BuildKitResult,
+  PrintStickersOptions,
+  StickerDesignInput,
+  StickerSheetInput,
   CrewAssignmentInput,
   CrewMemberInput,
   ScheduleMeta,
@@ -65,6 +69,20 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('devices:setSoftware', (_e, id: number, packageIds: number[] | null) =>
     repo.setDeviceSoftware(id, packageIds)
   )
+
+  // Cable loom stickers: sheet types + designs (shared library), printing.
+  ipcMain.handle('stickers:sheets', () => library.listStickerSheets())
+  ipcMain.handle('stickers:saveSheet', (_e, id: number | null, input: StickerSheetInput) =>
+    library.saveStickerSheet(id, input)
+  )
+  ipcMain.handle('stickers:removeSheet', (_e, id: number) => library.deleteStickerSheet(id))
+  ipcMain.handle('stickers:designs', () => library.listStickerDesigns())
+  ipcMain.handle('stickers:saveDesign', (_e, id: number | null, input: StickerDesignInput) =>
+    library.saveStickerDesign(id, input)
+  )
+  ipcMain.handle('stickers:removeDesign', (_e, id: number) => library.deleteStickerDesign(id))
+  ipcMain.handle('stickers:print', (_e, opts: PrintStickersOptions) => printStickers(opts))
+  ipcMain.handle('stickers:printTest', (_e, sheetId: number) => printStickerTest(sheetId))
 
   // Crew: shared directory (library.json, gitignored) + this show's bookings.
   ipcMain.handle('crew:directory', () => library.listCrew())

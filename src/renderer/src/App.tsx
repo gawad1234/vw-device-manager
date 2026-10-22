@@ -12,6 +12,7 @@ import ProjectorsPage from './pages/ProjectorsPage'
 import WallpapersPage from './pages/WallpapersPage'
 import SoftwarePage from './pages/SoftwarePage'
 import CrewPage from './pages/CrewPage'
+import LoomLabelsPage from './pages/LoomLabelsPage'
 import TruckingPage from './pages/TruckingPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjectMenu from './components/ProjectMenu'
@@ -25,6 +26,7 @@ type Tab =
   | 'trucking'
   | 'subnets'
   | 'cables'
+  | 'loomlabels'
   | 'configs'
   | 'orders'
   | 'labels'
@@ -173,6 +175,14 @@ function App(): React.JSX.Element {
           >
             Cables
           </button>
+          <div className="side-sub">
+            <button
+              className={`side-item ${tab === 'loomlabels' ? 'active' : ''}`}
+              onClick={() => setTab('loomlabels')}
+            >
+              Loom labels
+            </button>
+          </div>
           <button
             className={`side-item ${tab === 'patching' ? 'active' : ''}`}
             onClick={() => setTab('patching')}
@@ -277,6 +287,8 @@ function App(): React.JSX.Element {
             cableTypes={cableTypes}
             onChanged={refresh}
           />
+        ) : tab === 'loomlabels' ? (
+          <LoomLabelsPage bundles={bundles} onChanged={refresh} />
         ) : tab === 'configs' ? (
           <ConfigsPage subnets={subnets} />
         ) : tab === 'orders' ? (

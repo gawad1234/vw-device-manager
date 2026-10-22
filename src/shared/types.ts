@@ -548,7 +548,7 @@ export interface LabelElement {
   autoSize?: boolean
   /** text color / line color / rect border color */
   color?: string | null
-  /** rect fill (null = transparent) */
+  /** rect fill (null = transparent). `BUNDLE_COLOR` = the cable's bundle color (stickers). */
   fill?: string | null
   /** rect border / line thickness, in points */
   borderWidth?: number
@@ -573,6 +573,55 @@ export interface LabelTemplate {
 }
 
 export type LabelTemplateInput = Omit<LabelTemplate, 'id' | 'createdAt' | 'updatedAt'>
+
+// ---- Cable loom stickers ------------------------------------------------------
+
+/** A label's box on the sheet, in inches from the page's top-left corner. */
+export interface StickerRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** A sticker sheet (e.g. OnlineLabels OL25): page size + every label's position. */
+export interface StickerSheet {
+  id: number
+  name: string
+  pageW: number
+  pageH: number
+  /** labels in print order (row by row, left to right) */
+  labels: StickerRect[]
+  /** rounded label corners (only affects the test-page outlines) */
+  rounded: boolean
+  /** printer calibration nudge, in inches (+x right, +y down) */
+  offsetX: number
+  offsetY: number
+  /** the file it was imported from */
+  source: string
+}
+
+export type StickerSheetInput = Omit<StickerSheet, 'id'>
+
+/** A sticker layout for one sheet type. Elements are in inches on one label. */
+export interface StickerDesign {
+  id: number
+  name: string
+  sheetId: number
+  elements: LabelElement[]
+}
+
+export type StickerDesignInput = Omit<StickerDesign, 'id'>
+
+export interface PrintStickersOptions {
+  designId: number
+  bundleIds: number[]
+  /** 0-based index of the first unused label on the sheet */
+  startAt: number
+  /** stickers per cable: 2 = one for each end */
+  perCable: number
+  markLabeled: boolean
+}
 
 // ---- Cases (what's packed in each case) -----------------------------------
 
@@ -716,6 +765,19 @@ export interface VwDeviceManagerApi {
   /** Save a projector's MMCS command list CSV. Returns the path, or null if cancelled. */
   projector: {
     saveCommands: (deviceId: number) => Promise<string | null>
+  }
+  /** Cable loom stickers: sheet types + designs (shared library) and printing. */
+  stickers: {
+    sheets: () => Promise<StickerSheet[]>
+    saveSheet: (id: number | null, input: StickerSheetInput) => Promise<StickerSheet>
+    removeSheet: (id: number) => Promise<void>
+    designs: () => Promise<StickerDesign[]>
+    saveDesign: (id: number | null, input: StickerDesignInput) => Promise<StickerDesign>
+    removeDesign: (id: number) => Promise<void>
+    /** stickers for the given looms → PDF; returns the path, or null if cancelled */
+    print: (opts: PrintStickersOptions) => Promise<string | null>
+    /** the sheet's label outlines on plain paper, for checking printer alignment */
+    printTest: (sheetId: number) => Promise<string | null>
   }
   /** Crew: the shared directory (library.json) + this show's bookings and schedule window. */
   crew: {

@@ -39,6 +39,11 @@ workspace context and the cross-machine handoff log — check those first.
     schedule, device list, orders, **projector setup sheet** (one worksheet/page
     per projector) and **truck load sheets** (one page per trip).
   - `server.ts` — the LAN **Show Server** (plain `node:http`); reuses repo/exports.
+  - `stickers.ts` — **loom labels**: places cable stickers (2 per cable by default,
+    {This end}/{Other end} swapped) on a sticker sheet's exact label boxes, start
+    offset + printer nudge, printToPDF at the sheet's page size; test page; marks
+    cables labeled. Element rendering is shared with case labels via
+    `caselabels.ts` → `elementsHtml(elements, resolve, …)` + `AUTOFIT_SCRIPT`.
   - `switch-config.ts` — NETGEAR M4350 config generator; `software-kit.ts` — the
     install-kit `Install.ps1`/`Install.bat` generator (pure, tested);
     `vlan-script.ts` — Hyper-V VLAN script for the Configs tab.
@@ -56,7 +61,13 @@ workspace context and the cross-machine handoff log — check those first.
 - **Shared** (`src/shared/`): `types.ts` (all data types + the
   `VwDeviceManagerApi` contract shared between main/preload/renderer), and pure
   logic used by both sides: `projector-settings.ts` (Panasonic command catalog),
-  `software.ts` (silent-switch presets), `crew-cost.ts` (hours/OT/cost).
+  `software.ts` (silent-switch presets), `crew-cost.ts` (hours/OT/cost),
+  `sticker-sheet.ts` (label-template .docx parser — positioned shapes or Avery
+  table — plus `tidyLabels`/`stickerSlots`, `BUNDLE_COLOR`).
+- **Sticker template import runs in the renderer** (`lib/stickerImport.ts`): .docx via
+  `jszip`, .pdf via `pdfjs-dist` (bounding boxes of drawn paths on page 1, CTM
+  tracked; loaded on demand, worker run in-thread so it works under the CSP).
+  `LabelModal` doubles as the sticker designer via its `sticker` prop (any size).
 - **Tests:** `npm test` → `node --test` over `test/*.test.mts`; they import the
   pure `.ts` modules directly (so those must not import Electron or use
   extensionless relative imports).

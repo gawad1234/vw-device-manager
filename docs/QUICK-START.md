@@ -44,7 +44,7 @@ The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 ## 5. Do the paperwork
 
 - **Orders** — build a shop order (or import a bill of materials from the drawing), track received-vs-ordered, and export a **pull order** or **receiving checklist**. You can save custom **export formats** for different order types.
-- **Cables** — group cables into bundles and export pull sheets and labels.
+- **Cables** — group cables into bundles (looms) and export pull sheets and labels; **Loom labels** prints a sticker for each end of every cable onto manufacturer sticker sheets.
 - **Labels + Cases** — design a road-case label template, list what's in each case, and print a label per case.
 - **Schedule** — book crew and track their days, call times and cost (**Crew**); plan trucks and trips and print **load sheets** for the shop (**Trucking**).
 - **Devices → Projectors / Wallpapers / Software** — Panasonic projector setup sheets, branded desktop wallpapers, and USB install kits for show computers.

@@ -1,9 +1,9 @@
 import { BrowserWindow, dialog, shell } from 'electron'
 import { writeFileSync } from 'fs'
 import { getProjectMeta } from './repository'
-import type { LabelTemplate, PackCase } from '../shared/types'
+import type { LabelElement, LabelTemplate, PackCase } from '../shared/types'
 
-function esc(s: string): string {
+export function esc(s: string): string {
   return String(s ?? '').replace(
     /[&<>"]/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string
@@ -29,25 +29,27 @@ function resolveText(text: string, pc: PackCase | null, showNameText: string): s
   })
 }
 
-/** Freeform elements positioned in inches on the label. */
-function elementsHtml(
-  t: LabelTemplate,
+/** Freeform elements positioned in inches on a label. `resolve` fills a text
+ *  element's {tokens}; `color` maps a stored color (e.g. the BUNDLE_COLOR stand-in). */
+export function elementsHtml(
+  elements: LabelElement[],
+  resolve: (text: string) => string,
   showNameText: string,
   logo: string | null,
-  pc: PackCase | null
+  color: (c: string | null | undefined) => string | null | undefined = (c) => c
 ): string {
-  return t.elements
+  return elements
     .map((el) => {
       const pos = `position:absolute;left:${el.x}in;top:${el.y}in;width:${el.w}in;height:${el.h}in;`
       if (el.type === 'text' || el.type === 'showname') {
         const fs = el.fontSize || 18
         const raw = el.type === 'showname' ? showNameText : el.text || ''
-        const txt = el.type === 'showname' ? raw : resolveText(raw, pc, showNameText)
+        const txt = el.type === 'showname' ? raw : resolve(raw)
         const wrap = el.wrap !== false
         const justify =
           el.valign === 'middle' ? 'center' : el.valign === 'bottom' ? 'flex-end' : 'flex-start'
         const box = `${pos}display:flex;flex-direction:column;justify-content:${justify};overflow:hidden;`
-        const inner = `font-size:${fs}pt;font-weight:${el.bold ? 800 : 400};text-align:${el.align || 'left'};color:${esc(el.color || '#111111')};line-height:1.1;width:100%;word-break:break-word;white-space:${wrap ? 'pre-wrap' : 'pre'};`
+        const inner = `font-size:${fs}pt;font-weight:${el.bold ? 800 : 400};text-align:${el.align || 'left'};color:${esc(color(el.color) || '#111111')};line-height:1.1;width:100%;word-break:break-word;white-space:${wrap ? 'pre-wrap' : 'pre'};`
         const autofit = el.autoSize ? ` data-autofit="${fs}"` : ''
         return `<div style="${box}"><div style="${inner}"${autofit}>${esc(txt)}</div></div>`
       }
@@ -56,11 +58,12 @@ function elementsHtml(
         return `<div style="${pos}overflow:hidden;"><img src="${logo}" style="width:100%;height:100%;object-fit:contain;object-position:left center;"></div>`
       }
       if (el.type === 'line') {
-        return `<div style="${pos}background:${esc(el.color || '#111111')};"></div>`
+        return `<div style="${pos}background:${esc(color(el.color) || '#111111')};"></div>`
       }
       const bw = el.borderWidth || 0
-      const border = bw > 0 ? `border:${bw}pt solid ${esc(el.color || '#111111')};` : ''
-      const fill = el.fill ? `background:${esc(el.fill)};` : ''
+      const border = bw > 0 ? `border:${bw}pt solid ${esc(color(el.color) || '#111111')};` : ''
+      const fillColor = color(el.fill)
+      const fill = fillColor ? `background:${esc(fillColor)};` : ''
       return `<div style="${pos}${fill}${border}box-sizing:border-box;"></div>`
     })
     .join('')
@@ -75,7 +78,8 @@ function labelHtml(
 ): string {
   // Freeform layout wins when present.
   if (t.elements && t.elements.length) {
-    return `<div class="label label-free">${elementsHtml(t, showNameText, logo, pc)}</div>`
+    const resolve = (text: string): string => resolveText(text, pc, showNameText)
+    return `<div class="label label-free">${elementsHtml(t.elements, resolve, showNameText, logo)}</div>`
   }
   const band = t.color ? `<div class="band" style="background:${esc(t.color)}"></div>` : ''
   const showTop =
@@ -117,9 +121,11 @@ function sheetHtml(labels: string[]): string {
     .lfields { margin-top: 10pt; display: flex; flex-direction: column; gap: 4pt; }
     .lf { font-size: 18pt; line-height: 1.15; }
     .lk { font-weight: 700; text-transform: uppercase; font-size: 12pt; color: #333; margin-right: 10pt; }
-  </style></head><body>${labels.join('')}
-  <script>
-    // Shrink any auto-size text down until it fits its box (never grows past the set size).
+  </style></head><body>${labels.join('')}${AUTOFIT_SCRIPT}</body></html>`
+}
+
+/** Shrinks any auto-size text down until it fits its box (never grows past the set size). */
+export const AUTOFIT_SCRIPT = `<script>
     for (var n of document.querySelectorAll('[data-autofit]')) {
       var box = n.parentElement, max = parseFloat(n.getAttribute('data-autofit')) || 18, fs = max, guard = 0
       while (guard++ < 200 && fs > 4 && (n.scrollHeight > box.clientHeight + 1 || n.scrollWidth > box.clientWidth + 1)) {
@@ -127,8 +133,7 @@ function sheetHtml(labels: string[]): string {
         n.style.fontSize = fs + 'pt'
       }
     }
-  </script></body></html>`
-}
+  </script>`
 
 /** Render a sheet of labels to PDF, prompt for a save location, write + open it. */
 async function savePdf(html: string, defaultName: string): Promise<string | null> {

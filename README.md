@@ -40,7 +40,7 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
   - **Software** — a library of Windows installers with silent switches → a USB install kit per computer with a one-click `Install.bat`. *(beta)*
 - **Networking** — **Subnets** (name, CIDR, VLAN, gateway) and **Configs** (a Hyper-V VLAN PowerShell script or JSON for the VLAN Manager host tool).
 - **Schedule** *(beta)* — **Crew**: a shared crew directory, a per-show date grid (working/off, call times, phases) with day-rate or hourly + overtime costs. **Trucking**: trucks and trips with addresses, dock slots, on-arrival contacts and the cases on board, plus printable **truck load sheets** for the shop.
-- **Cables** — cable bundles and the cables in them (type, color, length, endpoints, pulled/labeled). Export pull sheets, schedules and cable labels.
+- **Cables** — cable bundles and the cables in them (type, color, length, endpoints, pulled/labeled). Export pull sheets, schedules and cable labels. Under it, **Loom labels**: import a sticker sheet template (Word or PDF, e.g. OnlineLabels / Avery), design the sticker, and print one for each end of every cable in the looms you pick.
 - **Patching** — import the drawing's circuit report and track patching per end, plus tested.
 - **Orders** — shop orders with equipment + cables, tracking **ordered vs. received**. Import from the drawing, paste from Excel, auto-add kits, and export **pull orders** and **receiving checklists** (PDF/Excel/CSV) in your own **export formats**.
 - **Packing** — **Labels** (case-label templates on a freeform canvas, printed two-up on Uline S-19323) and **Cases** (what's in each road case → a label per case).

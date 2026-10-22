@@ -10,6 +10,9 @@ import type {
   ProjectorConfig,
   SoftwarePackageInput,
   CrewAssignmentInput,
+  PrintStickersOptions,
+  StickerDesignInput,
+  StickerSheetInput,
   CrewMemberInput,
   ScheduleMeta,
   TruckInput,
@@ -47,6 +50,18 @@ const api: VwDeviceManagerApi = {
       ipcRenderer.invoke('devices:setProjector', id, config),
     setSoftware: (id: number, packageIds: number[] | null) =>
       ipcRenderer.invoke('devices:setSoftware', id, packageIds)
+  },
+  stickers: {
+    sheets: () => ipcRenderer.invoke('stickers:sheets'),
+    saveSheet: (id: number | null, input: StickerSheetInput) =>
+      ipcRenderer.invoke('stickers:saveSheet', id, input),
+    removeSheet: (id: number) => ipcRenderer.invoke('stickers:removeSheet', id),
+    designs: () => ipcRenderer.invoke('stickers:designs'),
+    saveDesign: (id: number | null, input: StickerDesignInput) =>
+      ipcRenderer.invoke('stickers:saveDesign', id, input),
+    removeDesign: (id: number) => ipcRenderer.invoke('stickers:removeDesign', id),
+    print: (opts: PrintStickersOptions) => ipcRenderer.invoke('stickers:print', opts),
+    printTest: (sheetId: number) => ipcRenderer.invoke('stickers:printTest', sheetId)
   },
   crew: {
     directory: () => ipcRenderer.invoke('crew:directory'),
