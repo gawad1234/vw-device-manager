@@ -1,8 +1,8 @@
 # Device Manager
 
-**A desktop app for tracking network and AV gear for ConnectCAD / Vectorworks shows — IPs, VLANs, cables, shop orders, and case labels — and syncing it onto the drawing.**
+**A desktop app for running the tech side of an AV / broadcast show — network gear, IPs and VLANs, cables, patching, shop orders, case labels, crew and trucking schedules — synced with your ConnectCAD / Vectorworks drawing.**
 
-Device Manager is the source-of-truth database for a show's network: every device, its ports, IP addresses, VLANs, MAC, location and notes. It then pushes that data back onto your ConnectCAD drawing in Vectorworks, and helps with the paperwork around it — purchasing/receiving, pull sheets, IP schedules, and printed road-case labels.
+Device Manager is the source-of-truth database for a show's network: every device, its ports, IP addresses, VLANs, MAC, location and notes. It pushes that data back onto your ConnectCAD drawing in Vectorworks, and helps with everything around it — purchasing/receiving, pull sheets, IP schedules, patching, printed road-case labels, projector and computer setup, and the crew and trucking schedule.
 
 > **Beta software.** You're helping test it — thank you! Please report anything confusing or broken (see [Feedback](#feedback)).
 
@@ -32,16 +32,19 @@ The app is **not code-signed** yet (that costs money we're skipping during the b
 
 ## What it does
 
-Everything lives in **projects** — one `.vwdm` file per show, kept next to its `.vwx` drawing. Use the project menu in the top-left to make a new one, open another, or save a copy. The app's tabs:
+Everything lives in **projects** — one `.vwdm` file per show, kept next to its `.vwx` drawing. Use the project menu in the top-left to make a new one, open another, or save a copy. The sidebar:
 
-- **Devices** — every piece of gear, its ports, IPs, VLANs, MAC, type and location. Switches get management/OOB IPs and VLAN-only ports. The app warns about duplicate IPs and IPs outside their subnet.
-- **Subnets** — your networks/VLANs (name, CIDR, VLAN tag, gateway).
-- **Cables** — cable bundles and the individual cables in them (type, color, length, endpoints, pulled/labeled status). Export pull sheets, schedules, and cable labels.
-- **Configs** — generate a Hyper-V VLAN setup PowerShell script from your subnets.
-- **Orders** — shop orders with equipment + cables, tracking **ordered vs. received**. Import a bill of materials straight from the drawing, paste from Excel, and export **pull orders** and **receiving checklists** (PDF/Excel/CSV) with change-highlighting. Export layout is customizable — see **Export formats** in the guide.
-- **Labels** — design reusable **case-label templates** on a freeform canvas (text, boxes, lines, your show name + logo) and print them two-up on Uline S-19323 sheets.
-- **Cases** — a **packing manager**: list what's in each road case, then print a label per case from any template, filling in `{Case}`, `{Contents}`, `{Show}` and your own fields automatically.
-- **Settings** — show branding (name + logo stamped on exports), the shared signal/cable-type library, device categories, and updates.
+- **Devices** — every piece of gear, its ports, IPs, VLANs, MAC, type and location (Details / Ports / Connections tabs). Switches get management/OOB IPs, VLAN-only ports, LAGs and a generated NETGEAR config. The app warns about duplicate IPs and IPs outside their subnet. Under it:
+  - **Projectors** — Panasonic PT-RZ / PT-RQ setup: pick settings, save a command list for Panasonic's Multi Monitoring & Control, print a one-page-per-projector setup sheet. *(beta)*
+  - **Wallpapers** — branded desktop wallpapers per show computer.
+  - **Software** — a library of Windows installers with silent switches → a USB install kit per computer with a one-click `Install.bat`. *(beta)*
+- **Networking** — **Subnets** (name, CIDR, VLAN, gateway) and **Configs** (a Hyper-V VLAN PowerShell script or JSON for the VLAN Manager host tool).
+- **Schedule** *(beta)* — **Crew**: a shared crew directory, a per-show date grid (working/off, call times, phases) with day-rate or hourly + overtime costs. **Trucking**: trucks and trips with addresses, dock slots, on-arrival contacts and the cases on board, plus printable **truck load sheets** for the shop.
+- **Cables** — cable bundles and the cables in them (type, color, length, endpoints, pulled/labeled). Export pull sheets, schedules and cable labels.
+- **Patching** — import the drawing's circuit report and track patching per end, plus tested.
+- **Orders** — shop orders with equipment + cables, tracking **ordered vs. received**. Import from the drawing, paste from Excel, auto-add kits, and export **pull orders** and **receiving checklists** (PDF/Excel/CSV) in your own **export formats**.
+- **Packing** — **Labels** (case-label templates on a freeform canvas, printed two-up on Uline S-19323) and **Cases** (what's in each road case → a label per case).
+- **Settings** — company + show branding, the shared libraries, kits, the switch-config template, the **Show Server** (the show on the production WiFi for crew phones) and updates.
 
 📖 **New here? Start with the [Quick Start](docs/QUICK-START.md), then the full [User Guide](docs/USER-GUIDE.md).**
 
@@ -51,14 +54,14 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
 
 Device Manager is the database; a set of Python scripts run **inside Vectorworks** (Script Palette) to link ConnectCAD devices to rows in it and push the data onto the drawing. One-time setup and the full workflow are in **[vectorworks-scripts/README.md](vectorworks-scripts/README.md)**.
 
-> ⚠️ **Never run the app and a sync script at the same time** on the same project — let one finish before starting the other.
+> The app can stay open while a sync script runs — it refreshes when the script writes.
 
 ---
 
 ## Documentation
 
 - [Quick Start](docs/QUICK-START.md) — install and your first project in a few minutes.
-- [User Guide](docs/USER-GUIDE.md) — every tab, exports, labels, cases, and troubleshooting.
+- [User Guide](docs/USER-GUIDE.md) — every page and feature, exports, and troubleshooting.
 - [Vectorworks sync](vectorworks-scripts/README.md) — the ConnectCAD ↔ app workflow.
 - [Host tools](host-tools/README.md) — the Hyper-V **VLAN Manager** GUI for the Windows host.
 
@@ -68,7 +71,7 @@ Found a bug or have an idea? **[Open an issue »](https://github.com/gawad1234/v
 
 ## Legal
 
-Device Manager is local-first and collects no data about you. See the
+Device Manager is local-first and collects no data about you. Anything you type about other people (like the crew directory) stays in your own files. See the
 [Privacy Policy](docs/PRIVACY.md) and [Terms of Service](docs/TERMS.md).
 
 ---
@@ -81,6 +84,7 @@ Electron + React + TypeScript (electron-vite). SQLite via Node's built-in `node:
 ```bash
 npm install
 npm run dev            # run in development
+npm test               # unit tests (Node's built-in runner)
 npm run build          # typecheck + bundle
 
 # installers (build OUTSIDE Dropbox, unsigned):

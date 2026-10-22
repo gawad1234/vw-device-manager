@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Device Manager**
-Effective date: October 19, 2026
+Effective date: October 22, 2026
 Provided by: Gabriel Awad ("we", "us") — contact: gabriel@gabrielawad.com
 
 ## The short version
@@ -14,20 +14,32 @@ reaches the internet on its own is to check GitHub for a software update.
 ## What data the app handles, and where it lives
 
 Everything you enter — devices, networks/VLANs, cables, shop orders, case
-labels, cases, patching, and your company/show branding — is stored in **files
-on your own computer**:
+labels, cases, patching, projector and wallpaper setups, software install kits,
+crew and trucking schedules, and your company/show branding — is stored in
+**files on your own computer**:
 
 - **Project files** (`*.vwdm`) — one per show, plain SQLite databases.
 - **A shared library file** (`library.json`) — your cross-project catalogs
-  (device categories, cable types, signal types, auto-add kits) and your
-  **company name and logo**.
+  (device categories, cable types, signal types, auto-add kits, the software
+  library, the switch-config template and admin login), your **company name and
+  logo**, and your **crew directory**.
 - **Per-machine settings** (`settings.json` in the app's data folder) — e.g.
   your recent-projects list and update preference.
 
-These files are created and read **only on your device**. If you keep them in a
+These files are created and read **only on your device**. Software install kits
+you build are written only to the folder you choose (for example a USB stick). If you keep them in a
 folder synced by a service like **Dropbox**, that service syncs them between your
 own machines on your behalf — that is your account and your choice, governed by
 that service's own privacy policy, not by us.
+
+### Information about other people
+
+The **crew directory** and schedules can hold other people's names, phone
+numbers, email addresses and pay rates, and trucking trips can hold drivers' and
+contacts' names and numbers. This stays in your own files like everything else —
+the app never uploads it, and the Show Server does not serve crew details,
+schedules or rates. You are responsible for how you share those files, so only
+keep them in storage you control and trust.
 
 ## What we collect
 

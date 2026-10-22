@@ -25,11 +25,23 @@ workspace context and the cross-machine handoff log — check those first.
     a recent list + last-project in `userData/settings.json` (per-machine, not
     Dropbox), and New/Open/Save-a-Copy-As via native dialogs. `paths.ts` is now
     just the legacy default location used on first launch.
-  - `library.ts` — the **universal library** (network signals + cable types),
-    shared across ALL projects: a single `data/library.json` (Dropbox-synced),
-    NOT stored per project. `ensureLibrary()` seeds it once from the legacy DB.
-    Cables reference their type by **name** (`cables.cable_type`), so nothing is
-    tied to a per-project id.
+  - `library.ts` — the **universal library**, shared across ALL projects: a
+    single `data/library.json` (Dropbox-synced, **gitignored** — `/data` — and
+    excluded from builds), NOT stored per project. Holds network signals, cable
+    types, device categories, auto-add kits, company branding, the switch-config
+    template + admin login, the **software library** and the **crew directory**
+    (names, phones, emails, rates — personal data: must never be committed or
+    served). `ensureLibrary()` seeds it once from the legacy DB. Cables reference
+    their type by **name** (`cables.cable_type`), so nothing is tied to a
+    per-project id.
+  - `exports.ts` — every PDF/Excel/CSV document (`exportDocument`, HTML → PDF via
+    an offscreen BrowserWindow `printToPDF`): pull sheets, schedules, labels, IP
+    schedule, device list, orders, **projector setup sheet** (one worksheet/page
+    per projector) and **truck load sheets** (one page per trip).
+  - `server.ts` — the LAN **Show Server** (plain `node:http`); reuses repo/exports.
+  - `switch-config.ts` — NETGEAR M4350 config generator; `software-kit.ts` — the
+    install-kit `Install.ps1`/`Install.bat` generator (pure, tested);
+    `vlan-script.ts` — Hyper-V VLAN script for the Configs tab.
   - `repository.ts` — CRUD + validation for devices/subnets (IP conflict
     checks, IP-outside-subnet checks, etc. — see `DeviceWarning` types).
   - `ipc.ts` — wires repository methods to IPC handlers.
@@ -37,10 +49,17 @@ workspace context and the cross-machine handoff log — check those first.
   - `index.ts` — Electron app bootstrap/window creation.
 - **Preload** (`src/preload/`): exposes the typed `VwDeviceManagerApi`
   (`src/shared/types.ts`) to the renderer via `contextBridge`.
-- **Renderer** (`src/renderer/src/`): React UI — `App.tsx` shell,
-  `pages/DevicesPage.tsx` and `pages/SubnetsPage.tsx`.
-- **Shared** (`src/shared/types.ts`): `Device`, `Subnet`, `DeviceWarning`,
-  and the `VwDeviceManagerApi` contract shared between main/preload/renderer.
+- **Renderer** (`src/renderer/src/`): React UI — `App.tsx` shell with the
+  sidebar (Devices › Projectors/Wallpapers/Software, Networking, Schedule ›
+  Crew/Trucking, Cables, Patching, Orders, Packing, Settings) and one file per
+  page in `pages/`. Shared two-pane page: `components/DeviceSetupPage.tsx`.
+- **Shared** (`src/shared/`): `types.ts` (all data types + the
+  `VwDeviceManagerApi` contract shared between main/preload/renderer), and pure
+  logic used by both sides: `projector-settings.ts` (Panasonic command catalog),
+  `software.ts` (silent-switch presets), `crew-cost.ts` (hours/OT/cost).
+- **Tests:** `npm test` → `node --test` over `test/*.test.mts`; they import the
+  pure `.ts` modules directly (so those must not import Electron or use
+  extensionless relative imports).
 
 ## Data model (as of last read — verify against `types.ts` before relying on this)
 
@@ -73,6 +92,15 @@ workspace context and the cross-machine handoff log — check those first.
   Phase 1 = data + entry UI; outputs (pull sheets/labels), conduit-fill %, and
   ConnectCAD auto-recognition are future (see `../ROADMAP.md`).
 
+- **Per-device JSON columns** (guarded additive migrations in `db.ts`):
+  `wallpaper_json`, `projector_json` (`{model, values}` — choice values are the
+  raw command; see ROADMAP/PROGRESS review notes), `software_json` (ids into the
+  software library; null = not set up).
+- **Schedule tables** (per show): `crew_assignments`, `trucks`, `truck_trips` —
+  each `{id, data_json}` via the generic `listJsonRows/saveJsonRow` helpers in
+  repository.ts; schedule window + phases in project meta key `schedule`. Crew
+  rows hold only the directory id + show rates + days (no contact details).
+
 ## Vectorworks sync (`vectorworks-scripts/`)
 
 One-directional: this app's DB is the source of truth for `vwdm_*` fields;
@@ -81,6 +109,31 @@ once, at link time via `link_selected.py`). Full workflow and current
 limitations are documented in `vectorworks-scripts/README.md` — read it
 before changing anything that touches the sync contract (field names,
 `VWDM Sync` record format, `vwdm_id` semantics).
+
+## Releasing (and keeping the docs current)
+
+**Every push of a new version to GitHub must ship with up-to-date docs** (user
+request, 2026-10-22). Before the version-bump commit / `gh release create`:
+1. `README.md` — the feature list matches the sidebar.
+2. `docs/USER-GUIDE.md` (+ contents links) and `docs/QUICK-START.md` — every new
+   or changed feature, and anything outdated removed.
+3. `docs/PRIVACY.md` — any new kind of data stored or sent (bump its date).
+4. The **GitHub wiki** (`git@github.com:gawad1234/vw-device-manager.wiki.git`,
+   clone it outside Dropbox): Home table, Features, `_Sidebar.md`, feature pages.
+5. This file's architecture/data-model notes, `../ROADMAP.md`, `../PROGRESS.md`.
+6. Release notes on the GitHub release itself.
+
+A PreToolUse hook (`../.claude/settings.json`) prints this reminder whenever a
+`git push` or `gh release create` command runs.
+
+**Build + publish** (outside Dropbox, unsigned): `CSC_IDENTITY_AUTO_DISCOVERY=false`,
+`npm run build`, `electron-builder --mac --arm64` and `--win --x64` with
+`-c.directories.output=/tmp/vwdm-out|/tmp/vwdm-win` (Windows NSIS needs Rosetta on
+Apple Silicon), verify `codesign --verify --deep --strict`, then `gh release create`
+with all 8 assets. Use a **normal** release, not a pre-release — `updater.ts` has
+no `allowPrerelease`, so pre-releases never reach installed apps. Don't
+`git commit -am` here (untracked-by-you edits in `host-tools/` may be sitting in
+the working tree).
 
 ## Git
 

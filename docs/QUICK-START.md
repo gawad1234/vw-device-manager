@@ -20,7 +20,7 @@ Each show is one **project file** (`.vwdm`). The convention is to keep it **next
 1. Open Device Manager.
 2. Top-left **project menu → Save a Copy As…** and save it beside your `.vwx` with a matching name.
 
-> Projects live in Dropbox and sync between your computers automatically. Don't edit the same project on two machines at once, and don't run a Vectorworks sync script while the app has the project open.
+> Projects live in Dropbox and sync between your computers automatically. Don't edit the same project on two machines at once.
 
 ---
 
@@ -46,6 +46,8 @@ The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 - **Orders** — build a shop order (or import a bill of materials from the drawing), track received-vs-ordered, and export a **pull order** or **receiving checklist**. You can save custom **export formats** for different order types.
 - **Cables** — group cables into bundles and export pull sheets and labels.
 - **Labels + Cases** — design a road-case label template, list what's in each case, and print a label per case.
+- **Schedule** — book crew and track their days, call times and cost (**Crew**); plan trucks and trips and print **load sheets** for the shop (**Trucking**).
+- **Devices → Projectors / Wallpapers / Software** — Panasonic projector setup sheets, branded desktop wallpapers, and USB install kits for show computers.
 
 ---
 
