@@ -15,6 +15,11 @@ import { projectorCommandsCsv } from '../shared/projector-settings'
 import { generateInstallScript, INSTALL_BAT, kitFileNames } from './software-kit'
 import type {
   BuildKitResult,
+  CrewAssignmentInput,
+  CrewMemberInput,
+  ScheduleMeta,
+  TruckInput,
+  TruckTripInput,
   SoftwarePackageInput,
   ProjectorConfig,
   CircuitStatusInput,
@@ -60,6 +65,38 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('devices:setSoftware', (_e, id: number, packageIds: number[] | null) =>
     repo.setDeviceSoftware(id, packageIds)
   )
+
+  // Crew: shared directory (library.json, gitignored) + this show's bookings.
+  ipcMain.handle('crew:directory', () => library.listCrew())
+  ipcMain.handle('crew:createMember', (_e, input: CrewMemberInput) =>
+    library.createCrewMember(input)
+  )
+  ipcMain.handle('crew:updateMember', (_e, id: number, input: CrewMemberInput) =>
+    library.updateCrewMember(id, input)
+  )
+  ipcMain.handle('crew:removeMember', (_e, id: number) => library.deleteCrewMember(id))
+  ipcMain.handle('crew:assignments', () => repo.listCrewAssignments())
+  ipcMain.handle('crew:assign', (_e, input: CrewAssignmentInput) =>
+    repo.saveCrewAssignment(null, input)
+  )
+  ipcMain.handle('crew:updateAssignment', (_e, id: number, input: CrewAssignmentInput) =>
+    repo.saveCrewAssignment(id, input)
+  )
+  ipcMain.handle('crew:unassign', (_e, id: number) => repo.deleteCrewAssignment(id))
+  ipcMain.handle('crew:getSchedule', () => repo.getScheduleMeta())
+  ipcMain.handle('crew:setSchedule', (_e, meta: ScheduleMeta) => repo.setScheduleMeta(meta))
+
+  // Trucking (per show).
+  ipcMain.handle('trucking:trucks', () => repo.listTrucks())
+  ipcMain.handle('trucking:saveTruck', (_e, id: number | null, input: TruckInput) =>
+    repo.saveTruck(id, input)
+  )
+  ipcMain.handle('trucking:removeTruck', (_e, id: number) => repo.deleteTruck(id))
+  ipcMain.handle('trucking:trips', () => repo.listTruckTrips())
+  ipcMain.handle('trucking:saveTrip', (_e, id: number | null, input: TruckTripInput) =>
+    repo.saveTruckTrip(id, input)
+  )
+  ipcMain.handle('trucking:removeTrip', (_e, id: number) => repo.deleteTruckTrip(id))
 
   // Software library (shared) + per-computer install kits.
   ipcMain.handle('software:list', () => library.listSoftware())

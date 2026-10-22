@@ -1939,3 +1939,113 @@ input[type='checkbox'] {
   .modal-backdrop { padding: 16px; }
   .modal { max-height: calc(100vh - 32px); }
 }
+
+/* Crew schedule grid */
+.sched-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.sched-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.sched-grid {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.sched-grid th,
+.sched-grid td {
+  border: 1px solid var(--line-soft);
+  padding: 5px 7px;
+  text-align: center;
+}
+.sched-grid thead th {
+  font-weight: 600;
+  color: var(--ev-c-text-2);
+  background: var(--ev-c-black-soft);
+}
+.sched-grid .sched-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  min-width: 170px;
+  background: var(--ev-c-black-soft);
+}
+.sched-grid .sched-name small {
+  display: block;
+  font-weight: 400;
+}
+.sched-grid .sched-name.clickable {
+  cursor: pointer;
+}
+.sched-phase input {
+  width: 74px;
+  font-size: 11.5px;
+  padding: 2px 4px;
+}
+.sched-cell {
+  cursor: pointer;
+  min-width: 74px;
+  color: var(--ev-c-text-2);
+}
+.sched-cell.work {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--ev-c-text-1);
+}
+.sched-cell.off {
+  color: var(--ev-c-text-3);
+  font-style: italic;
+}
+.sched-grid .sel {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.sched-grid tfoot td,
+.sched-grid tfoot th {
+  font-weight: 700;
+}
+.sched-editor {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.sched-editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* Trucking */
+.trip-cases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.trip-cases label.chk {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.badge.trip-confirmed {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.badge.trip-done {
+  opacity: 0.55;
+}
+.trips-wrap {
+  overflow-x: auto;
+}
+.trips-table td {
+  white-space: nowrap;
+}

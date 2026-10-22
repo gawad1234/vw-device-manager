@@ -594,6 +594,93 @@ export interface PackCase {
 
 export type PackCaseInput = Omit<PackCase, 'id' | 'createdAt' | 'updatedAt'>
 
+// ---- Crew + trucking schedule -----------------------------------------------
+
+export type CrewRateType = 'day' | 'hourly'
+
+/** How someone is paid. Hourly pay goes to `otMultiplier`× after `otAfterHours` a day. */
+export interface CrewRates {
+  rateType: CrewRateType
+  dayRate: number
+  hourlyRate: number
+  otAfterHours: number
+  otMultiplier: number
+}
+
+/** A person in the shared crew directory (library.json — never committed to git). */
+export interface CrewMember extends CrewRates {
+  id: number
+  name: string
+  role: string
+  phone: string
+  email: string
+  notes: string
+}
+
+export type CrewMemberInput = Omit<CrewMember, 'id'>
+
+/** One day on someone's show calendar. Times are "HH:MM"; an end before the call wraps past midnight. */
+export interface CrewDay {
+  status: 'work' | 'off'
+  call: string
+  end: string
+}
+
+/** A directory person booked on this show, with this show's rates and their days by "YYYY-MM-DD". */
+export interface CrewAssignment extends CrewRates {
+  id: number
+  crewId: number
+  role: string
+  days: Record<string, CrewDay>
+  notes: string
+}
+
+export type CrewAssignmentInput = Omit<CrewAssignment, 'id'>
+
+/** The show's schedule window + a phase label (load-in, tech, show…) per date. */
+export interface ScheduleMeta {
+  start: string
+  end: string
+  phases: Record<string, string>
+}
+
+export interface Truck {
+  id: number
+  name: string
+  vendor: string
+  size: string
+  cost: number
+  contact: string
+  notes: string
+}
+
+export type TruckInput = Omit<Truck, 'id'>
+
+export type TripKind = 'delivery' | 'load-in' | 'load-out' | 'return' | 'other'
+
+/** A truck run: when, from → to, who's driving, its dock slot and which packed cases ride on it. */
+export interface TruckTrip {
+  id: number
+  truckId: number | null
+  kind: TripKind
+  date: string
+  /** depart → arrive, "HH:MM" */
+  departTime: string
+  arriveTime: string
+  /** dock slot at the destination, "HH:MM" */
+  dockStart: string
+  dockEnd: string
+  origin: string
+  destination: string
+  driver: string
+  phone: string
+  status: 'planned' | 'confirmed' | 'done'
+  caseIds: number[]
+  notes: string
+}
+
+export type TruckTripInput = Omit<TruckTrip, 'id'>
+
 /** A sub-editor row's save, called by a modal's "Save changes" so it flushes
  *  every child row (ports/cables), not just the top-level fields. */
 export type RowSaver = () => Promise<{ ok: boolean; error?: string }>
@@ -620,6 +707,28 @@ export interface VwDeviceManagerApi {
   /** Save a projector's MMCS command list CSV. Returns the path, or null if cancelled. */
   projector: {
     saveCommands: (deviceId: number) => Promise<string | null>
+  }
+  /** Crew: the shared directory (library.json) + this show's bookings and schedule window. */
+  crew: {
+    directory: () => Promise<CrewMember[]>
+    createMember: (input: CrewMemberInput) => Promise<CrewMember>
+    updateMember: (id: number, input: CrewMemberInput) => Promise<CrewMember>
+    removeMember: (id: number) => Promise<void>
+    assignments: () => Promise<CrewAssignment[]>
+    assign: (input: CrewAssignmentInput) => Promise<CrewAssignment>
+    updateAssignment: (id: number, input: CrewAssignmentInput) => Promise<CrewAssignment>
+    unassign: (id: number) => Promise<void>
+    getSchedule: () => Promise<ScheduleMeta>
+    setSchedule: (meta: ScheduleMeta) => Promise<void>
+  }
+  /** Trucking: trucks and the trips they run (per show). */
+  trucking: {
+    trucks: () => Promise<Truck[]>
+    saveTruck: (id: number | null, input: TruckInput) => Promise<Truck>
+    removeTruck: (id: number) => Promise<void>
+    trips: () => Promise<TruckTrip[]>
+    saveTrip: (id: number | null, input: TruckTripInput) => Promise<TruckTrip>
+    removeTrip: (id: number) => Promise<void>
   }
   /** Shared library of Windows installers + per-computer install kits. */
   software: {

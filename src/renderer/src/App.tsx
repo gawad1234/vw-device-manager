@@ -11,6 +11,8 @@ import PatchingPage from './pages/PatchingPage'
 import ProjectorsPage from './pages/ProjectorsPage'
 import WallpapersPage from './pages/WallpapersPage'
 import SoftwarePage from './pages/SoftwarePage'
+import CrewPage from './pages/CrewPage'
+import TruckingPage from './pages/TruckingPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjectMenu from './components/ProjectMenu'
 
@@ -19,6 +21,8 @@ type Tab =
   | 'projectors'
   | 'wallpapers'
   | 'software'
+  | 'crew'
+  | 'trucking'
   | 'subnets'
   | 'cables'
   | 'configs'
@@ -31,6 +35,7 @@ type Tab =
 // Collapsible sidebar groups and the tabs they contain.
 const NAV_GROUPS: Record<string, Tab[]> = {
   networking: ['subnets', 'configs'],
+  schedule: ['crew', 'trucking'],
   packing: ['labels', 'cases']
 }
 
@@ -183,6 +188,32 @@ function App(): React.JSX.Element {
 
           <div className="side-group">
             <button
+              className={`side-group-head ${NAV_GROUPS.schedule.includes(tab) ? 'has-active' : ''}`}
+              onClick={() => toggleGroup('schedule')}
+            >
+              <span className="side-caret">{groupOpen('schedule') ? '▾' : '▸'}</span>
+              Schedule
+            </button>
+            {groupOpen('schedule') && (
+              <div className="side-sub">
+                <button
+                  className={`side-item ${tab === 'crew' ? 'active' : ''}`}
+                  onClick={() => setTab('crew')}
+                >
+                  Crew
+                </button>
+                <button
+                  className={`side-item ${tab === 'trucking' ? 'active' : ''}`}
+                  onClick={() => setTab('trucking')}
+                >
+                  Trucking
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="side-group">
+            <button
               className={`side-group-head ${NAV_GROUPS.packing.includes(tab) ? 'has-active' : ''}`}
               onClick={() => toggleGroup('packing')}
             >
@@ -233,6 +264,10 @@ function App(): React.JSX.Element {
           <WallpapersPage devices={devices} onChanged={refresh} />
         ) : tab === 'software' ? (
           <SoftwarePage devices={devices} onChanged={refresh} />
+        ) : tab === 'crew' ? (
+          <CrewPage key={project?.path} />
+        ) : tab === 'trucking' ? (
+          <TruckingPage key={project?.path} />
         ) : tab === 'subnets' ? (
           <SubnetsPage subnets={subnets} onChanged={refresh} />
         ) : tab === 'cables' ? (

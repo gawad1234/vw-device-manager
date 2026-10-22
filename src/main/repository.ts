@@ -25,6 +25,13 @@ import type {
   KitAddon,
   WallpaperConfig,
   ProjectorConfig,
+  CrewAssignment,
+  CrewAssignmentInput,
+  ScheduleMeta,
+  Truck,
+  TruckInput,
+  TruckTrip,
+  TruckTripInput,
   OrderItem,
   PackCase,
   PackCaseInput,
@@ -1111,4 +1118,57 @@ export function mergeCircuits(rows: CircuitImport[]): CircuitImportResult {
   }
   const totalRow = queryOne('SELECT count(*) AS n FROM circuits')
   return { added, updated, removed, total: (totalRow?.n as number) ?? 0 }
+}
+
+// ---- Crew + trucking schedule (per show) ---------------------------------
+// Rows are {id, data_json}; these three helpers serve all three tables.
+
+type JsonTable = 'crew_assignments' | 'trucks' | 'truck_trips'
+
+function listJsonRows<T>(table: JsonTable): T[] {
+  return queryAll(`SELECT id, data_json FROM ${table} ORDER BY id`).map(
+    (r) => ({ ...JSON.parse(r.data_json as string), id: r.id as number }) as T
+  )
+}
+
+function saveJsonRow<T extends { id: number }>(
+  table: JsonTable,
+  id: number | null,
+  input: Omit<T, 'id'>
+): T {
+  const json = JSON.stringify({ ...input, id: undefined })
+  if (id == null) {
+    dbRun(`INSERT INTO ${table} (data_json) VALUES (?)`, [json])
+    id = lastInsertRowId()
+  } else dbRun(`UPDATE ${table} SET data_json = ? WHERE id = ?`, [json, id])
+  return { ...input, id } as T
+}
+
+function deleteJsonRow(table: JsonTable, id: number): void {
+  dbRun(`DELETE FROM ${table} WHERE id = ?`, [id])
+}
+
+export const listCrewAssignments = (): CrewAssignment[] => listJsonRows('crew_assignments')
+export const saveCrewAssignment = (id: number | null, input: CrewAssignmentInput): CrewAssignment =>
+  saveJsonRow<CrewAssignment>('crew_assignments', id, input)
+export const deleteCrewAssignment = (id: number): void => deleteJsonRow('crew_assignments', id)
+
+export const listTrucks = (): Truck[] => listJsonRows('trucks')
+export const saveTruck = (id: number | null, input: TruckInput): Truck =>
+  saveJsonRow<Truck>('trucks', id, input)
+export const deleteTruck = (id: number): void => deleteJsonRow('trucks', id)
+
+export const listTruckTrips = (): TruckTrip[] => listJsonRows('truck_trips')
+export const saveTruckTrip = (id: number | null, input: TruckTripInput): TruckTrip =>
+  saveJsonRow<TruckTrip>('truck_trips', id, input)
+export const deleteTruckTrip = (id: number): void => deleteJsonRow('truck_trips', id)
+
+/** The show's schedule window + phase per date (project meta). */
+export function getScheduleMeta(): ScheduleMeta {
+  const empty: ScheduleMeta = { start: '', end: '', phases: {} }
+  return { ...empty, ...parseJson<ScheduleMeta>(getProjectMeta('schedule')) }
+}
+
+export function setScheduleMeta(meta: ScheduleMeta): void {
+  setProjectMeta('schedule', JSON.stringify(meta))
 }

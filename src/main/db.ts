@@ -218,6 +218,22 @@ CREATE TABLE IF NOT EXISTS cases (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Crew + trucking schedule (per show). Each row's fields live in data_json
+-- (CrewAssignment / Truck / TruckTrip minus id); crew contact details and
+-- default rates stay in the shared library, not here.
+CREATE TABLE IF NOT EXISTS crew_assignments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  data_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS trucks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  data_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS truck_trips (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  data_json TEXT NOT NULL
+);
 `
 
 // A real embedded SQLite (Node's built-in node:sqlite — no native module) that

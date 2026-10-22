@@ -9,6 +9,11 @@ import type {
   WallpaperConfig,
   ProjectorConfig,
   SoftwarePackageInput,
+  CrewAssignmentInput,
+  CrewMemberInput,
+  ScheduleMeta,
+  TruckInput,
+  TruckTripInput,
   ExportOptions,
   HostConfigInput,
   LabelTemplateInput,
@@ -42,6 +47,30 @@ const api: VwDeviceManagerApi = {
       ipcRenderer.invoke('devices:setProjector', id, config),
     setSoftware: (id: number, packageIds: number[] | null) =>
       ipcRenderer.invoke('devices:setSoftware', id, packageIds)
+  },
+  crew: {
+    directory: () => ipcRenderer.invoke('crew:directory'),
+    createMember: (input: CrewMemberInput) => ipcRenderer.invoke('crew:createMember', input),
+    updateMember: (id: number, input: CrewMemberInput) =>
+      ipcRenderer.invoke('crew:updateMember', id, input),
+    removeMember: (id: number) => ipcRenderer.invoke('crew:removeMember', id),
+    assignments: () => ipcRenderer.invoke('crew:assignments'),
+    assign: (input: CrewAssignmentInput) => ipcRenderer.invoke('crew:assign', input),
+    updateAssignment: (id: number, input: CrewAssignmentInput) =>
+      ipcRenderer.invoke('crew:updateAssignment', id, input),
+    unassign: (id: number) => ipcRenderer.invoke('crew:unassign', id),
+    getSchedule: () => ipcRenderer.invoke('crew:getSchedule'),
+    setSchedule: (meta: ScheduleMeta) => ipcRenderer.invoke('crew:setSchedule', meta)
+  },
+  trucking: {
+    trucks: () => ipcRenderer.invoke('trucking:trucks'),
+    saveTruck: (id: number | null, input: TruckInput) =>
+      ipcRenderer.invoke('trucking:saveTruck', id, input),
+    removeTruck: (id: number) => ipcRenderer.invoke('trucking:removeTruck', id),
+    trips: () => ipcRenderer.invoke('trucking:trips'),
+    saveTrip: (id: number | null, input: TruckTripInput) =>
+      ipcRenderer.invoke('trucking:saveTrip', id, input),
+    removeTrip: (id: number) => ipcRenderer.invoke('trucking:removeTrip', id)
   },
   software: {
     list: () => ipcRenderer.invoke('software:list'),

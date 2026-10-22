@@ -8,6 +8,8 @@ import { DEFAULT_SWITCH_BASE_CONFIG } from './switch-config'
 import type {
   CableType,
   CableTypeInput,
+  CrewMember,
+  CrewMemberInput,
   OrderKit,
   OrderKitInput,
   SoftwarePackage,
@@ -38,6 +40,9 @@ interface Library {
   switchConfig: SwitchConfigSettings
   /** Windows installers for per-computer install kits, shared like kits. */
   software: SoftwarePackage[]
+  /** Crew directory (names, contacts, default rates). library.json lives in
+   *  the gitignored data/ folder, so this never reaches GitHub. */
+  crew: CrewMember[]
 }
 
 function defaultSwitchConfig(): SwitchConfigSettings {
@@ -55,7 +60,8 @@ function readLibrary(): Library {
       companyName: raw.companyName ?? '',
       companyLogo: raw.companyLogo ?? null,
       switchConfig: { ...defaultSwitchConfig(), ...(raw.switchConfig ?? {}) },
-      software: raw.software ?? []
+      software: raw.software ?? [],
+      crew: raw.crew ?? []
     }
   } catch {
     return {
@@ -66,7 +72,8 @@ function readLibrary(): Library {
       companyName: '',
       companyLogo: null,
       switchConfig: defaultSwitchConfig(),
-      software: []
+      software: [],
+      crew: []
     }
   }
 }
@@ -94,7 +101,8 @@ export async function ensureLibrary(): Promise<void> {
     companyName: '',
     companyLogo: null,
     switchConfig: defaultSwitchConfig(),
-    software: []
+    software: [],
+    crew: []
   })
 }
 
@@ -306,5 +314,36 @@ export function updateSoftware(id: number, input: SoftwarePackageInput): Softwar
 export function deleteSoftware(id: number): void {
   const lib = readLibrary()
   lib.software = lib.software.filter((p) => p.id !== id)
+  writeLibrary(lib)
+}
+
+// ---- Crew directory (shared) ----------------------------------------------
+
+export function listCrew(): CrewMember[] {
+  return readLibrary().crew
+}
+
+export function createCrewMember(input: CrewMemberInput): CrewMember {
+  const lib = readLibrary()
+  const member: CrewMember = { ...input, id: lib.crew.reduce((m, c) => Math.max(m, c.id), 0) + 1 }
+  lib.crew.push(member)
+  lib.crew.sort((a, b) => a.name.localeCompare(b.name))
+  writeLibrary(lib)
+  return member
+}
+
+export function updateCrewMember(id: number, input: CrewMemberInput): CrewMember {
+  const lib = readLibrary()
+  const member = lib.crew.find((c) => c.id === id)
+  if (!member) throw new Error(`Crew member ${id} not found.`)
+  Object.assign(member, input)
+  lib.crew.sort((a, b) => a.name.localeCompare(b.name))
+  writeLibrary(lib)
+  return member
+}
+
+export function deleteCrewMember(id: number): void {
+  const lib = readLibrary()
+  lib.crew = lib.crew.filter((c) => c.id !== id)
   writeLibrary(lib)
 }
