@@ -332,6 +332,11 @@ code {
   height: 14px;
 }
 
+/* Let the hidden attribute win over display rules (tabbed panes stay mounted). */
+[hidden] {
+  display: none !important;
+}
+
 /* Sub-tabs inside the order editor (Equipment / Cables) */
 .subtabs {
   display: flex;

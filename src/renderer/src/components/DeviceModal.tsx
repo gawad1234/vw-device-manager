@@ -55,6 +55,7 @@ function DeviceModal({
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<DeviceWarning[]>([])
   const [saving, setSaving] = useState(false)
+  const [tab, setTab] = useState<'details' | 'ports' | 'connections'>('details')
 
   // Port rows register their save here so "Save changes" flushes them too.
   const saversRef = useRef(new Set<RowSaver>())
@@ -145,120 +146,143 @@ function DeviceModal({
 
   return (
     <Modal title={title} onClose={onClose} footer={footer}>
-      <form id="device-form" className="form-grid" onSubmit={save}>
-        {error && <div className="banner banner-error">{error}</div>}
-        {warnings.map((w, i) => (
-          <div className="banner banner-warning" key={i}>
-            {w.message}
-          </div>
-        ))}
-        <label>
-          Name
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="STAGE-CAM-01"
-            autoFocus
-          />
-        </label>
-        <label>
-          Type
-          <input
-            value={form.deviceType ?? ''}
-            readOnly
-            placeholder="— from Vectorworks —"
-            title="Synced from the drawing (Model field) — edit it in Vectorworks."
-          />
-          <small className="muted">Synced from Vectorworks (Model)</small>
-        </label>
-        <label>
-          MAC address
-          <input
-            value={form.macAddress ?? ''}
-            onChange={(e) => setForm({ ...form, macAddress: e.target.value || null })}
-            placeholder="00:1A:2B:3C:4D:5E"
-          />
-        </label>
-        <label>
-          Location
-          <input
-            value={form.location ?? ''}
-            readOnly
-            placeholder="— from Vectorworks —"
-            title="Synced from the drawing (Room / Rack / Rack U / Slot) — edit it in Vectorworks."
-          />
-          <small className="muted">Synced from Vectorworks (Room / Rack / Rack U / Slot)</small>
-        </label>
-        <label>
-          Category
-          <CategoryInput
-            value={form.category}
-            categories={categories}
-            onChange={(v) => setForm({ ...form, category: v })}
-          />
-          <small className="muted">Type to filter; a new name creates a group.</small>
-        </label>
-        <label className="checkbox-field span-2">
-          <input
-            type="checkbox"
-            checked={form.isSwitch}
-            onChange={(e) => setForm({ ...form, isSwitch: e.target.checked })}
-          />
-          This is a network switch
-          <small className="muted">
-            Switches use a management + OOB IP instead of a per-port IP; their ports are VLAN-only.
-          </small>
-        </label>
-        {form.isSwitch && (
-          <>
-            <label>
-              Management IP
-              <input
-                value={form.managementIp ?? ''}
-                onChange={(e) => setForm({ ...form, managementIp: e.target.value || null })}
-                placeholder="10.0.10.2"
-              />
-            </label>
-            <label>
-              Out-of-band (OOB) IP
-              <input
-                value={form.oobIp ?? ''}
-                onChange={(e) => setForm({ ...form, oobIp: e.target.value || null })}
-                placeholder="192.168.100.2"
-              />
-            </label>
-          </>
-        )}
-        <label className="span-2">
-          Notes
-          <textarea
-            value={form.notes ?? ''}
-            onChange={(e) => setForm({ ...form, notes: e.target.value || null })}
-            rows={2}
-          />
-        </label>
-      </form>
-
-      {device ? (
-        <div className="modal-section">
-          <h3>Ports</h3>
-          <PortsSection
-            device={device}
-            subnets={subnets}
-            onChanged={onChanged}
-            registerSaver={registerSaver}
-          />
+      {error && <div className="banner banner-error">{error}</div>}
+      {warnings.map((w, i) => (
+        <div className="banner banner-warning" key={i}>
+          {w.message}
         </div>
-      ) : (
-        <p className="muted modal-section">Create the device first, then add its ports here.</p>
-      )}
-
+      ))}
       {device && (
-        <div className="modal-section">
-          <h3>Connections (patching)</h3>
-          <DeviceConnections deviceName={device.name} />
-        </div>
+        <nav className="subtabs">
+          {(
+            [
+              ['details', 'Details'],
+              ['ports', `Ports (${device.ports.length})`],
+              ['connections', 'Connections']
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`tab ${tab === key ? 'active' : ''}`}
+              onClick={() => setTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       )}
+      {/* Inactive tabs stay mounted (just hidden) so unsaved port edits survive a
+          tab switch and "Save changes" still flushes them. */}
+      {/* min height: the window keeps its size when switching tabs */}
+      <div style={{ minHeight: device ? 420 : undefined }}>
+        <form id="device-form" className="form-grid" onSubmit={save} hidden={tab !== 'details'}>
+          <label>
+            Name
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="STAGE-CAM-01"
+              autoFocus
+            />
+          </label>
+          <label>
+            Type
+            <input
+              value={form.deviceType ?? ''}
+              readOnly
+              placeholder="— from Vectorworks —"
+              title="Synced from the drawing (Model field) — edit it in Vectorworks."
+            />
+            <small className="muted">Synced from Vectorworks (Model)</small>
+          </label>
+          <label>
+            MAC address
+            <input
+              value={form.macAddress ?? ''}
+              onChange={(e) => setForm({ ...form, macAddress: e.target.value || null })}
+              placeholder="00:1A:2B:3C:4D:5E"
+            />
+          </label>
+          <label>
+            Location
+            <input
+              value={form.location ?? ''}
+              readOnly
+              placeholder="— from Vectorworks —"
+              title="Synced from the drawing (Room / Rack / Rack U / Slot) — edit it in Vectorworks."
+            />
+            <small className="muted">Synced from Vectorworks (Room / Rack / Rack U / Slot)</small>
+          </label>
+          <label>
+            Category
+            <CategoryInput
+              value={form.category}
+              categories={categories}
+              onChange={(v) => setForm({ ...form, category: v })}
+            />
+            <small className="muted">Type to filter; a new name creates a group.</small>
+          </label>
+          <label className="checkbox-field span-2">
+            <input
+              type="checkbox"
+              checked={form.isSwitch}
+              onChange={(e) => setForm({ ...form, isSwitch: e.target.checked })}
+            />
+            This is a network switch
+            <small className="muted">
+              Switches use a management + OOB IP instead of a per-port IP; their ports are
+              VLAN-only.
+            </small>
+          </label>
+          {form.isSwitch && (
+            <>
+              <label>
+                Management IP
+                <input
+                  value={form.managementIp ?? ''}
+                  onChange={(e) => setForm({ ...form, managementIp: e.target.value || null })}
+                  placeholder="10.0.10.2"
+                />
+              </label>
+              <label>
+                Out-of-band (OOB) IP
+                <input
+                  value={form.oobIp ?? ''}
+                  onChange={(e) => setForm({ ...form, oobIp: e.target.value || null })}
+                  placeholder="192.168.100.2"
+                />
+              </label>
+            </>
+          )}
+          <label className="span-2">
+            Notes
+            <textarea
+              value={form.notes ?? ''}
+              onChange={(e) => setForm({ ...form, notes: e.target.value || null })}
+              rows={2}
+            />
+          </label>
+        </form>
+
+        {device ? (
+          <>
+            <div hidden={tab !== 'ports'}>
+              <PortsSection
+                device={device}
+                subnets={subnets}
+                onChanged={onChanged}
+                registerSaver={registerSaver}
+              />
+            </div>
+            <div hidden={tab !== 'connections'}>
+              <DeviceConnections deviceName={device.name} />
+            </div>
+          </>
+        ) : (
+          <p className="muted modal-section">Create the device first, then add its ports here.</p>
+        )}
+      </div>
     </Modal>
   )
 }
