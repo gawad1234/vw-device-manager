@@ -85,6 +85,7 @@ function mapDevice(row: Row, ports: Port[]): Device {
     oobIp: (row.oob_ip as string | null) ?? null,
     wallpaper: parseWallpaper(row.wallpaper_json as string | null),
     projector: parseJson<ProjectorConfig>(row.projector_json as string | null),
+    software: parseJson<number[]>(row.software_json as string | null),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     ports
@@ -105,6 +106,13 @@ const parseWallpaper = parseJson<WallpaperConfig>
 export function setDeviceProjector(id: number, config: ProjectorConfig | null): void {
   dbRun(`UPDATE devices SET projector_json = ?, updated_at = datetime('now') WHERE id = ?`, [
     config ? JSON.stringify(config) : null,
+    id
+  ])
+}
+
+export function setDeviceSoftware(id: number, packageIds: number[] | null): void {
+  dbRun(`UPDATE devices SET software_json = ?, updated_at = datetime('now') WHERE id = ?`, [
+    packageIds ? JSON.stringify(packageIds) : null,
     id
   ])
 }

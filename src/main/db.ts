@@ -441,6 +441,13 @@ function migrateAddDeviceProjector(database: DatabaseSync): void {
   database.exec('ALTER TABLE devices ADD COLUMN projector_json TEXT')
 }
 
+/** Adds `devices.software_json` (installers for the computer's install kit). Guarded, additive. */
+function migrateAddDeviceSoftware(database: DatabaseSync): void {
+  if (!tableExists(database, 'devices')) return
+  if (tableHasColumn(database, 'devices', 'software_json')) return
+  database.exec('ALTER TABLE devices ADD COLUMN software_json TEXT')
+}
+
 /** Adds `ports.is_unused` (jacks not used for the network). Guarded, additive. */
 function migrateAddPortUnused(database: DatabaseSync): void {
   if (!tableExists(database, 'ports')) return
@@ -513,6 +520,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateAddLabelElements(database)
   migrateCircuitEnds(database)
   migrateAddDeviceProjector(database)
+  migrateAddDeviceSoftware(database)
 }
 
 /**

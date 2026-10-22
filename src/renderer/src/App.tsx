@@ -10,6 +10,7 @@ import CasesPage from './pages/CasesPage'
 import PatchingPage from './pages/PatchingPage'
 import ProjectorsPage from './pages/ProjectorsPage'
 import WallpapersPage from './pages/WallpapersPage'
+import SoftwarePage from './pages/SoftwarePage'
 import SettingsPage from './pages/SettingsPage'
 import ProjectMenu from './components/ProjectMenu'
 
@@ -17,6 +18,7 @@ type Tab =
   | 'devices'
   | 'projectors'
   | 'wallpapers'
+  | 'software'
   | 'subnets'
   | 'cables'
   | 'configs'
@@ -126,6 +128,12 @@ function App(): React.JSX.Element {
             >
               Wallpapers
             </button>
+            <button
+              className={`side-item ${tab === 'software' ? 'active' : ''}`}
+              onClick={() => setTab('software')}
+            >
+              Software
+            </button>
           </div>
 
           <div className="side-group">
@@ -223,6 +231,8 @@ function App(): React.JSX.Element {
           <ProjectorsPage devices={devices} onChanged={refresh} />
         ) : tab === 'wallpapers' ? (
           <WallpapersPage devices={devices} onChanged={refresh} />
+        ) : tab === 'software' ? (
+          <SoftwarePage devices={devices} onChanged={refresh} />
         ) : tab === 'subnets' ? (
           <SubnetsPage subnets={subnets} onChanged={refresh} />
         ) : tab === 'cables' ? (

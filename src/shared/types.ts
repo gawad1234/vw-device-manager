@@ -76,6 +76,8 @@ export interface Device {
   wallpaper: WallpaperConfig | null
   /** Panasonic projector settings; null = not a projector */
   projector: ProjectorConfig | null
+  /** ids of the software-library installers this computer gets; null = no software setup */
+  software: number[] | null
   createdAt: string
   updatedAt: string
   ports: Port[]
@@ -83,7 +85,7 @@ export interface Device {
 
 export type DeviceInput = Omit<
   Device,
-  'id' | 'createdAt' | 'updatedAt' | 'ports' | 'wallpaper' | 'projector'
+  'id' | 'createdAt' | 'updatedAt' | 'ports' | 'wallpaper' | 'projector' | 'software'
 >
 
 /** A Panasonic projector's chosen settings (catalog in `projector-settings.ts`).
@@ -92,6 +94,29 @@ export type DeviceInput = Omit<
 export interface ProjectorConfig {
   model: string
   values: Record<string, string>
+}
+
+/** One Windows installer in the shared software library. */
+export interface SoftwarePackage {
+  id: number
+  name: string
+  /** absolute path to the .exe / .msi on the machine that builds kits */
+  path: string
+  /** silent-install switches (passed to the .exe, or to msiexec after /i for an .msi) */
+  args: string
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type SoftwarePackageInput = Omit<SoftwarePackage, 'id' | 'createdAt' | 'updatedAt'>
+
+/** Result of building a computer's install kit. */
+export interface BuildKitResult {
+  /** the kit folder written, when it worked */
+  path?: string
+  count?: number
+  error?: string
 }
 
 export interface DeviceWarning {
@@ -589,10 +614,23 @@ export interface VwDeviceManagerApi {
     setWallpaper: (id: number, config: WallpaperConfig | null) => Promise<void>
     /** save (or clear, with null) a projector's settings */
     setProjector: (id: number, config: ProjectorConfig | null) => Promise<void>
+    /** save (or clear, with null) which software-library installers a computer gets */
+    setSoftware: (id: number, packageIds: number[] | null) => Promise<void>
   }
   /** Save a projector's MMCS command list CSV. Returns the path, or null if cancelled. */
   projector: {
     saveCommands: (deviceId: number) => Promise<string | null>
+  }
+  /** Shared library of Windows installers + per-computer install kits. */
+  software: {
+    list: () => Promise<SoftwarePackage[]>
+    create: (input: SoftwarePackageInput) => Promise<SoftwarePackage>
+    update: (id: number, input: SoftwarePackageInput) => Promise<SoftwarePackage>
+    remove: (id: number) => Promise<void>
+    /** native file picker for an .exe / .msi; null if cancelled */
+    pickInstaller: () => Promise<string | null>
+    /** write a computer's setup folder (installers + Install.ps1/.bat) to a folder the user picks */
+    buildKit: (deviceId: number) => Promise<BuildKitResult | null>
   }
   /** Save generated wallpaper PNGs to a folder the user picks. Returns how many
    *  were written, or -1 if they cancelled. */

@@ -5,7 +5,15 @@ import { dirname, join } from 'path'
 import { readCatalogsFromFile } from './db'
 import { getDbPath } from './paths'
 import { DEFAULT_SWITCH_BASE_CONFIG } from './switch-config'
-import type { CableType, CableTypeInput, OrderKit, OrderKitInput, SwitchConfigSettings } from '../shared/types'
+import type {
+  CableType,
+  CableTypeInput,
+  OrderKit,
+  OrderKitInput,
+  SoftwarePackage,
+  SoftwarePackageInput,
+  SwitchConfigSettings
+} from '../shared/types'
 
 /**
  * The universal library — network signals + cable types — is shared across ALL
@@ -28,6 +36,8 @@ interface Library {
   companyLogo: string | null
   /** Switch-config generator settings (base template + admin login), shared. */
   switchConfig: SwitchConfigSettings
+  /** Windows installers for per-computer install kits, shared like kits. */
+  software: SoftwarePackage[]
 }
 
 function defaultSwitchConfig(): SwitchConfigSettings {
@@ -44,7 +54,8 @@ function readLibrary(): Library {
       orderKits: raw.orderKits ?? [],
       companyName: raw.companyName ?? '',
       companyLogo: raw.companyLogo ?? null,
-      switchConfig: { ...defaultSwitchConfig(), ...(raw.switchConfig ?? {}) }
+      switchConfig: { ...defaultSwitchConfig(), ...(raw.switchConfig ?? {}) },
+      software: raw.software ?? []
     }
   } catch {
     return {
@@ -54,7 +65,8 @@ function readLibrary(): Library {
       orderKits: [],
       companyName: '',
       companyLogo: null,
-      switchConfig: defaultSwitchConfig()
+      switchConfig: defaultSwitchConfig(),
+      software: []
     }
   }
 }
@@ -81,7 +93,8 @@ export async function ensureLibrary(): Promise<void> {
     orderKits: [],
     companyName: '',
     companyLogo: null,
-    switchConfig: defaultSwitchConfig()
+    switchConfig: defaultSwitchConfig(),
+    software: []
   })
 }
 
@@ -256,5 +269,42 @@ export function importOrderKits(kits: OrderKitInput[]): void {
     lib.orderKits.push({ id: id++, trigger: t, addons: k.addons, createdAt: now, updatedAt: now })
   }
   lib.orderKits.sort((a, b) => a.trigger.localeCompare(b.trigger))
+  writeLibrary(lib)
+}
+
+// ---- Software library (shared) ------------------------------------------
+
+export function listSoftware(): SoftwarePackage[] {
+  return readLibrary().software
+}
+
+export function createSoftware(input: SoftwarePackageInput): SoftwarePackage {
+  const lib = readLibrary()
+  const now = new Date().toISOString()
+  const pkg: SoftwarePackage = {
+    ...input,
+    id: lib.software.reduce((m, p) => Math.max(m, p.id), 0) + 1,
+    createdAt: now,
+    updatedAt: now
+  }
+  lib.software.push(pkg)
+  lib.software.sort((a, b) => a.name.localeCompare(b.name))
+  writeLibrary(lib)
+  return pkg
+}
+
+export function updateSoftware(id: number, input: SoftwarePackageInput): SoftwarePackage {
+  const lib = readLibrary()
+  const pkg = lib.software.find((p) => p.id === id)
+  if (!pkg) throw new Error(`Software ${id} not found.`)
+  Object.assign(pkg, input, { updatedAt: new Date().toISOString() })
+  lib.software.sort((a, b) => a.name.localeCompare(b.name))
+  writeLibrary(lib)
+  return pkg
+}
+
+export function deleteSoftware(id: number): void {
+  const lib = readLibrary()
+  lib.software = lib.software.filter((p) => p.id !== id)
   writeLibrary(lib)
 }

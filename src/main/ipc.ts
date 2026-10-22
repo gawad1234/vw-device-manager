@@ -1,5 +1,6 @@
 import { ipcMain, dialog, shell } from 'electron'
-import { writeFileSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { copyFile } from 'fs/promises'
 import { join } from 'path'
 import * as repo from './repository'
 import * as projects from './projects'
@@ -11,7 +12,10 @@ import { importCircuitReport } from './circuit-import'
 import * as updater from './updater'
 import * as server from './server'
 import { projectorCommandsCsv } from '../shared/projector-settings'
+import { generateInstallScript, INSTALL_BAT, kitFileNames } from './software-kit'
 import type {
+  BuildKitResult,
+  SoftwarePackageInput,
   ProjectorConfig,
   CircuitStatusInput,
   ServerPins,
@@ -51,6 +55,65 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle('devices:setProjector', (_e, id: number, config: ProjectorConfig | null) =>
     repo.setDeviceProjector(id, config)
+  )
+
+  ipcMain.handle('devices:setSoftware', (_e, id: number, packageIds: number[] | null) =>
+    repo.setDeviceSoftware(id, packageIds)
+  )
+
+  // Software library (shared) + per-computer install kits.
+  ipcMain.handle('software:list', () => library.listSoftware())
+  ipcMain.handle('software:create', (_e, input: SoftwarePackageInput) =>
+    library.createSoftware(input)
+  )
+  ipcMain.handle('software:update', (_e, id: number, input: SoftwarePackageInput) =>
+    library.updateSoftware(id, input)
+  )
+  ipcMain.handle('software:remove', (_e, id: number) => library.deleteSoftware(id))
+  ipcMain.handle('software:pickInstaller', async () => {
+    const res = await dialog.showOpenDialog({
+      title: 'Choose a Windows installer',
+      properties: ['openFile'],
+      filters: [{ name: 'Windows installers', extensions: ['exe', 'msi'] }]
+    })
+    return res.canceled ? null : (res.filePaths[0] ?? null)
+  })
+  // Writes "<Computer> Setup/" (installers\ + Install.ps1 + Install.bat) into a folder
+  // the user picks, e.g. a USB stick. Fails up front if any installer file is missing.
+  ipcMain.handle(
+    'software:buildKit',
+    async (_e, deviceId: number): Promise<BuildKitResult | null> => {
+      const device = repo.getDeviceById(deviceId)
+      const byId = new Map(library.listSoftware().map((p) => [p.id, p]))
+      const pkgs = (device?.software ?? []).flatMap((id) => byId.get(id) ?? [])
+      if (!device || !pkgs.length) return { error: 'No software is ticked for this computer.' }
+      const missing = pkgs.filter((p) => !existsSync(p.path))
+      if (missing.length)
+        return {
+          error: `Installer not found on this computer: ${missing.map((p) => `${p.name} (${p.path})`).join('; ')}`
+        }
+      const res = await dialog.showOpenDialog({
+        title: 'Choose where to write the install kit (e.g. a USB stick)',
+        properties: ['openDirectory', 'createDirectory']
+      })
+      if (res.canceled || !res.filePaths[0]) return null
+      const safe = (device.name || 'Computer').replace(/[/\\:*?"<>|]/g, '-')
+      const kitDir = join(res.filePaths[0], `${safe} Setup`)
+      const files = kitFileNames(pkgs.map((p) => p.path))
+      mkdirSync(join(kitDir, 'installers'), { recursive: true })
+      for (let i = 0; i < pkgs.length; i++)
+        await copyFile(pkgs[i].path, join(kitDir, 'installers', files[i]))
+      const items = pkgs.map((p, i) => ({ name: p.name, file: files[i], args: p.args }))
+      // BOM: Windows PowerShell 5.1 reads BOM-less scripts as ANSI and garbles non-ASCII names.
+      writeFileSync(
+        join(kitDir, 'Install.ps1'),
+        '\ufeff' + generateInstallScript(device.name, items).replace(/\r?\n/g, '\r\n'),
+        'utf-8'
+      )
+      writeFileSync(join(kitDir, 'Install.bat'), INSTALL_BAT, 'utf-8')
+      shell.showItemInFolder(join(kitDir, 'Install.bat'))
+      return { path: kitDir, count: pkgs.length }
+    }
   )
 
   // Save a projector's command list CSV for Panasonic Multi Monitoring & Control.
