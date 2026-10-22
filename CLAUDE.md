@@ -68,6 +68,8 @@ workspace context and the cross-machine handoff log — check those first.
   `jszip`, .pdf via `pdfjs-dist` (bounding boxes of drawn paths on page 1, CTM
   tracked; loaded on demand, worker run in-thread so it works under the CSP).
   `LabelModal` doubles as the sticker designer via its `sticker` prop (any size).
+  Renderer-only libraries (`pdfjs-dist`, `jszip`) are **devDependencies**: Vite bundles them,
+  and anything in `dependencies` is also copied into the installer by electron-builder.
 - **Tests:** `npm test` → `node --test` over `test/*.test.mts`; they import the
   pure `.ts` modules directly (so those must not import Electron or use
   extensionless relative imports).
