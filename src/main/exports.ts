@@ -7,6 +7,9 @@ import {
   getOrderExportFormatById,
   getShopOrderById,
   listBundles,
+  listCasesByIds,
+  listTruckTrips,
+  listTrucks,
   listDevices,
   listSubnets,
   markOrderExported
@@ -27,6 +30,7 @@ import type {
   OrderColumnKey,
   OrderExportFormat,
   OrderItem,
+  PackCase,
   ShopOrder
 } from '../shared/types'
 
@@ -742,6 +746,118 @@ function projectorSheetHtml(logo: string | null): string {
   return page(title, css + body, logo)
 }
 
+// ---- Truck load sheets ----------------------------------------------------
+// One page per trip for the shop: which truck, when, from -> to (with
+// addresses), who the driver calls on arrival, and every case to load with its
+// description + a "loaded" checkbox.
+
+const TRIP_KIND_LABEL: Record<string, string> = {
+  delivery: 'Delivery',
+  'load-in': 'Load-in',
+  'load-out': 'Load-out',
+  return: 'Return',
+  other: 'Trip'
+}
+
+/** A case's description: its "Description" field if it has one, else its other fields
+ *  (minus any "Truck" field — on a load sheet the truck is the page itself). */
+function caseDescription(c: PackCase): string {
+  const desc = c.fields.find((f) => /desc/i.test(f.label) && f.value.trim())
+  if (desc) return desc.value
+  return c.fields
+    .filter((f) => f.value.trim() && !/truck/i.test(f.label))
+    .map((f) => `${f.label}: ${f.value}`)
+    .join(' · ')
+}
+
+function loadSheetHtml(tripId: number | undefined, logo: string | null): string {
+  const trucks = new Map(listTrucks().map((t) => [t.id, t]))
+  const trips = listTruckTrips()
+    .filter((t) => tripId == null || t.id === tripId)
+    .sort((a, b) => (a.date + a.departTime).localeCompare(b.date + b.departTime))
+  const title = 'Truck Load Sheet'
+  if (!trips.length) return page(title, '<p>No trips yet.</p>', logo)
+  const css = `<style>
+    .ls + .ls { page-break-before: always; }
+    .ls-show { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .05em; }
+    .ls-head { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
+    .ls-sub { font-size: 14px; color: #333; margin-bottom: 12px; }
+    .ls-route { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .ls-box { border: 1px solid #cfcfcf; border-radius: 6px; padding: 8px 10px; }
+    .ls-box .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #666; }
+    .ls-box .place { font-size: 15px; font-weight: 700; margin: 2px 0; }
+    .ls-box .addr { white-space: pre-line; font-size: 13px; }
+    .ls-box .when { margin-top: 6px; font-size: 12px; }
+    .ls-contact { border: 2px solid #1f2a37; background: #fff6d6; border-radius: 6px;
+                  padding: 8px 12px; font-size: 15px; margin-bottom: 10px; }
+    .ls-contact b { font-size: 16px; }
+    .ls-meta { font-size: 12px; margin-bottom: 12px; }
+    .ls td.box { width: 54px; text-align: center; font-size: 16px; }
+    .ls td.num { font-weight: 700; white-space: nowrap; }
+    .ls td.contents { white-space: pre-line; font-size: 11px; color: #333; }
+    .ls-sign { display: flex; gap: 30px; margin-top: 22px; font-size: 12px; }
+    .ls-sign span { flex: 1; border-top: 1px solid #333; padding-top: 3px; }
+  </style>`
+  const body = trips
+    .map((t, i) => {
+      const truck = t.truckId != null ? trucks.get(t.truckId) : undefined
+      const truckLine = truck
+        ? [truck.name, truck.vendor, truck.size].filter(Boolean).join(' — ')
+        : 'Truck not assigned yet'
+      const date = t.date
+        ? new Date(t.date + 'T12:00:00').toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+          })
+        : 'Date not set'
+      const cases = listCasesByIds(t.caseIds)
+      const rows = cases
+        .map(
+          (c) =>
+            `<tr><td class="num">${esc(c.name)}</td><td>${esc(caseDescription(c))}</td><td class="contents">${esc(c.contents)}</td><td class="box">☐</td></tr>`
+        )
+        .join('')
+      const contact =
+        t.contactName || t.contactPhone
+          ? `<div class="ls-contact">On arrival, contact <b>${esc(t.contactName || '—')}</b>${
+              t.contactPhone ? ` &nbsp;·&nbsp; <b>${esc(t.contactPhone)}</b>` : ''
+            }</div>`
+          : ''
+      const dock =
+        t.dockStart || t.dockEnd
+          ? `Dock slot ${esc(t.dockStart || '?')}–${esc(t.dockEnd || '?')}`
+          : ''
+      // Sheets get pulled apart in the shop — every page after the first names the show too.
+      const show = i > 0 && docShowName ? `<div class="ls-show">${esc(docShowName)}</div>` : ''
+      return `<div class="ls">${show}
+        <div class="ls-head">${esc(TRIP_KIND_LABEL[t.kind] ?? 'Trip')} · ${esc(date)}</div>
+        <div class="ls-sub">${esc(truckLine)} &nbsp;·&nbsp; Status: ${esc(t.status)}</div>
+        <div class="ls-route">
+          <div class="ls-box"><div class="lbl">Pick up</div><div class="place">${esc(t.origin || '—')}</div>
+            <div class="addr">${esc(t.originAddress)}</div>${t.departTime ? `<div class="when">Depart ${esc(t.departTime)}</div>` : ''}</div>
+          <div class="ls-box"><div class="lbl">Deliver to</div><div class="place">${esc(t.destination || '—')}</div>
+            <div class="addr">${esc(t.destinationAddress)}</div><div class="when">${[
+              t.arriveTime ? `Arrive ${esc(t.arriveTime)}` : '',
+              dock
+            ]
+              .filter(Boolean)
+              .join(' &nbsp;·&nbsp; ')}</div></div>
+        </div>
+        ${contact}
+        <div class="ls-meta">Driver: <b>${esc(t.driver || '—')}</b>${t.phone ? ` · ${esc(t.phone)}` : ''}</div>
+        <table><thead><tr><th>Case</th><th>Description</th><th>Contents</th><th>Loaded</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="4">No cases assigned to this trip.</td></tr>'}</tbody></table>
+        <div class="ls-meta" style="margin-top:6px">${cases.length} case${cases.length === 1 ? '' : 's'} on this truck.</div>
+        ${t.notes ? `<div class="ls-meta"><b>Notes:</b> ${esc(t.notes)}</div>` : ''}
+        <div class="ls-sign"><span>Loaded by</span><span>Date / time</span><span>Received by</span></div>
+      </div>`
+    })
+    .join('')
+  return page(title, css + body, logo)
+}
+
 function tableCsv(t: Table): string {
   return [t.headers, ...t.rows].map((r) => r.map((c) => csvCell(String(c))).join(',')).join('\r\n')
 }
@@ -1211,6 +1327,7 @@ const DOC_LABEL: Record<ExportOptions['doc'], string> = {
   ipschedule: 'IP schedule',
   devicelist: 'device list',
   projectorsheet: 'projector setup sheet',
+  loadsheet: 'load sheet',
   order: 'pull order',
   receiving: 'receiving checklist'
 }
@@ -1257,6 +1374,22 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     markOrderExported(order.id, order.items)
     shell.openPath(outPath)
     return outPath
+  }
+
+  // Truck load sheet(s): PDF, one page per trip.
+  if (opts.doc === 'loadsheet') {
+    const trip = opts.tripId != null ? listTruckTrips().find((t) => t.id === opts.tripId) : null
+    const name = trip
+      ? `Load sheet ${trip.date || 'undated'} ${trip.destination || ''}`.trim()
+      : 'Load sheets'
+    const res = await dialog.showSaveDialog({
+      defaultPath: `${name.replace(/[/\\:*?"<>|]/g, '-')}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    writeFileSync(res.filePath, await htmlToPdf(loadSheetHtml(opts.tripId, logo), false))
+    shell.openPath(res.filePath)
+    return res.filePath
   }
 
   // Projector setup sheet (project-wide, portrait).

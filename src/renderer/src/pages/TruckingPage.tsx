@@ -51,6 +51,15 @@ function TruckingPage(): React.JSX.Element {
       <div className="page-header">
         <h2>Trucking</h2>
         <div className="page-header-actions">
+          <button
+            className="btn"
+            disabled={!trips.length}
+            onClick={() =>
+              window.api.exports.run({ scope: 'all', doc: 'loadsheet', format: 'pdf' })
+            }
+          >
+            Print all load sheets
+          </button>
           <button className="btn btn-primary" onClick={() => setEditTrip('new')}>
             + Add trip
           </button>

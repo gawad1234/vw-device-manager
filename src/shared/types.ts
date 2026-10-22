@@ -205,6 +205,8 @@ export interface ExportOptions {
   bundleId?: number
   /** required for `order` / `receiving` docs */
   orderId?: number
+  /** `loadsheet`: one trip's sheet; omitted = every trip, one page each */
+  tripId?: number
   doc:
     | 'pullsheet'
     | 'schedule'
@@ -212,6 +214,7 @@ export interface ExportOptions {
     | 'ipschedule'
     | 'devicelist'
     | 'projectorsheet'
+    | 'loadsheet'
     | 'order'
     | 'receiving'
   format: 'pdf' | 'xlsx' | 'csv'
@@ -670,10 +673,16 @@ export interface TruckTrip {
   /** dock slot at the destination, "HH:MM" */
   dockStart: string
   dockEnd: string
+  /** place names (e.g. "Shop", "Venue") + full street addresses */
   origin: string
+  originAddress: string
   destination: string
+  destinationAddress: string
   driver: string
   phone: string
+  /** who the driver contacts on arrival */
+  contactName: string
+  contactPhone: string
   status: 'planned' | 'confirmed' | 'done'
   caseIds: number[]
   notes: string

@@ -12,9 +12,13 @@ const BLANK: TruckTripInput = {
   dockStart: '',
   dockEnd: '',
   origin: '',
+  originAddress: '',
   destination: '',
+  destinationAddress: '',
   driver: '',
   phone: '',
+  contactName: '',
+  contactPhone: '',
   status: 'planned',
   caseIds: [],
   notes: ''
@@ -33,15 +37,27 @@ function TripModal({ trip, trucks, cases, onClose, onSaved }: Props): React.JSX.
   const [d, setD] = useState<TruckTripInput>(trip ? { ...trip } : BLANK)
   const [error, setError] = useState('')
 
-  async function save(e: React.FormEvent): Promise<void> {
-    e.preventDefault()
+  /** Save the trip; returns its id, or null if it isn't valid yet. */
+  async function persist(): Promise<number | null> {
     if (!d.date) {
       setError('A date is required.')
-      return
+      return null
     }
-    await window.api.trucking.saveTrip(trip?.id ?? null, d)
+    const saved = await window.api.trucking.saveTrip(trip?.id ?? null, d)
     onSaved()
-    onClose()
+    return saved.id
+  }
+
+  async function save(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    if ((await persist()) != null) onClose()
+  }
+
+  // Saves first so the sheet matches what's on screen.
+  async function printSheet(): Promise<void> {
+    const id = await persist()
+    if (id != null)
+      await window.api.exports.run({ scope: 'all', doc: 'loadsheet', format: 'pdf', tripId: id })
   }
 
   async function remove(): Promise<void> {
@@ -67,6 +83,16 @@ function TripModal({ trip, trucks, cases, onClose, onSaved }: Props): React.JSX.
     </label>
   )
 
+  const address = (
+    key: 'originAddress' | 'destinationAddress',
+    label: string
+  ): React.JSX.Element => (
+    <label>
+      {label}
+      <textarea rows={2} value={d[key]} onChange={(e) => setD({ ...d, [key]: e.target.value })} />
+    </label>
+  )
+
   const footer = (
     <>
       {trip && (
@@ -75,6 +101,9 @@ function TripModal({ trip, trucks, cases, onClose, onSaved }: Props): React.JSX.
         </button>
       )}
       <span className="footer-spacer" />
+      <button className="btn" onClick={printSheet}>
+        Save &amp; print load sheet
+      </button>
       <button className="btn" onClick={onClose}>
         Cancel
       </button>
@@ -127,14 +156,18 @@ function TripModal({ trip, trucks, cases, onClose, onSaved }: Props): React.JSX.
             <option value="done">Done</option>
           </select>
         </label>
-        {field('origin', 'From')}
-        {field('destination', 'To')}
+        {field('origin', 'From (place)')}
+        {field('destination', 'To (place)')}
+        {address('originAddress', 'Pickup address')}
+        {address('destinationAddress', 'Delivery address')}
         {field('departTime', 'Depart', 'time')}
         {field('arriveTime', 'Arrive', 'time')}
         {field('dockStart', 'Dock slot — start', 'time')}
         {field('dockEnd', 'Dock slot — end', 'time')}
         {field('driver', 'Driver')}
         {field('phone', 'Driver phone', 'tel')}
+        {field('contactName', 'On arrival, contact')}
+        {field('contactPhone', 'Contact phone', 'tel')}
         <div className="span-2">
           <div style={{ marginBottom: 6 }}>On board ({d.caseIds.length} cases)</div>
           {cases.length ? (

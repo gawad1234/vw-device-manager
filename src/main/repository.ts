@@ -1158,7 +1158,15 @@ export const saveTruck = (id: number | null, input: TruckInput): Truck =>
   saveJsonRow<Truck>('trucks', id, input)
 export const deleteTruck = (id: number): void => deleteJsonRow('trucks', id)
 
-export const listTruckTrips = (): TruckTrip[] => listJsonRows('truck_trips')
+// Trips saved before the address/contact fields existed get blanks for them.
+const TRIP_FIELD_DEFAULTS = {
+  originAddress: '',
+  destinationAddress: '',
+  contactName: '',
+  contactPhone: ''
+}
+export const listTruckTrips = (): TruckTrip[] =>
+  listJsonRows<TruckTrip>('truck_trips').map((t) => ({ ...TRIP_FIELD_DEFAULTS, ...t }))
 export const saveTruckTrip = (id: number | null, input: TruckTripInput): TruckTrip =>
   saveJsonRow<TruckTrip>('truck_trips', id, input)
 export const deleteTruckTrip = (id: number): void => deleteJsonRow('truck_trips', id)
