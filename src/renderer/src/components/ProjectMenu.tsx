@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ProjectInfo } from '../../../shared/types'
+import JoinShowModal from './JoinShowModal'
 
 interface Props {
   current: ProjectInfo | null
@@ -11,6 +12,8 @@ interface Props {
 function ProjectMenu({ current, onSwitched }: Props): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [recent, setRecent] = useState<ProjectInfo[]>([])
+  const [joining, setJoining] = useState(false)
+  const remote = current?.remote
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -38,10 +41,20 @@ function ProjectMenu({ current, onSwitched }: Props): React.JSX.Element {
     <div className="project-menu" ref={ref}>
       <button className="project-btn" onClick={() => setOpen((v) => !v)} title={current?.path}>
         <span className="project-icon">🗂</span>
-        <span className="project-name">{current?.name ?? 'No project'}</span>
+        <span className="project-name">
+          {current?.name ?? 'No project'}
+          {remote && <span className="muted"> · on {remote.host}</span>}
+        </span>
         <span className="caret">▾</span>
       </button>
-      {open && (
+      {open && remote && (
+        <div className="project-dropdown">
+          <button className="menu-item" onClick={() => run(() => window.api.projects.leave())}>
+            Leave shared show
+          </button>
+        </div>
+      )}
+      {open && !remote && (
         <div className="project-dropdown">
           <button className="menu-item" onClick={() => run(() => window.api.projects.new())}>
             New Project…
@@ -64,6 +77,16 @@ function ProjectMenu({ current, onSwitched }: Props): React.JSX.Element {
           >
             Reveal in Finder
           </button>
+          <div className="menu-sep" />
+          <button
+            className="menu-item"
+            onClick={() => {
+              setOpen(false)
+              setJoining(true)
+            }}
+          >
+            Join a show on the network…
+          </button>
           {others.length > 0 && (
             <>
               <div className="menu-sep" />
@@ -81,6 +104,15 @@ function ProjectMenu({ current, onSwitched }: Props): React.JSX.Element {
             </>
           )}
         </div>
+      )}
+      {joining && (
+        <JoinShowModal
+          onClose={() => setJoining(false)}
+          onJoined={(info) => {
+            setJoining(false)
+            onSwitched(info)
+          }}
+        />
       )}
     </div>
   )

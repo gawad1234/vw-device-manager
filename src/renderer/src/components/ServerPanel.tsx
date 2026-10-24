@@ -105,6 +105,12 @@ function ServerPanel(): React.JSX.Element {
               )}
               <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>
                 {status!.clientCount} signed in
+                {status!.appClients > 0 &&
+                  ` · ${status!.appClients} computer${status!.appClients === 1 ? '' : 's'} joined`}
+              </div>
+              <div className="muted" style={{ fontSize: 13 }}>
+                Other computers running Device Manager can join this show (view-only for now) from
+                their project menu with this address and the Manager PIN.
               </div>
             </div>
             {qr && (

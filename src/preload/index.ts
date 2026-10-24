@@ -32,127 +32,137 @@ import type {
 } from '../shared/types'
 
 // Custom APIs for renderer
+/** ipcRenderer.invoke, minus Electron's "Error invoking remote method 'x': Error:" prefix,
+ *  so pages can show a handler's message as written. */
+const invoke = (channel: string, ...args: unknown[]): Promise<any> => // eslint-disable-line @typescript-eslint/no-explicit-any
+  ipcRenderer.invoke(channel, ...args).catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(msg.replace(/^Error invoking remote method '[^']*': (Error: )?/, ''))
+  })
+
 const api: VwDeviceManagerApi = {
   subnets: {
-    list: () => ipcRenderer.invoke('subnets:list'),
-    create: (input: SubnetInput) => ipcRenderer.invoke('subnets:create', input),
-    update: (id: number, input: SubnetInput) => ipcRenderer.invoke('subnets:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('subnets:remove', id)
+    list: () => invoke('subnets:list'),
+    create: (input: SubnetInput) => invoke('subnets:create', input),
+    update: (id: number, input: SubnetInput) => invoke('subnets:update', id, input),
+    remove: (id: number) => invoke('subnets:remove', id)
   },
   devices: {
-    list: () => ipcRenderer.invoke('devices:list'),
-    create: (input: DeviceInput) => ipcRenderer.invoke('devices:create', input),
-    update: (id: number, input: DeviceInput) => ipcRenderer.invoke('devices:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('devices:remove', id),
+    list: () => invoke('devices:list'),
+    create: (input: DeviceInput) => invoke('devices:create', input),
+    update: (id: number, input: DeviceInput) => invoke('devices:update', id, input),
+    remove: (id: number) => invoke('devices:remove', id),
     setWallpaper: (id: number, config: WallpaperConfig | null) =>
-      ipcRenderer.invoke('devices:setWallpaper', id, config),
+      invoke('devices:setWallpaper', id, config),
     setProjector: (id: number, config: ProjectorConfig | null) =>
-      ipcRenderer.invoke('devices:setProjector', id, config),
+      invoke('devices:setProjector', id, config),
     setSoftware: (id: number, packageIds: number[] | null) =>
-      ipcRenderer.invoke('devices:setSoftware', id, packageIds)
+      invoke('devices:setSoftware', id, packageIds)
   },
   stickers: {
-    sheets: () => ipcRenderer.invoke('stickers:sheets'),
+    sheets: () => invoke('stickers:sheets'),
     saveSheet: (id: number | null, input: StickerSheetInput) =>
-      ipcRenderer.invoke('stickers:saveSheet', id, input),
-    removeSheet: (id: number) => ipcRenderer.invoke('stickers:removeSheet', id),
-    designs: () => ipcRenderer.invoke('stickers:designs'),
+      invoke('stickers:saveSheet', id, input),
+    removeSheet: (id: number) => invoke('stickers:removeSheet', id),
+    designs: () => invoke('stickers:designs'),
     saveDesign: (id: number | null, input: StickerDesignInput) =>
-      ipcRenderer.invoke('stickers:saveDesign', id, input),
-    removeDesign: (id: number) => ipcRenderer.invoke('stickers:removeDesign', id),
-    print: (opts: PrintStickersOptions) => ipcRenderer.invoke('stickers:print', opts),
-    printTest: (sheetId: number) => ipcRenderer.invoke('stickers:printTest', sheetId)
+      invoke('stickers:saveDesign', id, input),
+    removeDesign: (id: number) => invoke('stickers:removeDesign', id),
+    print: (opts: PrintStickersOptions) => invoke('stickers:print', opts),
+    printTest: (sheetId: number) => invoke('stickers:printTest', sheetId)
   },
   crew: {
-    directory: () => ipcRenderer.invoke('crew:directory'),
-    createMember: (input: CrewMemberInput) => ipcRenderer.invoke('crew:createMember', input),
+    directory: () => invoke('crew:directory'),
+    createMember: (input: CrewMemberInput) => invoke('crew:createMember', input),
     updateMember: (id: number, input: CrewMemberInput) =>
-      ipcRenderer.invoke('crew:updateMember', id, input),
-    removeMember: (id: number) => ipcRenderer.invoke('crew:removeMember', id),
-    assignments: () => ipcRenderer.invoke('crew:assignments'),
-    assign: (input: CrewAssignmentInput) => ipcRenderer.invoke('crew:assign', input),
+      invoke('crew:updateMember', id, input),
+    removeMember: (id: number) => invoke('crew:removeMember', id),
+    assignments: () => invoke('crew:assignments'),
+    assign: (input: CrewAssignmentInput) => invoke('crew:assign', input),
     updateAssignment: (id: number, input: CrewAssignmentInput) =>
-      ipcRenderer.invoke('crew:updateAssignment', id, input),
-    unassign: (id: number) => ipcRenderer.invoke('crew:unassign', id),
-    getSchedule: () => ipcRenderer.invoke('crew:getSchedule'),
-    setSchedule: (meta: ScheduleMeta) => ipcRenderer.invoke('crew:setSchedule', meta)
+      invoke('crew:updateAssignment', id, input),
+    unassign: (id: number) => invoke('crew:unassign', id),
+    getSchedule: () => invoke('crew:getSchedule'),
+    setSchedule: (meta: ScheduleMeta) => invoke('crew:setSchedule', meta)
   },
   trucking: {
-    trucks: () => ipcRenderer.invoke('trucking:trucks'),
+    trucks: () => invoke('trucking:trucks'),
     saveTruck: (id: number | null, input: TruckInput) =>
-      ipcRenderer.invoke('trucking:saveTruck', id, input),
-    removeTruck: (id: number) => ipcRenderer.invoke('trucking:removeTruck', id),
-    trips: () => ipcRenderer.invoke('trucking:trips'),
+      invoke('trucking:saveTruck', id, input),
+    removeTruck: (id: number) => invoke('trucking:removeTruck', id),
+    trips: () => invoke('trucking:trips'),
     saveTrip: (id: number | null, input: TruckTripInput) =>
-      ipcRenderer.invoke('trucking:saveTrip', id, input),
-    removeTrip: (id: number) => ipcRenderer.invoke('trucking:removeTrip', id)
+      invoke('trucking:saveTrip', id, input),
+    removeTrip: (id: number) => invoke('trucking:removeTrip', id)
   },
   software: {
-    list: () => ipcRenderer.invoke('software:list'),
-    create: (input: SoftwarePackageInput) => ipcRenderer.invoke('software:create', input),
+    list: () => invoke('software:list'),
+    create: (input: SoftwarePackageInput) => invoke('software:create', input),
     update: (id: number, input: SoftwarePackageInput) =>
-      ipcRenderer.invoke('software:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('software:remove', id),
-    pickInstaller: () => ipcRenderer.invoke('software:pickInstaller'),
-    buildKit: (deviceId: number) => ipcRenderer.invoke('software:buildKit', deviceId)
+      invoke('software:update', id, input),
+    remove: (id: number) => invoke('software:remove', id),
+    pickInstaller: () => invoke('software:pickInstaller'),
+    buildKit: (deviceId: number) => invoke('software:buildKit', deviceId)
   },
   projector: {
-    saveCommands: (deviceId: number) => ipcRenderer.invoke('projector:saveCommands', deviceId)
+    saveCommands: (deviceId: number) => invoke('projector:saveCommands', deviceId)
   },
   wallpapers: {
     save: (files: { name: string; dataUrl: string }[]) =>
-      ipcRenderer.invoke('wallpapers:save', files)
+      invoke('wallpapers:save', files)
   },
   ports: {
     create: (deviceId: number, input: PortInput) =>
-      ipcRenderer.invoke('ports:create', deviceId, input),
-    update: (id: number, input: PortInput) => ipcRenderer.invoke('ports:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('ports:remove', id),
+      invoke('ports:create', deviceId, input),
+    update: (id: number, input: PortInput) => invoke('ports:update', id, input),
+    remove: (id: number) => invoke('ports:remove', id),
     setTaggedVlans: (id: number, subnetIds: number[]) =>
-      ipcRenderer.invoke('ports:setTaggedVlans', id, subnetIds),
+      invoke('ports:setTaggedVlans', id, subnetIds),
     setPrimary: (id: number, isPrimary: boolean) =>
-      ipcRenderer.invoke('ports:setPrimary', id, isPrimary),
+      invoke('ports:setPrimary', id, isPrimary),
     setUnused: (id: number, isUnused: boolean) =>
-      ipcRenderer.invoke('ports:setUnused', id, isUnused),
+      invoke('ports:setUnused', id, isUnused),
     setLag: (id: number, lagGroup: string | null) =>
-      ipcRenderer.invoke('ports:setLag', id, lagGroup)
+      invoke('ports:setLag', id, lagGroup)
   },
   networkSignals: {
-    list: () => ipcRenderer.invoke('signals:list'),
-    add: (signal: string) => ipcRenderer.invoke('signals:add', signal),
-    remove: (signal: string) => ipcRenderer.invoke('signals:remove', signal)
+    list: () => invoke('signals:list'),
+    add: (signal: string) => invoke('signals:add', signal),
+    remove: (signal: string) => invoke('signals:remove', signal)
   },
   bundles: {
-    list: () => ipcRenderer.invoke('bundles:list'),
-    create: (input: BundleInput) => ipcRenderer.invoke('bundles:create', input),
-    update: (id: number, input: BundleInput) => ipcRenderer.invoke('bundles:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('bundles:remove', id),
-    duplicate: (id: number) => ipcRenderer.invoke('bundles:duplicate', id)
+    list: () => invoke('bundles:list'),
+    create: (input: BundleInput) => invoke('bundles:create', input),
+    update: (id: number, input: BundleInput) => invoke('bundles:update', id, input),
+    remove: (id: number) => invoke('bundles:remove', id),
+    duplicate: (id: number) => invoke('bundles:duplicate', id)
   },
   cables: {
     create: (bundleId: number, input: CableInput) =>
-      ipcRenderer.invoke('cables:create', bundleId, input),
-    update: (id: number, input: CableInput) => ipcRenderer.invoke('cables:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('cables:remove', id)
+      invoke('cables:create', bundleId, input),
+    update: (id: number, input: CableInput) => invoke('cables:update', id, input),
+    remove: (id: number) => invoke('cables:remove', id)
   },
   cableTypes: {
-    list: () => ipcRenderer.invoke('cableTypes:list'),
-    add: (input: CableTypeInput) => ipcRenderer.invoke('cableTypes:add', input),
-    remove: (name: string) => ipcRenderer.invoke('cableTypes:remove', name)
+    list: () => invoke('cableTypes:list'),
+    add: (input: CableTypeInput) => invoke('cableTypes:add', input),
+    remove: (name: string) => invoke('cableTypes:remove', name)
   },
   deviceCategories: {
-    list: () => ipcRenderer.invoke('deviceCategories:list'),
-    add: (name: string) => ipcRenderer.invoke('deviceCategories:add', name),
-    remove: (name: string) => ipcRenderer.invoke('deviceCategories:remove', name)
+    list: () => invoke('deviceCategories:list'),
+    add: (name: string) => invoke('deviceCategories:add', name),
+    remove: (name: string) => invoke('deviceCategories:remove', name)
   },
   projects: {
-    current: () => ipcRenderer.invoke('project:current'),
-    recent: () => ipcRenderer.invoke('project:recent'),
-    new: () => ipcRenderer.invoke('project:new'),
-    open: () => ipcRenderer.invoke('project:open'),
-    openRecent: (path: string) => ipcRenderer.invoke('project:openRecent', path),
-    saveCopyAs: () => ipcRenderer.invoke('project:saveCopyAs'),
-    reveal: () => ipcRenderer.invoke('project:reveal')
+    current: () => invoke('project:current'),
+    recent: () => invoke('project:recent'),
+    new: () => invoke('project:new'),
+    open: () => invoke('project:open'),
+    openRecent: (path: string) => invoke('project:openRecent', path),
+    saveCopyAs: () => invoke('project:saveCopyAs'),
+    reveal: () => invoke('project:reveal'),
+    join: (address: string, pin: string) => invoke('project:join', address, pin),
+    leave: () => invoke('project:leave')
   },
   onDataChanged: (cb: () => void) => {
     const listener = (): void => cb()
@@ -160,35 +170,35 @@ const api: VwDeviceManagerApi = {
     return () => ipcRenderer.removeListener('data-changed', listener)
   },
   exports: {
-    run: (opts: ExportOptions) => ipcRenderer.invoke('export:run', opts)
+    run: (opts: ExportOptions) => invoke('export:run', opts)
   },
   showLogo: {
-    get: () => ipcRenderer.invoke('showLogo:get'),
-    set: (dataUrl: string | null) => ipcRenderer.invoke('showLogo:set', dataUrl)
+    get: () => invoke('showLogo:get'),
+    set: (dataUrl: string | null) => invoke('showLogo:set', dataUrl)
   },
   showName: {
-    get: () => ipcRenderer.invoke('showName:get'),
-    set: (name: string | null) => ipcRenderer.invoke('showName:set', name)
+    get: () => invoke('showName:get'),
+    set: (name: string | null) => invoke('showName:set', name)
   },
   companyLogo: {
-    get: () => ipcRenderer.invoke('companyLogo:get'),
-    set: (dataUrl: string | null) => ipcRenderer.invoke('companyLogo:set', dataUrl)
+    get: () => invoke('companyLogo:get'),
+    set: (dataUrl: string | null) => invoke('companyLogo:set', dataUrl)
   },
   companyName: {
-    get: () => ipcRenderer.invoke('companyName:get'),
-    set: (name: string | null) => ipcRenderer.invoke('companyName:set', name)
+    get: () => invoke('companyName:get'),
+    set: (name: string | null) => invoke('companyName:set', name)
   },
   switchConfig: {
-    get: () => ipcRenderer.invoke('switchConfig:get'),
-    set: (input: SwitchConfigSettings) => ipcRenderer.invoke('switchConfig:set', input)
+    get: () => invoke('switchConfig:get'),
+    set: (input: SwitchConfigSettings) => invoke('switchConfig:set', input)
   },
   updates: {
-    getState: () => ipcRenderer.invoke('updates:getState'),
-    check: () => ipcRenderer.invoke('updates:check'),
-    download: () => ipcRenderer.invoke('updates:download'),
-    install: () => ipcRenderer.invoke('updates:install'),
-    getAutoCheck: () => ipcRenderer.invoke('updates:getAutoCheck'),
-    setAutoCheck: (value: boolean) => ipcRenderer.invoke('updates:setAutoCheck', value)
+    getState: () => invoke('updates:getState'),
+    check: () => invoke('updates:check'),
+    download: () => invoke('updates:download'),
+    install: () => invoke('updates:install'),
+    getAutoCheck: () => invoke('updates:getAutoCheck'),
+    setAutoCheck: (value: boolean) => invoke('updates:setAutoCheck', value)
   },
   onUpdateStatus: (cb) => {
     const listener = (_e: unknown, status: Parameters<typeof cb>[0]): void => cb(status)
@@ -196,12 +206,12 @@ const api: VwDeviceManagerApi = {
     return () => ipcRenderer.removeListener('update-status', listener)
   },
   server: {
-    getState: () => ipcRenderer.invoke('server:getState'),
-    setEnabled: (value: boolean) => ipcRenderer.invoke('server:setEnabled', value),
-    setPort: (port: number) => ipcRenderer.invoke('server:setPort', port),
-    getPins: () => ipcRenderer.invoke('server:getPins'),
-    setPins: (pins: ServerPins) => ipcRenderer.invoke('server:setPins', pins),
-    connectQr: () => ipcRenderer.invoke('server:connectQr')
+    getState: () => invoke('server:getState'),
+    setEnabled: (value: boolean) => invoke('server:setEnabled', value),
+    setPort: (port: number) => invoke('server:setPort', port),
+    getPins: () => invoke('server:getPins'),
+    setPins: (pins: ServerPins) => invoke('server:setPins', pins),
+    connectQr: () => invoke('server:connectQr')
   },
   onServerStatus: (cb) => {
     const listener = (_e: unknown, status: Parameters<typeof cb>[0]): void => cb(status)
@@ -209,53 +219,53 @@ const api: VwDeviceManagerApi = {
     return () => ipcRenderer.removeListener('server-status', listener)
   },
   configs: {
-    list: () => ipcRenderer.invoke('configs:list'),
-    create: (input: HostConfigInput) => ipcRenderer.invoke('configs:create', input),
-    update: (id: number, input: HostConfigInput) => ipcRenderer.invoke('configs:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('configs:remove', id),
-    generate: (id: number) => ipcRenderer.invoke('configs:generate', id),
-    exportJson: (id: number) => ipcRenderer.invoke('configs:exportJson', id)
+    list: () => invoke('configs:list'),
+    create: (input: HostConfigInput) => invoke('configs:create', input),
+    update: (id: number, input: HostConfigInput) => invoke('configs:update', id, input),
+    remove: (id: number) => invoke('configs:remove', id),
+    generate: (id: number) => invoke('configs:generate', id),
+    exportJson: (id: number) => invoke('configs:exportJson', id)
   },
   orders: {
-    list: () => ipcRenderer.invoke('orders:list'),
-    create: (input: ShopOrderInput) => ipcRenderer.invoke('orders:create', input),
-    update: (id: number, input: ShopOrderInput) => ipcRenderer.invoke('orders:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('orders:remove', id)
+    list: () => invoke('orders:list'),
+    create: (input: ShopOrderInput) => invoke('orders:create', input),
+    update: (id: number, input: ShopOrderInput) => invoke('orders:update', id, input),
+    remove: (id: number) => invoke('orders:remove', id)
   },
   labels: {
-    list: () => ipcRenderer.invoke('labels:list'),
-    create: (input: LabelTemplateInput) => ipcRenderer.invoke('labels:create', input),
-    update: (id: number, input: LabelTemplateInput) => ipcRenderer.invoke('labels:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('labels:remove', id),
-    print: (id: number, copies: number) => ipcRenderer.invoke('labels:print', id, copies),
+    list: () => invoke('labels:list'),
+    create: (input: LabelTemplateInput) => invoke('labels:create', input),
+    update: (id: number, input: LabelTemplateInput) => invoke('labels:update', id, input),
+    remove: (id: number) => invoke('labels:remove', id),
+    print: (id: number, copies: number) => invoke('labels:print', id, copies),
     printCases: (templateId: number, caseIds: number[]) =>
-      ipcRenderer.invoke('labels:printCases', templateId, caseIds)
+      invoke('labels:printCases', templateId, caseIds)
   },
   cases: {
-    list: () => ipcRenderer.invoke('cases:list'),
-    create: (input: PackCaseInput) => ipcRenderer.invoke('cases:create', input),
-    update: (id: number, input: PackCaseInput) => ipcRenderer.invoke('cases:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('cases:remove', id)
+    list: () => invoke('cases:list'),
+    create: (input: PackCaseInput) => invoke('cases:create', input),
+    update: (id: number, input: PackCaseInput) => invoke('cases:update', id, input),
+    remove: (id: number) => invoke('cases:remove', id)
   },
   circuits: {
-    list: () => ipcRenderer.invoke('circuits:list'),
+    list: () => invoke('circuits:list'),
     setStatus: (id: number, input: CircuitStatusInput) =>
-      ipcRenderer.invoke('circuits:setStatus', id, input),
-    import: () => ipcRenderer.invoke('circuits:import'),
-    clear: () => ipcRenderer.invoke('circuits:clear')
+      invoke('circuits:setStatus', id, input),
+    import: () => invoke('circuits:import'),
+    clear: () => invoke('circuits:clear')
   },
   orderFormats: {
-    list: () => ipcRenderer.invoke('orderFormats:list'),
-    create: (input: OrderExportFormatInput) => ipcRenderer.invoke('orderFormats:create', input),
+    list: () => invoke('orderFormats:list'),
+    create: (input: OrderExportFormatInput) => invoke('orderFormats:create', input),
     update: (id: number, input: OrderExportFormatInput) =>
-      ipcRenderer.invoke('orderFormats:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('orderFormats:remove', id)
+      invoke('orderFormats:update', id, input),
+    remove: (id: number) => invoke('orderFormats:remove', id)
   },
   orderKits: {
-    list: () => ipcRenderer.invoke('orderKits:list'),
-    create: (input: OrderKitInput) => ipcRenderer.invoke('orderKits:create', input),
-    update: (id: number, input: OrderKitInput) => ipcRenderer.invoke('orderKits:update', id, input),
-    remove: (id: number) => ipcRenderer.invoke('orderKits:remove', id)
+    list: () => invoke('orderKits:list'),
+    create: (input: OrderKitInput) => invoke('orderKits:create', input),
+    update: (id: number, input: OrderKitInput) => invoke('orderKits:update', id, input),
+    remove: (id: number) => invoke('orderKits:remove', id)
   }
 }
 

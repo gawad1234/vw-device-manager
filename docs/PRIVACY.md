@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Device Manager**
-Effective date: October 22, 2026
+Effective date: October 24, 2026
 Provided by: Gabriel Awad ("we", "us") — contact: gabriel@gabrielawad.com
 
 ## The short version
@@ -38,7 +38,10 @@ The **crew directory** and schedules can hold other people's names, phone
 numbers, email addresses and pay rates, and trucking trips can hold drivers' and
 contacts' names and numbers. This stays in your own files like everything else —
 the app never uploads it, and the Show Server does not serve crew details,
-schedules or rates. You are responsible for how you share those files, so only
+schedules or rates to phones or browsers. If you let another computer running
+Device Manager **join** your show (which needs your manager PIN), that computer
+can read the whole show and your shared library — crew directory included — over
+your local network while it is joined. You are responsible for how you share those files, so only
 keep them in storage you control and trust.
 
 ## What we collect
@@ -64,6 +67,9 @@ usage statistics, crash reports, your IP address, or any personal information.
    phones. This traffic stays on your local network and is **not** sent to us or
    to any external service. It is plain HTTP (not encrypted), so only run it on a
    network you trust, and use the optional crew/manager PINs to limit access.
+   Other copies of Device Manager on the same network can **join** the show with
+   the manager PIN and read it through the same local server; that traffic also
+   stays on your network.
 
 Apart from these, the app makes no outbound connections.
 

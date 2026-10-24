@@ -24,6 +24,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Labels](#labels)
 - [Cases](#cases)
 - [Show Server](#show-server)
+  - [Sharing a show with other computers](#sharing-a-show-with-other-computers)
 - [Settings](#settings)
 - [Updating the app](#updating-the-app)
 - [Syncing to Vectorworks](#syncing-to-vectorworks)
@@ -337,7 +338,20 @@ Serve the open show over your **local production WiFi** so anyone helping with t
 
 **What crew can do:** receive order items (quantities + notes), see the IP schedule and device list, open a page per device (ports → VLANs, switch IPs, notes, its own QR code — and, for switches, the generated [switch config](#devices)), tick off [patching](#patching), and view/print case labels. **Managers** also get a printable **QR sheet** for sticking a code on each piece of gear.
 
-**Access:** a blank crew PIN leaves the site open to anyone on the WiFi; a crew PIN locks it; the manager PIN gates the admin tools. Crew schedules, rates and contact details are **not** served.
+**Access:** a blank crew PIN leaves the site open to anyone on the WiFi; a crew PIN locks it; the manager PIN gates the admin tools. Crew schedules, rates and contact details are **not** served to phones and browsers.
+
+### Sharing a show with other computers
+
+*(beta — view-only for now)* Other computers running Device Manager can open the show that's on this computer, over the same network, and see everything live.
+
+1. **On the computer that has the show** (usually the Vectorworks machine — keep the `.vwdm` there): turn on the **Show Server**, set a **manager PIN**, and note the address it shows (e.g. `192.168.1.20:8787`). Joining is refused until a manager PIN is set.
+2. **On the other computer:** top-left project menu → **Join a show on the network…** → enter the address and the manager PIN → **Join**. Both computers must run the **same version** of Device Manager.
+3. The project button shows **"Show name · on <host>"** and a blue strip says you're viewing a shared show. Changes made on the host — or by a Vectorworks sync script — appear within a few seconds.
+4. **Leave** (on the strip, or in the project menu) goes back to your own project. Opening a local project also leaves.
+
+**For now a joined computer can look but not change anything**: saves are refused with a message, and exports, printing and install kits are done from the host. Editing from several computers at once is the next step. If the host goes to sleep or drops off the network, the strip turns amber ("Can't reach …") and it reconnects on its own.
+
+A joined computer can see the whole show **and the shared library on the host, including the crew directory** — so only give the manager PIN to people who should see it.
 
 ---
 

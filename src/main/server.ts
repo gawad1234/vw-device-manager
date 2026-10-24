@@ -1,7 +1,7 @@
 import http from 'node:http'
 import os from 'node:os'
 import { randomUUID } from 'node:crypto'
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import QRCode from 'qrcode'
 import type { ServerPins, ServerStatus, ShopOrder, Subnet } from '../shared/types'
 import {
@@ -33,6 +33,8 @@ import { ipSchedulePageHtml, deviceListPageHtml } from './exports'
 import { renderTemplateSheetHtml, renderCasesSheetHtml } from './caselabels'
 import { generateSwitchConfig } from './switch-config'
 import { getSwitchConfig } from './library'
+import { handlers, bumpChange, getChangeSeq } from './rpc-registry'
+import { remoteReadable } from '../shared/remote-scope'
 
 // ---------------------------------------------------------------------------
 // Module state
@@ -43,7 +45,8 @@ let lastPort = getShowServerPort()
 let lastError: string | null = null
 
 type Role = 'crew' | 'manager'
-const sessions = new Map<string, { role: Role }>()
+// kind 'app' = another Device Manager that joined this show (bearer token, /rpc/*).
+const sessions = new Map<string, { role: Role; kind?: 'app' }>()
 
 // Serialize all DB writes (crew check-ins) so two browsers can't clobber the
 // whole-order JSON blob — each write re-reads inside the chain.
@@ -58,6 +61,7 @@ export function setServerWindow(w: BrowserWindow): void {
   win = w
 }
 function notifyDataChanged(): void {
+  bumpChange()
   if (win && !win.isDestroyed()) win.webContents.send('data-changed')
 }
 function emitStatus(): void {
@@ -93,6 +97,7 @@ export function getServerStatus(): ServerStatus {
     port: lastPort,
     urls: server ? lanUrls(lastPort) : [],
     clientCount: sessions.size,
+    appClients: [...sessions.values()].filter((x) => x.kind === 'app').length,
     error: lastError
   }
 }
@@ -332,12 +337,83 @@ ${nav}
 }
 
 // ---------------------------------------------------------------------------
+// Joined computers (/rpc/*): another Device Manager reads this show's data.
+// Read-only for now; the channel allow-list lives in shared/remote-scope.ts.
+// ---------------------------------------------------------------------------
+function appSession(req: http.IncomingMessage): boolean {
+  const m = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')
+  return !!m && sessions.get(m[1])?.kind === 'app'
+}
+async function handleRpc(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  path: string,
+  method: string
+): Promise<void> {
+  if (!getCurrentProject()) return sendJson(res, 503, { ok: false, error: 'The host has no show open.' })
+
+  if (path === '/rpc/login' && method === 'POST') {
+    let body: { pin?: unknown; appVersion?: unknown }
+    try {
+      body = JSON.parse(await readBody(req))
+    } catch {
+      return sendJson(res, 400, { ok: false, error: 'bad request' })
+    }
+    // The crew directory and every contact detail are readable once joined,
+    // so joining needs the Manager PIN — never an open, PIN-less show.
+    if (managerPin() === '')
+      return sendJson(res, 403, { ok: false, error: 'Set a Manager PIN on the host (Settings → Show Server) to let other computers join.' })
+    if (String(body.pin ?? '').trim() !== managerPin())
+      return sendJson(res, 401, { ok: false, error: 'That isn’t the host’s Manager PIN.' })
+    if (body.appVersion !== app.getVersion())
+      return sendJson(res, 409, { ok: false, error: `The host runs Device Manager ${app.getVersion()} and this computer runs ${String(body.appVersion)}. Update both to the same version.` })
+    const token = randomUUID()
+    sessions.set(token, { role: 'manager', kind: 'app' })
+    emitStatus()
+    return sendJson(res, 200, {
+      ok: true,
+      token,
+      showName: getProjectMeta('showName') || getCurrentProject()?.name || 'Shared show',
+      hostName: os.hostname().replace(/\.local$/, ''),
+      seq: getChangeSeq()
+    })
+  }
+
+  if (!appSession(req)) return sendJson(res, 401, { ok: false, error: 'Not signed in to this show. Join again.' })
+
+  if (path === '/rpc/changes' && method === 'GET') return sendJson(res, 200, { ok: true, seq: getChangeSeq() })
+
+  if (path === '/rpc/call' && method === 'POST') {
+    let body: { channel?: unknown; args?: unknown }
+    try {
+      body = JSON.parse(await readBody(req))
+    } catch {
+      return sendJson(res, 400, { ok: false, error: 'bad request' })
+    }
+    const channel = String(body.channel ?? '')
+    const fn = handlers.get(channel)
+    if (!fn || !remoteReadable(channel) || !Array.isArray(body.args))
+      return sendJson(res, 403, { ok: false, error: 'not allowed' })
+    try {
+      return sendJson(res, 200, { ok: true, result: (await fn(null, ...body.args)) ?? null })
+    } catch (err) {
+      return sendJson(res, 500, { ok: false, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  return sendJson(res, 404, { ok: false, error: 'not found' })
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost')
   const path = url.pathname
   const method = req.method ?? 'GET'
+
+  // Other Device Manager apps that joined this show (JSON, bearer token).
+  if (path.startsWith('/rpc/')) return handleRpc(req, res, path, method)
 
   // No project open → nothing to serve.
   if (!getCurrentProject()) {

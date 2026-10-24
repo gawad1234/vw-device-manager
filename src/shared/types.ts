@@ -196,6 +196,8 @@ export type BundleInput = Omit<Bundle, 'id' | 'createdAt' | 'updatedAt' | 'cable
 export interface ProjectInfo {
   path: string
   name: string
+  /** set while this computer views a show that another computer (the host) has open */
+  remote?: { host: string; offline: boolean }
 }
 
 /** What to export and how. `bundleId` is required when `scope === 'bundle'`.
@@ -379,6 +381,8 @@ export interface ServerStatus {
   urls: string[]
   /** how many distinct sessions are currently signed in */
   clientCount: number
+  /** how many of those are other Device Manager computers that joined this show */
+  appClients: number
   /** human-readable message when the server failed to start */
   error: string | null
 }
@@ -870,6 +874,10 @@ export interface VwDeviceManagerApi {
     openRecent: (path: string) => Promise<ProjectInfo | null>
     saveCopyAs: () => Promise<ProjectInfo | null>
     reveal: () => Promise<void>
+    /** join a show another computer has open (its Show Server address + Manager PIN) */
+    join: (address: string, pin: string) => Promise<ProjectInfo | { error: string }>
+    /** stop viewing the shared show; returns the local project again */
+    leave: () => Promise<ProjectInfo | null>
   }
   /** Fires when another process (a Vectorworks script) writes to the open
    *  project file, so the UI can auto-refresh. Returns an unsubscribe fn. */

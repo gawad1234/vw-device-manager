@@ -39,6 +39,17 @@ workspace context and the cross-machine handoff log — check those first.
     schedule, device list, orders, **projector setup sheet** (one worksheet/page
     per projector) and **truck load sheets** (one page per trip).
   - `server.ts` — the LAN **Show Server** (plain `node:http`); reuses repo/exports.
+    Also the **host side of sharing a show** with other Device Manager computers:
+    `/rpc/login` (manager PIN required — a PIN-less show can't be joined — plus
+    matching app version → bearer token), `/rpc/call` (runs a handler from
+    `rpc-registry.ts`, only channels `shared/remote-scope.ts` marks `read`),
+    `/rpc/changes` (a change counter joined computers poll).
+  - `remote.ts` — the **joining side**: `join/leave/info/call`; polls `/rpc/changes`
+    (1.5 s focused, 4.5 s in the background) and sends `data-changed`.
+  - `ipc.ts` registers every handler through `handle(channel, fn)`: while joined,
+    `read` channels go to the host, writes and `host-only` channels (exports,
+    printing, kits) are refused — **view-only (step 1)**; host writes bump the
+    change counter. Unknown channels default to `write`, so new handlers are safe.
   - `stickers.ts` — **loom labels**: places cable stickers (2 per cable by default,
     {This end}/{Other end} swapped) on a sticker sheet's exact label boxes, start
     offset + printer nudge, printToPDF at the sheet's page size; test page; marks

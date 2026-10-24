@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Bundle, CableType, Device, ProjectInfo, Subnet } from '../../shared/types'
+import { HOST_UNREACHABLE } from '../../shared/remote-scope'
 import SubnetsPage from './pages/SubnetsPage'
 import DevicesPage from './pages/DevicesPage'
 import CablesPage from './pages/CablesPage'
@@ -62,6 +63,9 @@ function App(): React.JSX.Element {
   const [categories, setCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [updateReady, setUpdateReady] = useState(false)
+  // A save or action that failed where the page doesn't show its own error
+  // (e.g. a change refused while viewing a shared show).
+  const [notice, setNotice] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     const [subnetList, deviceList, bundleList, cableTypeList, categoryList] = await Promise.all([
@@ -83,8 +87,25 @@ function App(): React.JSX.Element {
     refresh().finally(() => setLoading(false))
   }, [refresh])
 
-  // Auto-refresh when a Vectorworks script writes to the open project file.
-  useEffect(() => window.api.onDataChanged(() => void refresh()), [refresh])
+  useEffect(() => {
+    const onRejection = (e: PromiseRejectionEvent): void => {
+      const msg = e.reason instanceof Error ? e.reason.message : String(e.reason)
+      if (msg !== HOST_UNREACHABLE) setNotice(msg) // the shared-show banner covers that one
+    }
+    window.addEventListener('unhandledrejection', onRejection)
+    return () => window.removeEventListener('unhandledrejection', onRejection)
+  }, [])
+
+  // Auto-refresh when a Vectorworks script writes to the open project file, or
+  // the host of a shared show changes something (or goes offline / comes back).
+  useEffect(
+    () =>
+      window.api.onDataChanged(() => {
+        void refresh()
+        window.api.projects.current().then(setProject)
+      }),
+    [refresh]
+  )
 
   // Flag the Settings tab when an update is ready, so it's noticed without
   // opening Settings. Reflects the current state on mount, then live changes.
@@ -113,6 +134,27 @@ function App(): React.JSX.Element {
           <ProjectMenu current={project} onSwitched={handleSwitch} />
         </div>
       </header>
+      {notice && (
+        <div className="banner banner-error remote-banner">
+          {notice}
+          <button className="btn btn-small" onClick={() => setNotice(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
+      {project?.remote && (
+        <div className={`banner ${project.remote.offline ? 'banner-warning' : 'banner-info'} remote-banner`}>
+          {project.remote.offline
+            ? `Can’t reach ${project.remote.host} — retrying. What you see may be out of date.`
+            : `Viewing a shared show on ${project.remote.host} (view-only).`}
+          <button
+            className="btn btn-small"
+            onClick={() => window.api.projects.leave().then((info) => info && handleSwitch(info))}
+          >
+            Leave
+          </button>
+        </div>
+      )}
 
       <div className="app-body">
         <nav className="sidebar">

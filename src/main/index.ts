@@ -7,7 +7,9 @@ import { ensureLibrary } from './library'
 import { getDataVersion } from './db'
 import { initUpdater } from './updater'
 import { registerIpcHandlers } from './ipc'
-import { setServerWindow, initServer, stopServer } from './server'
+import { setServerWindow, initServer, stopServer, getServerStatus } from './server'
+import { setRemoteWindow } from './remote'
+import { bumpChange } from './rpc-registry'
 
 function createWindow(): void {
   // Create the browser window.
@@ -43,6 +45,7 @@ function createWindow(): void {
     try {
       const v = getDataVersion()
       if (lastDataVersion !== -1 && v !== lastDataVersion && !mainWindow.isDestroyed()) {
+        bumpChange() // computers that joined this show refresh too
         mainWindow.webContents.send('data-changed')
       }
       lastDataVersion = v
@@ -51,7 +54,9 @@ function createWindow(): void {
     }
   }
   const poll = setInterval(() => {
-    if (mainWindow.isFocused()) checkExternalChanges()
+    // Also while other computers have joined: they need Vectorworks edits made
+    // while this window sits in the background.
+    if (mainWindow.isFocused() || getServerStatus().appClients > 0) checkExternalChanges()
   }, 1500)
   mainWindow.on('focus', checkExternalChanges)
   mainWindow.on('closed', () => clearInterval(poll))
@@ -61,6 +66,8 @@ function createWindow(): void {
 
   // Let the LAN Show Server push 'data-changed' here after crew check-ins.
   setServerWindow(mainWindow)
+  // Joined to a show on another computer: its changes refresh this window.
+  setRemoteWindow(mainWindow)
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
