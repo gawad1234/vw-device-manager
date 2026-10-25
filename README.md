@@ -2,6 +2,8 @@
 
 **A desktop app for running the tech side of an AV / broadcast show — network gear, IPs and VLANs, cables, patching, shop orders, case labels, crew and trucking schedules — synced with your ConnectCAD / Vectorworks drawing.**
 
+![Device Manager — the paperwork a show runs on: IP schedule, pull sheet, projector setup sheet, loom stickers, truck load sheet, case labels](docs/images/hero.jpg)
+
 Device Manager is the source-of-truth database for a show's network: every device, its ports, IP addresses, VLANs, MAC, location and notes. It pushes that data back onto your ConnectCAD drawing in Vectorworks, and helps with everything around it — purchasing/receiving, pull sheets, IP schedules, patching, printed road-case labels, projector and computer setup, and the crew and trucking schedule.
 
 > **Beta software.** You're helping test it — thank you! Please report anything confusing or broken (see [Feedback](#feedback)).
@@ -47,6 +49,25 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
 - **Settings** — company + show branding, the shared libraries, kits, the switch-config template, the **Show Server** (the show on the production WiFi for crew phones) and updates.
 
 📖 **New here? Start with the [Quick Start](docs/QUICK-START.md), then the full [User Guide](docs/USER-GUIDE.md).**
+
+---
+
+## A quick look
+
+*All screenshots use a made-up demo show.*
+
+| | |
+|---|---|
+| ![Devices: every device, port, IP and VLAN](docs/images/devices.jpg) | ![Synced onto the ConnectCAD drawing](docs/images/vectorworks-sync.jpg) |
+| **Devices** — every port, IP and VLAN, with conflict warnings | **Vectorworks** — data pushed onto the ConnectCAD drawing |
+| ![Subnets and a generated NETGEAR switch config](docs/images/networking.jpg) | ![Panasonic projector setup](docs/images/projectors.jpg) |
+| **Networking** — subnets, VLANs and the switch config, written for you | **Projectors, wallpapers, install kits** |
+| ![A sticker sheet printed with both ends of every cable](docs/images/loom-labels.jpg) | ![Patching from the circuit report](docs/images/patching.jpg) |
+| **Loom labels** — a sticker for both ends of every cable, on real sticker sheets | **Patching** — tick off each end and test, from the circuit report |
+| ![Case labels](docs/images/case-labels.jpg) | ![Crew schedule with costs](docs/images/crew.jpg) |
+| **Case labels** — one for every road case | **Crew** — days, call times and what it costs |
+| ![Truck load sheet](docs/images/load-sheet.jpg) | ![The Show Server on crew phones](docs/images/show-server.jpg) |
+| **Trucking** — load sheets with the on-arrival contact | **Show Server** — the show on the crew's phones |
 
 ---
 
