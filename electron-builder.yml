@@ -20,6 +20,9 @@ files:
   # Dropbox sync conflict artifacts (e.g. "node_modules 2") — never bundle them
   - '!node_modules 2'
   - '!**/*conflicted copy*'
+  # Local work folders (launch-video renders, code graph) — never bundle them
+  - '!brag-output*'
+  - '!graphify-out'
 asarUnpack:
   - resources/**
 win:
@@ -39,10 +42,12 @@ mac:
     - zip
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    NSCameraUsageDescription: Application requests access to the device's camera.
+    NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    # macOS 15+: needed to reach other computers on the LAN (joining a shared show).
+    NSLocalNetworkUsageDescription: Device Manager connects to other computers on your local network to share a show.
   notarize: false
 dmg:
   artifactName: ${name}-${version}.${ext}

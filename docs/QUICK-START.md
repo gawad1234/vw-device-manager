@@ -55,6 +55,8 @@ The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 
 In Vectorworks, run the sync scripts to write everything back onto your ConnectCAD devices. One-time setup and the workflow are in **[vectorworks-scripts/README.md](../vectorworks-scripts/README.md)**.
 
+**Working as a team?** Keep the show on the Vectorworks computer, turn on the **Show Server** there with a **manager PIN**, and other computers running Device Manager can **join** it from the project menu (*Join a show on the network…*) to see it live — view-only for now. Details: [Sharing a show with other computers](USER-GUIDE.md#sharing-a-show-with-other-computers).
+
 ---
 
 That's the loop. The **[User Guide](USER-GUIDE.md)** covers every tab and feature in detail.
