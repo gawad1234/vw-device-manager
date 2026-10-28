@@ -58,6 +58,13 @@ workspace context and the cross-machine handoff log — check those first.
   - `switch-config.ts` — NETGEAR M4350 config generator; `software-kit.ts` — the
     install-kit `Install.ps1`/`Install.bat` generator (pure, tested);
     `vlan-script.ts` — Hyper-V VLAN script for the Configs tab.
+  - `lightwright-sync.ts` — **live Vectorworks Spotlight sync for lighting**: stands in for
+    Lightwright on the `<drawing>.xml` exchange file (default `<show>.xml` beside the `.vwdm`,
+    or a chosen path). Polls mtime every 1.5 s; ingests files Vectorworks wrote (UID-first
+    matching, `Lightwright_ID` = our fixture row id, `Entire Plot` deletes rows missing from the
+    drawing); on fixture saves writes the whole rig back with every AppStamp `Lightwright`,
+    reading first and never writing while our last file is unconsumed. Host only (off while
+    joined). Protocol: `_Master/knowledge/vectorworks-lightwright-exchange.md`.
   - `repository.ts` — CRUD + validation for devices/subnets (IP conflict
     checks, IP-outside-subnet checks, etc. — see `DeviceWarning` types).
   - `ipc.ts` — wires repository methods to IPC handlers.
@@ -67,13 +74,14 @@ workspace context and the cross-machine handoff log — check those first.
   (`src/shared/types.ts`) to the renderer via `contextBridge`.
 - **Renderer** (`src/renderer/src/`): React UI — `App.tsx` shell with the
   sidebar (Devices › Projectors/Wallpapers/Software, Networking, Schedule ›
-  Crew/Trucking, Cables, Patching, Orders, Packing, Settings) and one file per
+  Crew/Trucking, Cables, Lighting › Fixtures/Universes/Fixture types, Patching, Orders, Packing, Settings) and one file per
   page in `pages/`. Shared two-pane page: `components/DeviceSetupPage.tsx`.
 - **Shared** (`src/shared/`): `types.ts` (all data types + the
   `VwDeviceManagerApi` contract shared between main/preload/renderer), and pure
   logic used by both sides: `projector-settings.ts` (Panasonic command catalog),
   `software.ts` (silent-switch presets), `crew-cost.ts` (hours/OT/cost),
-  `sticker-sheet.ts` (label-template .docx parser — positioned shapes or Avery
+  `lw-exchange.ts` (parse/build the Lightwright exchange file, absolute ↔ universe/address),
+  `lighting-checks.ts` (patch warnings), `sticker-sheet.ts` (label-template .docx parser — positioned shapes or Avery
   table — plus `tidyLabels`/`stickerSlots`, `BUNDLE_COLOR`).
 - **Sticker template import runs in the renderer** (`lib/stickerImport.ts`): .docx via
   `jszip`, .pdf via `pdfjs-dist` (bounding boxes of drawn paths on page 1, CTM
@@ -124,6 +132,12 @@ workspace context and the cross-machine handoff log — check those first.
   each `{id, data_json}` via the generic `listJsonRows/saveJsonRow` helpers in
   repository.ts; schedule window + phases in project meta key `schedule`. Crew
   rows hold only the directory id + show rates + days (no contact details).
+
+- **Lighting** (per show): `fixtures` table (`{id, data_json}`, `Fixture` in types.ts — the row id
+  is the `Lightwright_ID` Vectorworks stores; `vw` keeps the raw drawing fields we echo back;
+  `notes`/`mode` are app-only). Project meta `lighting` = `{exchangePath, syncOn, universes:
+  {[n]: {deviceId, label}}}`; `lightingVw` = the last Vectorworks field list/header/universe table.
+  `library.json` → `fixtureTypes` (`{name, modes: [{name, footprint}]}`, shared).
 
 ## Vectorworks sync (`vectorworks-scripts/`)
 

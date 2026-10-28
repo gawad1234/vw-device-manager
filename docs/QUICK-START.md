@@ -47,6 +47,7 @@ The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 - **Cables** — group cables into bundles (looms) and export pull sheets and labels; **Loom labels** prints a sticker for each end of every cable onto manufacturer sticker sheets.
 - **Labels + Cases** — design a road-case label template, list what's in each case, and print a label per case.
 - **Schedule** — book crew and track their days, call times and cost (**Crew**); plan trucks and trips and print **load sheets** for the shop (**Trucking**).
+- **Lighting** — turn on Lightwright data exchange in Vectorworks' Spotlight preferences, tick **Live sync** on **Lighting → Fixtures**, and the rig flows both ways: channels, addresses, purposes, colors, gobos. **Universes** shows each DMX universe and flags overlaps.
 - **Devices → Projectors / Wallpapers / Software** — Panasonic projector setup sheets, branded desktop wallpapers, and USB install kits for show computers.
 
 ---

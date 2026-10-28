@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Device Manager**
-Effective date: October 24, 2026
+Effective date: October 28, 2026
 Provided by: Gabriel Awad ("we", "us") — contact: gabriel@gabrielawad.com
 
 ## The short version
@@ -15,13 +15,13 @@ reaches the internet on its own is to check GitHub for a software update.
 
 Everything you enter — devices, networks/VLANs, cables, shop orders, case
 labels, cases, patching, projector and wallpaper setups, software install kits,
-crew and trucking schedules, and your company/show branding — is stored in
+crew and trucking schedules, lighting fixtures and universes, and your company/show branding — is stored in
 **files on your own computer**:
 
 - **Project files** (`*.vwdm`) — one per show, plain SQLite databases.
 - **A shared library file** (`library.json`) — your cross-project catalogs
   (device categories, cable types, signal types, auto-add kits, the software
-  library, the switch-config template and admin login), your **company name and
+  library, the switch-config template and admin login, lighting fixture types), your **company name and
   logo**, and your **crew directory**.
 - **Per-machine settings** (`settings.json` in the app's data folder) — e.g.
   your recent-projects list and update preference.
@@ -71,7 +71,9 @@ usage statistics, crash reports, your IP address, or any personal information.
    the manager PIN and read it through the same local server; that traffic also
    stays on your network.
 
-Apart from these, the app makes no outbound connections.
+Apart from these, the app makes no outbound connections. (Lighting sync with
+Vectorworks is not a network connection: the app reads and writes the exchange
+file beside your drawing on your own computer.)
 
 ## Device permissions
 

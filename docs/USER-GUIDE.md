@@ -17,6 +17,8 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
   - [Truck load sheets](#truck-load-sheets)
 - [Cables](#cables)
   - [Loom labels (sticker sheets)](#loom-labels)
+- [Lighting](#lighting)
+  - [Live sync with Vectorworks Spotlight](#live-sync-with-vectorworks-spotlight)
 - [Patching](#patching)
 - [Orders](#orders)
   - [Auto-add kits](#auto-add-kits)
@@ -30,7 +32,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Syncing to Vectorworks](#syncing-to-vectorworks)
 - [Troubleshooting](#troubleshooting)
 
-The left sidebar groups these: **Devices** (with Projectors, Wallpapers and Software under it), **Networking** (Subnets, Configs), **Schedule** (Crew, Trucking), **Cables**, **Patching**, **Orders**, **Packing** (Labels, Cases) and **Settings**.
+The left sidebar groups these: **Devices** (with Projectors, Wallpapers and Software under it), **Networking** (Subnets, Configs), **Schedule** (Crew, Trucking), **Cables**, **Lighting** (Fixtures, Universes, Fixture types), **Patching**, **Orders**, **Packing** (Labels, Cases) and **Settings**.
 
 ---
 
@@ -217,6 +219,46 @@ For a GUI instead of a script, the project repo ships a small **VLAN Manager** i
 Tie it to Device Manager with **Export JSON…** here → **Load config…** in the tool. Setup and full instructions are in [`host-tools/README.md`](../host-tools/README.md).
 
 > Both the generated script and the tool need Windows 10/11 Pro+ with Hyper-V, and administrator rights.
+
+---
+
+## Lighting
+
+*(beta)* The **Lighting** group in the sidebar tracks a lighting rig, Lightwright-style. Fixtures come from your Vectorworks Spotlight drawing (see [live sync](#live-sync-with-vectorworks-spotlight) below) and are stored in the show's project file.
+
+**Fixtures** — the rig, grouped by hanging position and sorted by unit number. **Sort by channel** flips it into a channel hookup. Columns: unit, type (and mode), purpose, channel, universe/address (shown as `1/101`), color, gobo, dimmer and notes. Click a row to edit every field: position, unit, instrument type, mode, purpose, channel, universe + address, color, gobo 1/2, accessories, wattage, dimmer, circuit name/number, mark, user fields 1–6 and notes. **Notes** and **mode** stay in Device Manager; everything else is sent to the drawing.
+
+**Patch checks** — a **To check** count in the header and a list under the table, with a **!** on the affected rows:
+- two fixtures whose address ranges **overlap** in the same universe,
+- a fixture that **runs past address 512**,
+- a fixture with a **channel but no address** (or an address but no channel),
+- a fixture type whose **footprint isn't known** yet (it's counted as 1 address until you set it),
+- a universe in use that **isn't linked to a DMX node**.
+
+Several fixtures on one channel is normal, so that isn't flagged.
+
+**Universes** — one card per universe in use: how many of its 512 addresses are used, a bar showing what's patched where (overlaps in red), and the fixture list with address ranges. Pick the **DMX node** (any device from Devices — e.g. an sACN/Art-Net node) the universe comes out of, and type its port or label.
+
+**Fixture types** — every instrument type in the rig, with its **modes** and how many DMX addresses each takes (**footprint**). The overlap check needs these. Fixture types are shared by every show, so you set a type up once. A type with a single mode doesn't need a mode chosen on each fixture.
+
+### Live sync with Vectorworks Spotlight
+
+Device Manager talks to Vectorworks the way **Lightwright** does, through the data exchange file Vectorworks keeps beside the drawing (`MyShow.vwx` → `MyShow.xml`). No scripts are needed.
+
+1. In Vectorworks: **Spotlight preferences → Lightwright**, turn on the data exchange and tick the fields to share (channel, purpose, address, color, gobos, position, unit number…).
+2. Keep the show's project beside the drawing with the same name (`MyShow.vwdm`). Device Manager finds `MyShow.xml` on its own; **Choose file…** points it at a different one.
+3. On **Lighting → Fixtures**, tick **Live sync with Vectorworks**.
+
+Then:
+- When the drawing opens, Vectorworks sends the whole rig (this can take a few minutes) and the fixtures appear.
+- Edits in Vectorworks arrive in the app on their own.
+- Edits in the app are sent to Vectorworks a moment after you save; it applies them within about a minute or two. The sync bar shows **waiting for Vectorworks** until it has.
+
+Good to know:
+- **The drawing decides which fixtures exist.** Add and delete fixtures in Vectorworks; a fixture removed from the drawing is removed from the app at the next full export.
+- Sync runs only on the computer that has the show open. Computers that [join the show](#sharing-a-show-with-other-computers) see the fixtures but don't sync.
+- Vectorworks has to be running with the drawing open to pick up the app's edits; until then they wait.
+- Don't run real Lightwright on the same drawing at the same time — both would answer the same exchange file.
 
 ---
 
@@ -413,6 +455,9 @@ Its silent switches are wrong for that installer. Check `install-log.txt` in the
 
 **An export looks off (wrong columns, cramped, etc.).**
 Check which **export format** is selected in the Export menu — switch to **Default**, or open **Edit formats…** and adjust columns/width/density.
+
+**Lighting sync isn't picking anything up.**
+Check the sync bar on **Lighting → Fixtures**: it shows which exchange file it's watching and whether it was found. The file appears only after Lightwright data exchange is turned on in Vectorworks' Spotlight preferences and the drawing has been opened. If it says **waiting for Vectorworks**, open the drawing — Vectorworks picks up the app's changes only while the drawing is open.
 
 **Something else?**
 Please **[open an issue](https://github.com/gawad1234/vw-device-manager/issues/new)** with what you did, what you expected, and what happened — a screenshot helps a lot.

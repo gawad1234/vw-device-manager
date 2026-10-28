@@ -43,6 +43,7 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
 - **Networking** — **Subnets** (name, CIDR, VLAN, gateway) and **Configs** (a Hyper-V VLAN PowerShell script or JSON for the VLAN Manager host tool).
 - **Schedule** *(beta)* — **Crew**: a shared crew directory, a per-show date grid (working/off, call times, phases) with day-rate or hourly + overtime costs. **Trucking**: trucks and trips with addresses, dock slots, on-arrival contacts and the cases on board, plus printable **truck load sheets** for the shop.
 - **Cables** — cable bundles and the cables in them (type, color, length, endpoints, pulled/labeled). Export pull sheets, schedules and cable labels. Under it, **Loom labels**: import a sticker sheet template (Word or PDF, e.g. OnlineLabels / Avery), design the sticker, and print one for each end of every cable in the looms you pick.
+- **Lighting** *(beta)* — **Fixtures**: the lighting rig (position, unit, type, mode, purpose, channel, universe/address, color, gobos, dimmer, circuit, user fields, notes) with **live two-way sync with Vectorworks Spotlight** through its Lightwright exchange file. **Universes**: what's patched where in each DMX universe, overlaps in red, and which DMX/sACN node from Devices each universe comes out of. **Fixture types**: DMX modes and footprints, shared by every show. Patch checks flag overlapping addresses, fixtures past 512, half-patched fixtures and universes with no node.
 - **Patching** — import the drawing's circuit report and track patching per end, plus tested.
 - **Orders** — shop orders with equipment + cables, tracking **ordered vs. received**. Import from the drawing, paste from Excel, auto-add kits, and export **pull orders** and **receiving checklists** (PDF/Excel/CSV) in your own **export formats**.
 - **Packing** — **Labels** (case-label templates on a freeform canvas, printed two-up on Uline S-19323) and **Cases** (what's in each road case → a label per case).
@@ -77,6 +78,8 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
 Device Manager is the database; a set of Python scripts run **inside Vectorworks** (Script Palette) to link ConnectCAD devices to rows in it and push the data onto the drawing. One-time setup and the full workflow are in **[vectorworks-scripts/README.md](vectorworks-scripts/README.md)**.
 
 > The app can stay open while a sync script runs — it refreshes when the script writes.
+
+**Lighting** syncs differently: turn on Vectorworks' Lightwright data exchange and Device Manager stands in for Lightwright, so fixture edits flow both ways live — no scripts. See [Lighting](docs/USER-GUIDE.md#lighting) in the User Guide.
 
 ---
 
