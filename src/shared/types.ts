@@ -743,6 +743,76 @@ export interface TruckTrip {
 
 export type TruckTripInput = Omit<TruckTrip, 'id'>
 
+// ---- Lighting -----------------------------------------------------------------
+
+/** A lighting fixture (one Vectorworks Lighting Device). The row id is the
+ *  Lightwright_ID handed to Vectorworks through the exchange file. */
+export interface Fixture {
+  id: number
+  /** Vectorworks' UID, e.g. "1006.1.1.0.1"; '' for none */
+  vwUid: string
+  position: string
+  unit: string
+  instType: string
+  /** DMX mode — app-only, picks the footprint from Fixture types */
+  mode: string
+  purpose: string
+  /** channels are text in Vectorworks; sorted numerically where they are numbers */
+  channel: string
+  universe: number | null
+  address: number | null
+  /** Vectorworks DMX system letter (A–F) */
+  system: string
+  color: string
+  gobo1: string
+  gobo2: string
+  accessories: string
+  wattage: string
+  dimmer: string
+  circuitName: string
+  circuitNumber: string
+  mark: string
+  userFields: string[]
+  notes: string
+  /** everything Vectorworks last sent for this fixture (symbol, layer, X/Y/Z…), written back as-is apart from our edits */
+  vw: Record<string, string>
+}
+
+export type FixtureInput = Omit<Fixture, 'id'>
+
+/** A DMX mode of a fixture type and how many addresses it takes. */
+export interface FixtureMode {
+  name: string
+  footprint: number
+}
+
+/** Shared across shows (library): matched to fixtures by instType. */
+export interface FixtureType {
+  name: string
+  modes: FixtureMode[]
+}
+
+/** Per-show lighting settings (project meta "lighting"). */
+export interface LightingSettings {
+  /** the Vectorworks exchange .xml; '' = the one named after the open show */
+  exchangePath: string
+  syncOn: boolean
+  /** universe number → the DMX/sACN node (a device) it comes out of */
+  universes: Record<string, { deviceId: number | null; label: string }>
+}
+
+export interface LightingSyncStatus {
+  path: string
+  found: boolean
+  syncOn: boolean
+  /** ISO times of the last read from / write to Vectorworks */
+  lastIn: string | null
+  lastOut: string | null
+  /** we wrote changes and Vectorworks hasn't picked them up yet */
+  waitingForVw: boolean
+  error: string | null
+}
+
 /** A sub-editor row's save, called by a modal's "Save changes" so it flushes
  *  every child row (ports/cables), not just the top-level fields. */
 export type RowSaver = () => Promise<{ ok: boolean; error?: string }>
@@ -804,6 +874,26 @@ export interface VwDeviceManagerApi {
     trips: () => Promise<TruckTrip[]>
     saveTrip: (id: number | null, input: TruckTripInput) => Promise<TruckTrip>
     removeTrip: (id: number) => Promise<void>
+  }
+  /** Lighting fixtures (per show). Which fixtures exist comes from the drawing. */
+  fixtures: {
+    list: () => Promise<Fixture[]>
+    save: (id: number, input: FixtureInput) => Promise<Fixture>
+  }
+  /** Per-show lighting settings + the live Vectorworks sync (Lightwright exchange file). */
+  lighting: {
+    get: () => Promise<LightingSettings>
+    setUniverse: (universe: number, deviceId: number | null, label: string) => Promise<void>
+    syncStatus: () => Promise<LightingSyncStatus>
+    setSync: (on: boolean) => Promise<LightingSyncStatus>
+    /** pick a different exchange .xml */
+    chooseFile: () => Promise<LightingSyncStatus>
+    onSyncStatus: (cb: (status: LightingSyncStatus) => void) => () => void
+  }
+  /** Shared fixture types: DMX modes + footprints. Saving a type with no modes removes it. */
+  fixtureTypes: {
+    list: () => Promise<FixtureType[]>
+    save: (type: FixtureType) => Promise<FixtureType[]>
   }
   /** Shared library of Windows installers + per-computer install kits. */
   software: {

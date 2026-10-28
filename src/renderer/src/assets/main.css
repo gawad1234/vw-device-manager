@@ -2125,3 +2125,80 @@ input[type='checkbox'] {
   padding: 7px 20px;
   flex: none;
 }
+
+/* ---- Lighting ---- */
+.lx-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 18px;
+}
+.lx-sync-path {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lx-group h3 {
+  margin: 18px 0 6px;
+}
+.lx-warn {
+  margin-left: 6px;
+  cursor: help;
+}
+.lx-warnings {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.7;
+}
+.lx-universe {
+  margin-bottom: 26px;
+}
+.lx-universe-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 8px;
+}
+.lx-universe-head h3 {
+  margin: 0;
+}
+.lx-bar {
+  position: relative;
+  height: 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.lx-bar-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  background: var(--accent);
+  opacity: 0.75;
+}
+.lx-bar-bad {
+  background: var(--danger);
+}
+.lx-row-bad td {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+.lx-mode {
+  display: inline-flex;
+  gap: 4px;
+  margin: 2px 12px 2px 0;
+}
+.lx-mode input {
+  width: 110px;
+}
+.lx-mode input.mono {
+  width: 64px;
+}
+.lx-group td.mono {
+  white-space: nowrap;
+}

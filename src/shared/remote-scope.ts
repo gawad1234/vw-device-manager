@@ -29,7 +29,10 @@ const READ = new Set([
   'orderFormats:list',
   'orderKits:list',
   'cases:list',
-  'circuits:list'
+  'circuits:list',
+  'fixtures:list',
+  'lighting:get',
+  'fixtureTypes:list'
 ])
 
 /** Need this machine's files, dialogs or printer but read the open project's data:
@@ -48,8 +51,9 @@ const HOST_ONLY = new Set([
   'circuits:import'
 ])
 
-/** Always this machine: app updates, this machine's Show Server, project switching. */
-const LOCAL_GROUPS = ['updates:', 'server:', 'project:']
+/** Always this machine: app updates, this machine's Show Server, project switching,
+ *  the Vectorworks lighting sync (it runs on the computer that has the show open). */
+const LOCAL_GROUPS = ['updates:', 'server:', 'project:', 'lightingSync:']
 
 /** Anything not listed is a write — refused while joined, so a new channel is safe by default. */
 export function channelScope(channel: string): ChannelScope {

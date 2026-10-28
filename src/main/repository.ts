@@ -28,6 +28,9 @@ import type {
   CrewAssignment,
   CrewAssignmentInput,
   ScheduleMeta,
+  Fixture,
+  FixtureInput,
+  LightingSettings,
   Truck,
   TruckInput,
   TruckTrip,
@@ -1123,7 +1126,7 @@ export function mergeCircuits(rows: CircuitImport[]): CircuitImportResult {
 // ---- Crew + trucking schedule (per show) ---------------------------------
 // Rows are {id, data_json}; these three helpers serve all three tables.
 
-type JsonTable = 'crew_assignments' | 'trucks' | 'truck_trips'
+type JsonTable = 'crew_assignments' | 'trucks' | 'truck_trips' | 'fixtures'
 
 function listJsonRows<T>(table: JsonTable): T[] {
   return queryAll(`SELECT id, data_json FROM ${table} ORDER BY id`).map(
@@ -1179,4 +1182,20 @@ export function getScheduleMeta(): ScheduleMeta {
 
 export function setScheduleMeta(meta: ScheduleMeta): void {
   setProjectMeta('schedule', JSON.stringify(meta))
+}
+
+// ---- Lighting (per show) -------------------------------------------------
+
+export const listFixtures = (): Fixture[] => listJsonRows('fixtures')
+export const saveFixture = (id: number | null, input: FixtureInput): Fixture =>
+  saveJsonRow<Fixture>('fixtures', id, input)
+export const deleteFixture = (id: number): void => deleteJsonRow('fixtures', id)
+
+export function getLightingSettings(): LightingSettings {
+  const empty: LightingSettings = { exchangePath: '', syncOn: false, universes: {} }
+  return { ...empty, ...parseJson<LightingSettings>(getProjectMeta('lighting')) }
+}
+
+export function setLightingSettings(settings: LightingSettings): void {
+  setProjectMeta('lighting', JSON.stringify(settings))
 }

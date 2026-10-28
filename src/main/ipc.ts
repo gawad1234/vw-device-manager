@@ -17,6 +17,7 @@ import { channelScope } from '../shared/remote-scope'
 import { projectorCommandsCsv } from '../shared/projector-settings'
 import { generateInstallScript, INSTALL_BAT, kitFileNames } from './software-kit'
 import { printStickers, printStickerTest } from './stickers'
+import * as lighting from './lightwright-sync'
 import type {
   BuildKitResult,
   PrintStickersOptions,
@@ -26,6 +27,8 @@ import type {
   CrewMemberInput,
   ScheduleMeta,
   TruckInput,
+  FixtureInput,
+  FixtureType,
   TruckTripInput,
   SoftwarePackageInput,
   ProjectorConfig,
@@ -140,6 +143,27 @@ export function registerIpcHandlers(): void {
     repo.saveTruckTrip(id, input)
   )
   handle('trucking:removeTrip', (_e, id: number) => repo.deleteTruckTrip(id))
+
+  // Lighting (per show) + live Vectorworks sync through the Lightwright exchange file.
+  handle('fixtures:list', () => repo.listFixtures())
+  handle('fixtures:save', (_e, id: number, input: FixtureInput) => {
+    const saved = repo.saveFixture(id, input)
+    lighting.markLightingDirty()
+    return saved
+  })
+  handle('lighting:get', () => repo.getLightingSettings())
+  handle('lighting:setUniverse', (_e, universe: number, deviceId: number | null, label: string) => {
+    const s = repo.getLightingSettings()
+    repo.setLightingSettings({
+      ...s,
+      universes: { ...s.universes, [String(universe)]: { deviceId, label } }
+    })
+  })
+  handle('fixtureTypes:list', () => library.listFixtureTypes())
+  handle('fixtureTypes:save', (_e, type: FixtureType) => library.saveFixtureType(type))
+  handle('lightingSync:status', () => lighting.getLightingSyncStatus())
+  handle('lightingSync:set', (_e, on: boolean) => lighting.setLightingSync(on))
+  handle('lightingSync:choose', () => lighting.chooseExchangeFile())
 
   // Software library (shared) + per-computer install kits.
   handle('software:list', () => library.listSoftware())

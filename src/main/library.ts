@@ -18,7 +18,8 @@ import type {
   StickerSheet,
   StickerSheetInput,
   SoftwarePackageInput,
-  SwitchConfigSettings
+  SwitchConfigSettings,
+  FixtureType
 } from '../shared/types'
 
 /**
@@ -50,6 +51,8 @@ interface Library {
   /** Cable loom sticker sheet types + designs. */
   stickerSheets: StickerSheet[]
   stickerDesigns: StickerDesign[]
+  /** Lighting fixture types with their DMX modes + footprints. */
+  fixtureTypes: FixtureType[]
 }
 
 function defaultSwitchConfig(): SwitchConfigSettings {
@@ -70,7 +73,8 @@ function readLibrary(): Library {
       software: raw.software ?? [],
       crew: raw.crew ?? [],
       stickerSheets: raw.stickerSheets ?? [],
-      stickerDesigns: raw.stickerDesigns ?? []
+      stickerDesigns: raw.stickerDesigns ?? [],
+      fixtureTypes: raw.fixtureTypes ?? []
     }
   } catch {
     return {
@@ -84,7 +88,8 @@ function readLibrary(): Library {
       software: [],
       crew: [],
       stickerSheets: [],
-      stickerDesigns: []
+      stickerDesigns: [],
+      fixtureTypes: []
     }
   }
 }
@@ -115,7 +120,8 @@ export async function ensureLibrary(): Promise<void> {
     software: [],
     crew: [],
     stickerSheets: [],
-    stickerDesigns: []
+    stickerDesigns: [],
+    fixtureTypes: []
   })
 }
 
@@ -403,4 +409,20 @@ export function deleteStickerDesign(id: number): void {
   const lib = readLibrary()
   lib.stickerDesigns = lib.stickerDesigns.filter((d) => d.id !== id)
   writeLibrary(lib)
+}
+
+// ---- Lighting fixture types (shared) -------------------------------------
+
+export function listFixtureTypes(): FixtureType[] {
+  return readLibrary().fixtureTypes
+}
+
+/** Replace one type's modes by name; a type with no modes is removed. */
+export function saveFixtureType(type: FixtureType): FixtureType[] {
+  const lib = readLibrary()
+  const others = lib.fixtureTypes.filter((t) => t.name !== type.name)
+  const modes = type.modes.filter((m) => m.footprint > 0)
+  lib.fixtureTypes = modes.length ? [...others, { name: type.name, modes }] : others
+  writeLibrary(lib)
+  return lib.fixtureTypes
 }

@@ -234,6 +234,13 @@ CREATE TABLE IF NOT EXISTS truck_trips (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   data_json TEXT NOT NULL
 );
+
+-- Lighting fixtures (per show), data_json = Fixture minus id. The id doubles as
+-- the Lightwright_ID handed to Vectorworks through the exchange file.
+CREATE TABLE IF NOT EXISTS fixtures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  data_json TEXT NOT NULL
+);
 `
 
 // A real embedded SQLite (Node's built-in node:sqlite — no native module) that

@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
+  FixtureInput,
+  FixtureType,
   BundleInput,
   CableInput,
   CableTypeInput,
@@ -94,6 +96,27 @@ const api: VwDeviceManagerApi = {
     saveTrip: (id: number | null, input: TruckTripInput) =>
       invoke('trucking:saveTrip', id, input),
     removeTrip: (id: number) => invoke('trucking:removeTrip', id)
+  },
+  fixtures: {
+    list: () => invoke('fixtures:list'),
+    save: (id: number, input: FixtureInput) => invoke('fixtures:save', id, input)
+  },
+  lighting: {
+    get: () => invoke('lighting:get'),
+    setUniverse: (universe: number, deviceId: number | null, label: string) =>
+      invoke('lighting:setUniverse', universe, deviceId, label),
+    syncStatus: () => invoke('lightingSync:status'),
+    setSync: (on: boolean) => invoke('lightingSync:set', on),
+    chooseFile: () => invoke('lightingSync:choose'),
+    onSyncStatus: (cb) => {
+      const listener = (_e: unknown, status: Parameters<typeof cb>[0]): void => cb(status)
+      ipcRenderer.on('lighting-sync-status', listener)
+      return () => ipcRenderer.removeListener('lighting-sync-status', listener)
+    }
+  },
+  fixtureTypes: {
+    list: () => invoke('fixtureTypes:list'),
+    save: (type: FixtureType) => invoke('fixtureTypes:save', type)
   },
   software: {
     list: () => invoke('software:list'),

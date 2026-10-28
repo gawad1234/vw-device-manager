@@ -15,6 +15,9 @@ import SoftwarePage from './pages/SoftwarePage'
 import CrewPage from './pages/CrewPage'
 import LoomLabelsPage from './pages/LoomLabelsPage'
 import TruckingPage from './pages/TruckingPage'
+import FixturesPage from './pages/FixturesPage'
+import UniversesPage from './pages/UniversesPage'
+import FixtureTypesPage from './pages/FixtureTypesPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjectMenu from './components/ProjectMenu'
 
@@ -33,13 +36,17 @@ type Tab =
   | 'labels'
   | 'cases'
   | 'patching'
+  | 'fixtures'
+  | 'universes'
+  | 'fixtureTypes'
   | 'settings'
 
 // Collapsible sidebar groups and the tabs they contain.
 const NAV_GROUPS: Record<string, Tab[]> = {
   networking: ['subnets', 'configs'],
   schedule: ['crew', 'trucking'],
-  packing: ['labels', 'cases']
+  packing: ['labels', 'cases'],
+  lighting: ['fixtures', 'universes', 'fixtureTypes']
 }
 
 function App(): React.JSX.Element {
@@ -225,6 +232,34 @@ function App(): React.JSX.Element {
               Loom labels
             </button>
           </div>
+          <div className="side-group">
+            <button
+              className={`side-group-head ${NAV_GROUPS.lighting.includes(tab) ? 'has-active' : ''}`}
+              onClick={() => toggleGroup('lighting')}
+            >
+              <span className="side-caret">{groupOpen('lighting') ? '▾' : '▸'}</span>
+              Lighting
+            </button>
+            {groupOpen('lighting') && (
+              <div className="side-sub">
+                {(
+                  [
+                    ['fixtures', 'Fixtures'],
+                    ['universes', 'Universes'],
+                    ['fixtureTypes', 'Fixture types']
+                  ] as const
+                ).map(([t, label]) => (
+                  <button
+                    key={t}
+                    className={`side-item ${tab === t ? 'active' : ''}`}
+                    onClick={() => setTab(t)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             className={`side-item ${tab === 'patching' ? 'active' : ''}`}
             onClick={() => setTab('patching')}
@@ -341,6 +376,12 @@ function App(): React.JSX.Element {
           <CasesPage />
         ) : tab === 'patching' ? (
           <PatchingPage />
+        ) : tab === 'fixtures' ? (
+          <FixturesPage key={project?.path} />
+        ) : tab === 'universes' ? (
+          <UniversesPage key={project?.path} devices={devices} />
+        ) : tab === 'fixtureTypes' ? (
+          <FixtureTypesPage key={project?.path} />
         ) : (
           <SettingsPage
             key={project?.path}

@@ -10,6 +10,7 @@ import { registerIpcHandlers } from './ipc'
 import { setServerWindow, initServer, stopServer, getServerStatus } from './server'
 import { setRemoteWindow } from './remote'
 import { bumpChange } from './rpc-registry'
+import { setLightingWindow, startLightingSync } from './lightwright-sync'
 
 function createWindow(): void {
   // Create the browser window.
@@ -68,6 +69,8 @@ function createWindow(): void {
   setServerWindow(mainWindow)
   // Joined to a show on another computer: its changes refresh this window.
   setRemoteWindow(mainWindow)
+  // Live lighting sync with Vectorworks pushes its status + data changes here.
+  setLightingWindow(mainWindow)
 
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
@@ -100,6 +103,7 @@ app.whenReady().then(async () => {
   registerIpcHandlers()
 
   createWindow()
+  startLightingSync()
 
   // Auto-start the LAN Show Server if this machine has it enabled.
   await initServer()
