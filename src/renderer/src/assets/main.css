@@ -2469,3 +2469,53 @@ body.col-resizing {
   text-align: left;
   padding: 4px 7px;
 }
+
+/* Paperwork: template list grouped by area, section extras */
+.lxr-area {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.lxr-area-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 4px 12px 2px;
+}
+.lxr-new select {
+  width: 100%;
+}
+.lxr-bound {
+  margin: 0 0 10px;
+}
+.lxr-preview .lxr-sw {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  margin-right: 6px;
+  border: 1px solid #0003;
+}
+.lxr-count,
+.lxr-note {
+  color: #666;
+  font-weight: 400;
+  font-size: 0.85em;
+}
+.lxr-note {
+  margin: -2px 0 4px;
+}
+.lxr-table td.lxr-dcell {
+  font-weight: 600;
+  vertical-align: middle;
+}
+.lxr-table td {
+  white-space: pre-line;
+}
+.menu-item.menu-item-muted {
+  color: var(--muted);
+  font-size: 0.92em;
+}

@@ -21,7 +21,7 @@ import type {
   SwitchConfigSettings,
   FixtureType
 } from '../shared/types'
-import { REPORT_PRESETS, type LightingReport } from '../shared/lighting-reports'
+import { DOC_TEMPLATES, withBuiltIns, type PaperworkTemplate } from '../shared/paperwork'
 import { normalizeTableStyle, type TableStyle } from '../shared/table-style'
 
 /**
@@ -55,8 +55,10 @@ interface Library {
   stickerDesigns: StickerDesign[]
   /** Lighting fixture types with their DMX modes + footprints. */
   fixtureTypes: FixtureType[]
-  /** Lighting paperwork templates; null = never saved, so the built-in presets show. */
-  lightingReports: LightingReport[] | null
+  /** Paperwork templates (every export's layout + the user's own); null = never saved. */
+  paperwork: PaperworkTemplate[] | null
+  /** v2.9.0's lighting-only templates, read once to carry them into `paperwork`. */
+  lightingReports?: Omit<PaperworkTemplate, 'source' | 'mergeRepeats'>[] | null
   /** How exported tables look (Excel + PDF); null = the default look. */
   tableStyle: TableStyle | null
 }
@@ -81,7 +83,8 @@ function readLibrary(): Library {
       stickerSheets: raw.stickerSheets ?? [],
       stickerDesigns: raw.stickerDesigns ?? [],
       fixtureTypes: raw.fixtureTypes ?? [],
-      lightingReports: raw.lightingReports ?? null,
+      paperwork: raw.paperwork ?? null,
+      lightingReports: raw.lightingReports,
       tableStyle: raw.tableStyle ?? null
     }
   } catch {
@@ -98,7 +101,7 @@ function readLibrary(): Library {
       stickerSheets: [],
       stickerDesigns: [],
       fixtureTypes: [],
-      lightingReports: null,
+      paperwork: null,
       tableStyle: null
     }
   }
@@ -132,7 +135,7 @@ export async function ensureLibrary(): Promise<void> {
     stickerSheets: [],
     stickerDesigns: [],
     fixtureTypes: [],
-    lightingReports: null,
+    paperwork: null,
     tableStyle: null
   })
 }
@@ -441,18 +444,27 @@ export function saveFixtureType(type: FixtureType): FixtureType[] {
   return lib.fixtureTypes
 }
 
-// ---- Lighting paperwork templates (shared) --------------------------------
+// ---- Paperwork templates (shared) --------------------------------------------
 
-export function listLightingReports(): LightingReport[] {
-  return readLibrary().lightingReports ?? REPORT_PRESETS
+export function listPaperwork(): PaperworkTemplate[] {
+  const lib = readLibrary()
+  return withBuiltIns(lib.paperwork, lib.lightingReports ?? null)
 }
 
-/** Replace the whole template list (the page adds, edits, reorders and deletes). */
-export function saveLightingReports(list: LightingReport[]): LightingReport[] {
+/** Replace the whole template list (the page adds, edits and deletes). A template an
+ *  export prints can't be deleted, so it is put back if missing. */
+export function savePaperwork(list: PaperworkTemplate[]): PaperworkTemplate[] {
   const lib = readLibrary()
-  lib.lightingReports = list
+  lib.paperwork = withBuiltIns(list, null)
+  delete lib.lightingReports
   writeLibrary(lib)
-  return list
+  return lib.paperwork
+}
+
+/** The template(s) an export prints, in order. */
+export function templatesForDoc(doc: keyof typeof DOC_TEMPLATES): PaperworkTemplate[] {
+  const list = listPaperwork()
+  return DOC_TEMPLATES[doc].map((id) => list.find((t) => t.id === id)!)
 }
 
 // ---- Exported table style (shared) ----------------------------------------

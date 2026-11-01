@@ -1,4 +1,4 @@
-import type { LightingReport } from './lighting-reports'
+import type { PaperworkSource, PaperworkTemplate } from './paperwork'
 import type { TableStyle } from './table-style'
 export interface Subnet {
   id: number
@@ -891,12 +891,14 @@ export interface VwDeviceManagerApi {
     list: () => Promise<FixtureType[]>
     save: (type: FixtureType) => Promise<FixtureType[]>
   }
-  /** Shared lighting paperwork templates (built-in presets until saved) + export. */
-  lightingReports: {
-    list: () => Promise<LightingReport[]>
-    saveAll: (list: LightingReport[]) => Promise<LightingReport[]>
+  /** Shared paperwork templates (every templated export's layout + your own) + export. */
+  paperwork: {
+    list: () => Promise<PaperworkTemplate[]>
+    saveAll: (list: PaperworkTemplate[]) => Promise<PaperworkTemplate[]>
+    /** the rows a source lists in the open show (for the preview) */
+    records: (source: PaperworkSource) => Promise<object[]>
     /** saves a file the user picks and opens it; null = cancelled */
-    export: (report: LightingReport, format: 'pdf' | 'xlsx' | 'csv') => Promise<string | null>
+    export: (t: PaperworkTemplate, format: 'pdf' | 'xlsx' | 'csv') => Promise<string | null>
   }
   /** Shared library of Windows installers + per-computer install kits. */
   software: {

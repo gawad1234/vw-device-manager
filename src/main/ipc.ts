@@ -5,8 +5,9 @@ import { join } from 'path'
 import * as repo from './repository'
 import * as projects from './projects'
 import * as library from './library'
-import { exportDocument, exportLightingReport } from './exports'
-import type { LightingReport } from '../shared/lighting-reports'
+import { exportDocument, exportPaperwork } from './exports'
+import { recordsFor } from './paperwork-data'
+import type { PaperworkSource, PaperworkTemplate } from '../shared/paperwork'
 import type { TableStyle } from '../shared/table-style'
 import { generateVlanScript } from './vlan-script'
 import { printCaseLabels, printCasesLabels } from './caselabels'
@@ -155,12 +156,11 @@ export function registerIpcHandlers(): void {
   })
   handle('fixtureTypes:list', () => library.listFixtureTypes())
   handle('fixtureTypes:save', (_e, type: FixtureType) => library.saveFixtureType(type))
-  handle('lightingReports:list', () => library.listLightingReports())
-  handle('lightingReports:saveAll', (_e, list: LightingReport[]) =>
-    library.saveLightingReports(list)
-  )
-  handle('lightingReports:export', (_e, report: LightingReport, format: 'pdf' | 'xlsx' | 'csv') =>
-    exportLightingReport(report, format)
+  handle('paperwork:list', () => library.listPaperwork())
+  handle('paperwork:saveAll', (_e, list: PaperworkTemplate[]) => library.savePaperwork(list))
+  handle('paperwork:records', (_e, source: PaperworkSource) => recordsFor(source))
+  handle('paperwork:export', (_e, t: PaperworkTemplate, format: 'pdf' | 'xlsx' | 'csv') =>
+    exportPaperwork(t, format)
   )
   handle('lightingSync:status', () => lighting.getLightingSyncStatus())
   handle('lightingSync:set', (_e, on: boolean) => lighting.setLightingSync(on))

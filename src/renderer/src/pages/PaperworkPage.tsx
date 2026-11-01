@@ -1,35 +1,42 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Fixture } from '../../../shared/types'
 import {
   buildReport,
   fieldLabel,
-  REPORT_FIELDS,
-  type LightingReport,
+  fieldsFor,
+  PRESETS,
+  SOURCES,
+  usedBy,
+  type PaperworkSource,
+  type PaperworkTemplate,
   type ReportColumn
-} from '../../../shared/lighting-reports'
+} from '../../../shared/paperwork'
 import { DEFAULT_TABLE_STYLE, tableStyleCss } from '../../../shared/table-style'
 
-const blankReport = (): LightingReport => ({
+const AREAS = ['Cables', 'Devices & network', 'Trucking', 'Lighting']
+
+const blankTemplate = (source: PaperworkSource): PaperworkTemplate => ({
   id: crypto.randomUUID(),
-  name: 'New report',
+  name: `New ${SOURCES[source].label.toLowerCase()} report`,
+  source,
   kind: 'list',
-  columns: [
-    { field: 'channel', label: 'Chan', width: 60 },
-    { field: 'position', label: 'Position', width: 140 },
-    { field: 'unit', label: 'Unit', width: 50 }
-  ],
+  columns: SOURCES[source].fields
+    .slice(0, 3)
+    .map((f) => ({ field: f.key, label: f.label, width: 140 })),
   groupBy: '',
-  sortBy: ['channel'],
+  sortBy: [SOURCES[source].fields[0].key],
+  mergeRepeats: 0,
   orientation: 'portrait',
   fontSize: 11
 })
 
-/** Lighting › Paperwork: build report templates (your own columns, drag to size) and export them. */
-function PaperworkPage(): React.JSX.Element {
-  const [reports, setReports] = useState<LightingReport[]>([])
-  const [selId, setSelId] = useState('')
+/** Paperwork: every templated export's layout (pull sheet, IP schedule, load sheet,
+ *  lighting…) plus your own — your columns, drag to size, export. */
+function PaperworkPage({ focusId }: { focusId?: string | null }): React.JSX.Element {
+  const [templates, setTemplates] = useState<PaperworkTemplate[]>([])
+  // App remounts the page (key) when an export's "Edit layout…" picks a template
+  const [selId, setSelId] = useState(focusId ?? '')
   const [colIdx, setColIdx] = useState<number | null>(null)
-  const [fixtures, setFixtures] = useState<Fixture[]>([])
+  const [records, setRecords] = useState<Partial<Record<PaperworkSource, object[]>>>({})
   const [busy, setBusy] = useState('')
   const [tableStyle, setTableStyle] = useState(DEFAULT_TABLE_STYLE)
   // the column whose right edge is under the pointer (or being dragged)
@@ -37,28 +44,37 @@ function PaperworkPage(): React.JSX.Element {
   const dragging = useRef(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const r = templates.find((x) => x.id === selId)
+  const source = r?.source
+
   useEffect(() => {
     window.api.tableStyle.get().then(setTableStyle)
-    window.api.lightingReports.list().then((l) => {
-      setReports(l)
-      setSelId(l[0]?.id ?? '')
+    window.api.paperwork.list().then((l) => {
+      setTemplates(l)
+      setSelId((cur) => cur || l[0]?.id || '')
     })
-    const loadFixtures = (): void => {
-      window.api.fixtures.list().then(setFixtures)
-    }
-    loadFixtures()
-    return window.api.onDataChanged(loadFixtures)
   }, [])
 
+  // the preview's rows: the selected template's source, refreshed when the show changes
+  useEffect(() => {
+    if (!source) return
+    const load = (): void => {
+      window.api.paperwork
+        .records(source)
+        .then((list) => setRecords((prev) => ({ ...prev, [source]: list })))
+    }
+    load()
+    return window.api.onDataChanged(load)
+  }, [source])
+
   // every edit saves a moment later (a column drag is many edits)
-  const commit = (next: LightingReport[]): void => {
-    setReports(next)
+  const commit = (next: PaperworkTemplate[]): void => {
+    setTemplates(next)
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => window.api.lightingReports.saveAll(next), 600)
+    saveTimer.current = setTimeout(() => window.api.paperwork.saveAll(next), 600)
   }
-  const r = reports.find((x) => x.id === selId)
-  const update = (patch: Partial<LightingReport>): void => {
-    if (r) commit(reports.map((x) => (x.id === r.id ? { ...r, ...patch } : x)))
+  const update = (patch: Partial<PaperworkTemplate>): void => {
+    if (r) commit(templates.map((x) => (x.id === r.id ? { ...r, ...patch } : x)))
   }
   const setCol = (i: number, patch: Partial<ReportColumn>): void => {
     if (r) update({ columns: r.columns.map((c, j) => (j === i ? { ...c, ...patch } : c)) })
@@ -104,20 +120,24 @@ function PaperworkPage(): React.JSX.Element {
     window.addEventListener('mouseup', up)
   }
 
-  function add(copyOf?: LightingReport): void {
-    const n = copyOf
-      ? { ...copyOf, id: crypto.randomUUID(), name: `${copyOf.name} copy` }
-      : blankReport()
-    commit([...reports, n])
-    setSelId(n.id)
+  function add(t: PaperworkTemplate): void {
+    commit([...templates, t])
+    setSelId(t.id)
     setColIdx(null)
   }
 
   function remove(): void {
     if (!r || !confirm(`Delete the "${r.name}" template?`)) return
-    const next = reports.filter((x) => x.id !== r.id)
+    const next = templates.filter((x) => x.id !== r.id)
     commit(next)
     setSelId(next[0]?.id ?? '')
+    setColIdx(null)
+  }
+
+  function reset(): void {
+    const original = PRESETS.find((p) => p.id === r?.id)
+    if (!r || !original || !confirm(`Put "${r.name}" back the way it came?`)) return
+    commit(templates.map((x) => (x.id === r.id ? original : x)))
     setColIdx(null)
   }
 
@@ -125,19 +145,22 @@ function PaperworkPage(): React.JSX.Element {
     if (!r) return
     setBusy(format)
     try {
-      await window.api.lightingReports.export(r, format)
+      await window.api.paperwork.export(r, format)
     } finally {
       setBusy('')
     }
   }
 
-  const built = r ? buildReport(r, fixtures) : null
+  const rows = (source && records[source]) || []
+  const built = r ? buildReport(r, rows) : null
   const col = r && colIdx != null ? r.columns[colIdx] : undefined
-  const fieldOptions = REPORT_FIELDS.map((f) => (
+  const fieldOptions = (r ? fieldsFor(r.source, rows) : []).map((f) => (
     <option key={f.key} value={f.key}>
       {f.label}
     </option>
   ))
+  const bound = r ? usedBy(r.id) : null
+  const isPreset = !!r && PRESETS.some((p) => p.id === r.id)
 
   return (
     <div className="page lxr-page">
@@ -161,29 +184,60 @@ function PaperworkPage(): React.JSX.Element {
 
       <div className="lxr-layout">
         <aside className="lxr-list">
-          {reports.map((x) => (
-            <button
-              key={x.id}
-              className={`side-item ${x.id === selId ? 'active' : ''}`}
-              onClick={() => {
-                setSelId(x.id)
-                setColIdx(null)
-              }}
+          {AREAS.map((area) => {
+            const list = templates.filter((x) => SOURCES[x.source]?.area === area)
+            if (!list.length) return null
+            return (
+              <div key={area} className="lxr-area">
+                <div className="lxr-area-head">{area}</div>
+                {list.map((x) => (
+                  <button
+                    key={x.id}
+                    className={`side-item ${x.id === selId ? 'active' : ''}`}
+                    onClick={() => {
+                      setSelId(x.id)
+                      setColIdx(null)
+                    }}
+                  >
+                    {x.name || 'Untitled'}
+                  </button>
+                ))}
+              </div>
+            )
+          })}
+          <label className="lxr-new">
+            <select
+              value=""
+              onChange={(e) =>
+                e.target.value && add(blankTemplate(e.target.value as PaperworkSource))
+              }
             >
-              {x.name || 'Untitled'}
-            </button>
-          ))}
-          <button className="btn" onClick={() => add()}>
-            + New template
-          </button>
+              <option value="">+ New template for…</option>
+              {(Object.keys(SOURCES) as PaperworkSource[]).map((s) => (
+                <option key={s} value={s}>
+                  {SOURCES[s].label}
+                </option>
+              ))}
+            </select>
+          </label>
           {r && (
             <>
-              <button className="btn" onClick={() => add(r)}>
+              <button
+                className="btn"
+                onClick={() => add({ ...r, id: crypto.randomUUID(), name: `${r.name} copy` })}
+              >
                 Duplicate
               </button>
-              <button className="btn btn-danger" onClick={remove}>
-                Delete
-              </button>
+              {isPreset && (
+                <button className="btn" onClick={reset}>
+                  Reset to default
+                </button>
+              )}
+              {!bound && (
+                <button className="btn btn-danger" onClick={remove}>
+                  Delete
+                </button>
+              )}
             </>
           )}
           <p className="muted lxr-hint">Templates are shared by every show.</p>
@@ -191,6 +245,11 @@ function PaperworkPage(): React.JSX.Element {
 
         {r && built ? (
           <div className="lxr-main">
+            {bound && (
+              <p className="muted lxr-bound">
+                Used by <b>{bound}</b> — changes here change that export.
+              </p>
+            )}
             <div className="lxr-settings">
               <label>
                 Name
@@ -200,9 +259,9 @@ function PaperworkPage(): React.JSX.Element {
                 Rows
                 <select
                   value={r.kind}
-                  onChange={(e) => update({ kind: e.target.value as LightingReport['kind'] })}
+                  onChange={(e) => update({ kind: e.target.value as PaperworkTemplate['kind'] })}
                 >
-                  <option value="list">One per fixture</option>
+                  <option value="list">One per row</option>
                   <option value="count">Count (e.g. color schedule)</option>
                 </select>
               </label>
@@ -213,7 +272,7 @@ function PaperworkPage(): React.JSX.Element {
                   {fieldOptions}
                 </select>
               </label>
-              {[0, 1].map((i) => (
+              {[0, 1, 2].map((i) => (
                 <label key={i}>
                   {i ? 'Then by' : 'Sort by'}
                   <select
@@ -229,12 +288,30 @@ function PaperworkPage(): React.JSX.Element {
                   </select>
                 </label>
               ))}
+              <label title="Merge repeated values down the first N columns into one cell (e.g. a device and its ports)">
+                Merge repeats
+                <input
+                  type="number"
+                  min={0}
+                  max={r.columns.length}
+                  value={r.mergeRepeats}
+                  disabled={r.kind === 'count'}
+                  onChange={(e) =>
+                    update({
+                      mergeRepeats: Math.min(
+                        r.columns.length,
+                        Math.max(0, Number(e.target.value) || 0)
+                      )
+                    })
+                  }
+                />
+              </label>
               <label>
                 Page
                 <select
                   value={r.orientation}
                   onChange={(e) =>
-                    update({ orientation: e.target.value as LightingReport['orientation'] })
+                    update({ orientation: e.target.value as PaperworkTemplate['orientation'] })
                   }
                 >
                   <option value="portrait">Portrait</option>
@@ -260,7 +337,7 @@ function PaperworkPage(): React.JSX.Element {
                 className="btn"
                 onClick={() => {
                   update({
-                    columns: [...r.columns, { field: 'notes', label: 'Notes', width: 120 }]
+                    columns: [...r.columns, { field: 'blank', label: 'Notes', width: 120 }]
                   })
                   setColIdx(r.columns.length)
                 }}
@@ -278,8 +355,8 @@ function PaperworkPage(): React.JSX.Element {
                           field: e.target.value,
                           // keep a custom heading, follow the field otherwise
                           label:
-                            col.label === fieldLabel(col.field)
-                              ? fieldLabel(e.target.value)
+                            col.label === fieldLabel(r.source, col.field)
+                              ? fieldLabel(r.source, e.target.value)
                               : col.label
                         })
                       }
@@ -332,16 +409,22 @@ function PaperworkPage(): React.JSX.Element {
               <style>{tableStyleCss(tableStyle, '.lxr-table')}</style>
               {built.sections.length === 0 && (
                 <p className="lxr-empty">
-                  {fixtures.length === 0
-                    ? 'No fixtures in this show yet.'
+                  {rows.length === 0
+                    ? `No ${SOURCES[r.source].label.toLowerCase()} in this show yet.`
                     : r.kind === 'count'
-                      ? `No fixture has a ${r.columns[0]?.label || 'value'} yet.`
+                      ? `Nothing has a ${r.columns[0]?.label || 'value'} yet.`
                       : 'Nothing to list.'}
                 </p>
               )}
               {built.sections.map((s, si) => (
                 <div key={si}>
-                  {s.title && <h3>{s.title}</h3>}
+                  {s.title && (
+                    <h3>
+                      {s.color && <span className="lxr-sw" style={{ background: s.color }} />}
+                      {s.title} <span className="lxr-count">({s.count})</span>
+                    </h3>
+                  )}
+                  {s.note && <div className="lxr-note">{s.note}</div>}
                   <table
                     className="lxr-table"
                     style={{
@@ -370,6 +453,7 @@ function PaperworkPage(): React.JSX.Element {
                           <th
                             key={i}
                             className={i === colIdx ? 'lxr-th-sel' : ''}
+                            style={built.center[i] ? { textAlign: 'center' } : undefined}
                             onClick={() => i < r.columns.length && setColIdx(i)}
                           >
                             {h}
@@ -379,10 +463,21 @@ function PaperworkPage(): React.JSX.Element {
                     </thead>
                     <tbody>
                       {s.rows.map((row, ri) => (
-                        <tr key={ri}>
-                          {row.map((c, ci) => (
-                            <td key={ci}>{c}</td>
-                          ))}
+                        <tr key={ri} className={s.bands ? `g${s.bands[ri]}` : undefined}>
+                          {row.map((c, ci) => {
+                            const span = s.spans?.[ri][ci] ?? 1
+                            if (!span) return null
+                            return (
+                              <td
+                                key={ci}
+                                rowSpan={span > 1 ? span : undefined}
+                                className={r.mergeRepeats > 0 && ci === 0 ? 'lxr-dcell' : undefined}
+                                style={built.center[ci] ? { textAlign: 'center' } : undefined}
+                              >
+                                {c}
+                              </td>
+                            )
+                          })}
                         </tr>
                       ))}
                     </tbody>

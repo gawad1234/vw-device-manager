@@ -34,7 +34,8 @@ const READ = new Set([
   'fixtures:list',
   'lighting:get',
   'fixtureTypes:list',
-  'lightingReports:list'
+  'paperwork:list',
+  'paperwork:records'
 ])
 
 /** Need this machine's files, dialogs or printer but read the open project's data:
@@ -51,7 +52,7 @@ const HOST_ONLY = new Set([
   'software:pickInstaller',
   'software:buildKit',
   'circuits:import',
-  'lightingReports:export'
+  'paperwork:export'
 ])
 
 /** Always this machine: app updates, this machine's Show Server, project switching,

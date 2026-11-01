@@ -1,7 +1,20 @@
 import { BrowserWindow, dialog, shell } from 'electron'
 import { writeFileSync } from 'fs'
 import ExcelJS from 'exceljs'
-import { buildReport, type LightingReport } from '../shared/lighting-reports'
+import {
+  buildReport,
+  fieldLabel,
+  type BuiltReport,
+  type PaperworkTemplate
+} from '../shared/paperwork'
+import {
+  buildDeviceIndex,
+  caseRecords,
+  recordsFor,
+  resolveEndpoint,
+  TRIP_KIND_LABEL,
+  type DeviceIndex
+} from './paperwork-data'
 import {
   getProjectMeta,
   getOrderExportSnapshot,
@@ -9,7 +22,6 @@ import {
   getShopOrderById,
   listBundles,
   listCasesByIds,
-  listFixtures,
   listTruckTrips,
   listTrucks,
   listDevices,
@@ -23,17 +35,15 @@ import {
   PROJECTOR_SETTINGS,
   projectorValueLabel
 } from '../shared/projector-settings'
-import { getCompanyName, getCompanyLogo, getTableStyle } from './library'
+import { getCompanyName, getCompanyLogo, getTableStyle, templatesForDoc } from './library'
 import { argb, tableStyleCss } from '../shared/table-style'
 import type {
   Bundle,
-  CableEndpoint,
   ExportOptions,
   OrderColumn,
   OrderColumnKey,
   OrderExportFormat,
   OrderItem,
-  PackCase,
   ShopOrder
 } from '../shared/types'
 
@@ -45,27 +55,6 @@ let docShowName: string | null = null
 // ---- Endpoint resolution -------------------------------------------------
 // A cable endpoint is a device (+ optional port) or free text. Resolve it to a
 // readable string using the current device list.
-type DeviceIndex = Map<number, { name: string; ports: Map<number, string> }>
-
-export function buildDeviceIndex(): DeviceIndex {
-  const idx: DeviceIndex = new Map()
-  for (const d of listDevices()) {
-    idx.set(d.id, { name: d.name, ports: new Map(d.ports.map((p) => [p.id, p.label])) })
-  }
-  return idx
-}
-
-function resolveEndpoint(ep: CableEndpoint, idx: DeviceIndex): string {
-  if (ep.deviceId != null) {
-    const dev = idx.get(ep.deviceId)
-    if (dev) {
-      const port = ep.portId != null ? dev.ports.get(ep.portId) : undefined
-      return port ? `${dev.name} · ${port}` : dev.name
-    }
-  }
-  return ep.text?.trim() || '—'
-}
-
 // ---- Row model (shared by every format) ----------------------------------
 interface Row {
   bundle: string
@@ -107,36 +96,6 @@ function csvCell(v: string): string {
   return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
 }
 
-function toCsv(rows: Row[], includeBundle: boolean): string {
-  const headers = [
-    ...(includeBundle ? ['Bundle'] : []),
-    'Cable',
-    'Type',
-    'From',
-    'To',
-    'Length',
-    'Pulled',
-    'Labeled',
-    'Notes'
-  ]
-  const lines = [headers.join(',')]
-  for (const r of rows) {
-    const cells = [
-      ...(includeBundle ? [r.bundle] : []),
-      r.cable,
-      r.type,
-      r.from,
-      r.to,
-      r.length,
-      r.pulled ? 'Yes' : 'No',
-      r.labeled ? 'Yes' : 'No',
-      r.notes
-    ]
-    lines.push(cells.map((c) => csvCell(String(c))).join(','))
-  }
-  return lines.join('\r\n')
-}
-
 // ---- XLSX (exceljs) ------------------------------------------------------
 function parseImageDataUrl(
   dataUrl: string | null
@@ -176,47 +135,6 @@ function styleSheet(ws: ExcelJS.Worksheet, headerRowNum: number, cols: number): 
       } else if (striped) cell.fill = fill(st.stripeColor)
     }
   }
-}
-
-async function toXlsx(rows: Row[], includeBundle: boolean, logo: string | null): Promise<Buffer> {
-  const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet('Cables')
-  ws.columns = [
-    ...(includeBundle ? [{ header: 'Bundle', key: 'bundle', width: 22 }] : []),
-    { header: 'Cable', key: 'cable', width: 18 },
-    { header: 'Type', key: 'type', width: 12 },
-    { header: 'From', key: 'from', width: 26 },
-    { header: 'To', key: 'to', width: 26 },
-    { header: 'Length', key: 'length', width: 10 },
-    { header: 'Pulled', key: 'pulled', width: 8 },
-    { header: 'Labeled', key: 'labeled', width: 9 },
-    { header: 'Notes', key: 'notes', width: 24 }
-  ]
-
-  // Logo: push the header/data down a few rows and float the image top-left.
-  const img = parseImageDataUrl(logo)
-  const headerRowNum = img ? 5 : 1
-  if (img) {
-    ws.spliceRows(1, 0, [], [], [], [])
-    const imgId = wb.addImage({ base64: img.base64, extension: img.extension })
-    ws.addImage(imgId, { tl: { col: 0, row: 0 }, ext: { width: 170, height: 60 } })
-  }
-  ws.views = [{ state: 'frozen', ySplit: headerRowNum }]
-  for (const r of rows) {
-    ws.addRow({
-      bundle: r.bundle,
-      cable: r.cable,
-      type: r.type,
-      from: r.from,
-      to: r.to,
-      length: r.length,
-      pulled: r.pulled ? '✓' : '',
-      labeled: r.labeled ? '✓' : '',
-      notes: r.notes
-    })
-  }
-  styleSheet(ws, headerRowNum, ws.columns.length)
-  return (await wb.xlsx.writeBuffer()) as unknown as Buffer
 }
 
 // ---- PDF (HTML -> Electron printToPDF, no dependency) --------------------
@@ -316,47 +234,6 @@ function page(
   </style></head><body>${header}${body}</body></html>`
 }
 
-function pullSheetHtml(bundles: Bundle[], idx: DeviceIndex, logo: string | null): string {
-  const sections = bundles
-    .map((b) => {
-      const rows = bundleToRows(b, idx)
-      const body =
-        rows
-          .map(
-            (r) =>
-              `<tr><td>${esc(r.cable)}</td><td>${esc(r.type)}</td><td>${esc(r.from)}</td><td>${esc(
-                r.to
-              )}</td><td class="chk">${r.pulled ? '☑' : '☐'}</td><td class="chk">${
-                r.labeled ? '☑' : '☐'
-              }</td></tr>`
-          )
-          .join('') || '<tr><td colspan="6">No cables in this bundle.</td></tr>'
-      return `<section><h2><span class="sw" style="background:${b.color || '#cccccc'}"></span>${esc(
-        b.name
-      )}</h2><div class="meta">${esc(b.fromLocation || '—')} → ${esc(b.toLocation || '—')}${
-        b.length ? ' · ' + esc(b.length) : ''
-      }</div><table><thead><tr><th>Cable</th><th>Type</th><th>From</th><th>To</th><th class="chk">Pulled</th><th class="chk">Labeled</th></tr></thead><tbody>${body}</tbody></table></section>`
-    })
-    .join('')
-  return page('Pull Sheet', sections, logo)
-}
-
-function scheduleHtml(rows: Row[], logo: string | null): string {
-  const body =
-    rows
-      .map(
-        (r) =>
-          `<tr><td>${esc(r.bundle)}</td><td>${esc(r.cable)}</td><td>${esc(r.type)}</td><td>${esc(
-            r.from
-          )}</td><td>${esc(r.to)}</td><td>${esc(r.length)}</td><td class="chk">${
-            r.pulled ? '☑' : ''
-          }</td><td class="chk">${r.labeled ? '☑' : ''}</td><td>${esc(r.notes)}</td></tr>`
-      )
-      .join('') || '<tr><td colspan="9">No cables.</td></tr>'
-  const table = `<table><thead><tr><th>Bundle</th><th>Cable</th><th>Type</th><th>From</th><th>To</th><th>Length</th><th class="chk">Pulled</th><th class="chk">Labeled</th><th>Notes</th></tr></thead><tbody>${body}</tbody></table>`
-  return page('Cable Schedule', table, logo)
-}
-
 function labelsHtml(bundles: Bundle[], idx: DeviceIndex, logo: string | null): string {
   const cards =
     bundles
@@ -399,179 +276,6 @@ function flagLabelsHtml(bundles: Bundle[], idx: DeviceIndex, logo: string | null
 interface Table {
   headers: string[]
   rows: string[][]
-}
-
-/** Numeric VLAN for sorting; non-numeric / blank sorts last. */
-function vlanSortKey(vlan: string): number {
-  const n = parseInt(vlan, 10)
-  return Number.isNaN(n) ? Number.MAX_SAFE_INTEGER : n
-}
-
-/** One row per port (blank IP shown if unassigned), plus a switch's
- *  management / out-of-band IPs. Sorted by VLAN, then grouped by device. */
-function ipScheduleTable(): Table {
-  const subnets = new Map(listSubnets().map((s) => [s.id, s]))
-  const raw: {
-    device: string
-    port: string
-    ip: string
-    net: string
-    cidr: string
-    vlan: string
-    mac: string
-    type: string
-    location: string
-  }[] = []
-
-  for (const d of listDevices()) {
-    const base = {
-      device: d.name,
-      mac: d.macAddress ?? '',
-      type: d.deviceType ?? '',
-      location: d.location ?? ''
-    }
-    for (const p of d.ports) {
-      if (p.isUnused) continue // jacks flagged "not needed" don't appear in schedules
-      const s = p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId) : undefined
-      raw.push({
-        ...base,
-        port: p.label,
-        ip: p.ipAddress ?? '',
-        net: s?.name ?? '',
-        cidr: s?.cidr ?? '',
-        vlan: s?.vlan ?? ''
-      })
-    }
-    if (d.isSwitch) {
-      if (d.managementIp)
-        raw.push({ ...base, port: 'Management', ip: d.managementIp, net: '', cidr: '', vlan: '' })
-      if (d.oobIp)
-        raw.push({ ...base, port: 'Out-of-band', ip: d.oobIp, net: '', cidr: '', vlan: '' })
-    }
-  }
-
-  // Sort by VLAN, then group by device name, then port.
-  raw.sort(
-    (a, b) =>
-      vlanSortKey(a.vlan) - vlanSortKey(b.vlan) ||
-      a.device.localeCompare(b.device) ||
-      a.port.localeCompare(b.port)
-  )
-  return {
-    headers: ['Device', 'Port', 'IP Address', 'Network', 'CIDR', 'VLAN', 'MAC', 'Type', 'Location'],
-    rows: raw.map((r) => [r.device, r.port, r.ip, r.net, r.cidr, r.vlan, r.mac, r.type, r.location])
-  }
-}
-
-interface DeviceEntry {
-  name: string
-  category: string // '' = uncategorized
-  type: string
-  location: string
-  vlan: string
-  ip: string
-}
-
-/** One entry per device: name, category, location, and its "main" VLAN + IP.
- *  The main IP is the user-designated primary port if set, else a switch's
- *  management IP (else OOB), else the first port with an IP. The main VLAN is
- *  that IP's VLAN — the port's untagged subnet when set, otherwise matched by
- *  CIDR. Sorted by category (uncategorized last), then device name. */
-function deviceListEntries(): DeviceEntry[] {
-  const subnets = listSubnets()
-  const byId = new Map(subnets.map((s) => [s.id, s]))
-  const vlanFor = (subnetId: number | null, ip: string): string => {
-    if (subnetId != null) {
-      const s = byId.get(subnetId)
-      if (s) return s.vlan ?? '' // the port's assigned network is authoritative
-    }
-    if (ip) {
-      const hit = subnets.find((s) => s.cidr && ipInCidr(ip, s.cidr) === true)
-      if (hit) return hit.vlan ?? ''
-    }
-    return ''
-  }
-
-  const catSortKey = (c: string): string => (c ? c.toLowerCase() : '￿') // uncategorized last
-
-  return listDevices()
-    .map((d) => {
-      let ip = ''
-      let subnetId: number | null = null
-      const chosen = d.ports.find((x) => x.isPrimary && !x.isUnused) // user-designated main port
-      if (chosen) {
-        ip = chosen.ipAddress ?? ''
-        subnetId = chosen.untaggedSubnetId
-      } else if (d.isSwitch && (d.managementIp || d.oobIp)) {
-        ip = d.managementIp || d.oobIp || '' // switch IPs aren't tied to a port subnet
-      } else {
-        // Auto-pick among jacks that are actually in use.
-        const usable = d.ports.filter((x) => !x.isUnused)
-        const p = usable.find((x) => x.ipAddress) ?? usable[0]
-        if (p) {
-          ip = p.ipAddress ?? ''
-          subnetId = p.untaggedSubnetId
-        }
-      }
-      return {
-        name: d.name,
-        category: d.category?.trim() || '',
-        type: d.deviceType ?? '',
-        location: d.location ?? '',
-        vlan: vlanFor(subnetId, ip),
-        ip
-      }
-    })
-    .sort(
-      (a, b) =>
-        catSortKey(a.category).localeCompare(catSortKey(b.category)) || a.name.localeCompare(b.name)
-    )
-}
-
-/** Flat device-list table (for CSV/XLSX): a Category column, rows grouped by
- *  category via the sort so filtering/pivoting is easy. */
-function deviceListTable(): Table {
-  return {
-    headers: ['Device', 'Category', 'Type', 'Location', 'Main VLAN', 'Main IP'],
-    rows: deviceListEntries().map((e) => [
-      e.name,
-      e.category || 'Uncategorized',
-      e.type,
-      e.location,
-      e.vlan,
-      e.ip
-    ])
-  }
-}
-
-/** Device-list PDF: a section per category (heading + table). */
-function deviceListHtml(logo: string | null): string {
-  const entries = deviceListEntries()
-  if (!entries.length) return page('Device List', '<p>No devices yet.</p>', logo)
-
-  // Group consecutive entries (they're already sorted by category).
-  const groups: { cat: string; items: DeviceEntry[] }[] = []
-  for (const e of entries) {
-    const label = e.category || 'Uncategorized'
-    const last = groups[groups.length - 1]
-    if (last && last.cat === label) last.items.push(e)
-    else groups.push({ cat: label, items: [e] })
-  }
-
-  const sections = groups
-    .map((g) => {
-      const body = g.items
-        .map(
-          (e) =>
-            `<tr><td>${esc(e.name)}</td><td>${esc(e.type)}</td><td>${esc(e.location)}</td><td>${esc(
-              e.vlan
-            )}</td><td>${esc(e.ip)}</td></tr>`
-        )
-        .join('')
-      return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table><thead><tr><th>Device</th><th>Type</th><th>Location</th><th>Main VLAN</th><th>Main IP</th></tr></thead><tbody>${body}</tbody></table></section>`
-    })
-    .join('')
-  return page('Device List', sections, logo)
 }
 
 // ---- Projector setup sheet ----------------------------------------------
@@ -800,31 +504,13 @@ function projectorSheetHtml(logo: string | null): string {
 // addresses), who the driver calls on arrival, and every case to load with its
 // description + a "loaded" checkbox.
 
-const TRIP_KIND_LABEL: Record<string, string> = {
-  delivery: 'Delivery',
-  'load-in': 'Load-in',
-  'load-out': 'Load-out',
-  return: 'Return',
-  other: 'Trip'
-}
-
-/** A case's description: its "Description" field if it has one, else its other fields
- *  (minus any "Truck" field — on a load sheet the truck is the page itself). */
-function caseDescription(c: PackCase): string {
-  const desc = c.fields.find((f) => /desc/i.test(f.label) && f.value.trim())
-  if (desc) return desc.value
-  return c.fields
-    .filter((f) => f.value.trim() && !/truck/i.test(f.label))
-    .map((f) => `${f.label}: ${f.value}`)
-    .join(' · ')
-}
-
 function loadSheetHtml(tripId: number | undefined, logo: string | null): string {
   const trucks = new Map(listTrucks().map((t) => [t.id, t]))
   const trips = listTruckTrips()
     .filter((t) => tripId == null || t.id === tripId)
     .sort((a, b) => (a.date + a.departTime).localeCompare(b.date + b.departTime))
   const title = 'Truck Load Sheet'
+  const [caseTpl] = templatesForDoc('loadsheet')
   if (!trips.length) return page(title, '<p>No trips yet.</p>', logo)
   const css = `<style>
     .ls + .ls { page-break-before: always; }
@@ -862,12 +548,6 @@ function loadSheetHtml(tripId: number | undefined, logo: string | null): string 
           })
         : 'Date not set'
       const cases = listCasesByIds(t.caseIds)
-      const rows = cases
-        .map(
-          (c) =>
-            `<tr><td class="num">${esc(c.name)}</td><td>${esc(caseDescription(c))}</td><td class="contents">${esc(c.contents)}</td><td class="box">☐</td></tr>`
-        )
-        .join('')
       const contact =
         t.contactName || t.contactPhone
           ? `<div class="ls-contact">On arrival, contact <b>${esc(t.contactName || '—')}</b>${
@@ -896,29 +576,40 @@ function loadSheetHtml(tripId: number | undefined, logo: string | null): string 
         </div>
         ${contact}
         <div class="ls-meta">Driver: <b>${esc(t.driver || '—')}</b>${t.phone ? ` · ${esc(t.phone)}` : ''}</div>
-        <table><thead><tr><th>Case</th><th>Description</th><th>Contents</th><th>Loaded</th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="4">No cases assigned to this trip.</td></tr>'}</tbody></table>
+        ${cases.length ? templateHtml(caseTpl, buildReport(caseTpl, caseRecords(t.id))) : '<p>No cases assigned to this trip.</p>'}
         <div class="ls-meta" style="margin-top:6px">${cases.length} case${cases.length === 1 ? '' : 's'} on this truck.</div>
         ${t.notes ? `<div class="ls-meta"><b>Notes:</b> ${esc(t.notes)}</div>` : ''}
         <div class="ls-sign"><span>Loaded by</span><span>Date / time</span><span>Received by</span></div>
       </div>`
     })
     .join('')
-  return page(title, css + body, logo)
+  return page(title, TEMPLATE_CSS + css + body, logo)
 }
 
 function tableCsv(t: Table): string {
   return [t.headers, ...t.rows].map((r) => r.map((c) => csvCell(String(c))).join(',')).join('\r\n')
 }
 
-async function tableXlsx(
-  t: Table,
-  logo: string | null,
-  sheetName = 'Sheet1',
-  widths?: number[]
+/** One workbook, one styled sheet per table (sheet names: max 31 chars, no []:*?/\). */
+async function sheetsXlsx(
+  sheets: { name: string; table: Table; widths?: number[] }[],
+  logo: string | null
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet(sheetName)
+  for (const { name, table: t, widths } of sheets) {
+    const ws = wb.addWorksheet(name.replace(/[[\]:*?/\\]/g, '-').slice(0, 31) || 'Sheet')
+    addTableSheet(wb, ws, t, logo, widths)
+  }
+  return (await wb.xlsx.writeBuffer()) as unknown as Buffer
+}
+
+function addTableSheet(
+  wb: ExcelJS.Workbook,
+  ws: ExcelJS.Worksheet,
+  t: Table,
+  logo: string | null,
+  widths?: number[]
+): void {
   ws.columns = t.headers.map((h, i) => ({
     header: h,
     key: `c${i}`,
@@ -934,102 +625,117 @@ async function tableXlsx(
   ws.views = [{ state: 'frozen', ySplit: headerRowNum }]
   for (const r of t.rows) ws.addRow(r)
   styleSheet(ws, headerRowNum, t.headers.length)
-  return (await wb.xlsx.writeBuffer()) as unknown as Buffer
 }
 
-/**
- * IP schedule PDF: two sections (switch port-config, then device IPs). Each
- * device's device-level columns are one merged cell (rowspan) instead of
- * repeating, and each device group alternates shade. Ports within a device are
- * ordered by VLAN.
- */
-function ipScheduleHtml(logo: string | null): string {
-  const subnets = new Map(listSubnets().map((s) => [s.id, s]))
-  const subLabel = (id: number | null): string => {
-    if (id == null) return ''
-    const s = subnets.get(id)
-    if (!s) return ''
-    return s.vlan ? `VLAN ${s.vlan}${s.name ? ` (${s.name})` : ''}` : s.name
-  }
-  const portVlan = (p: { untaggedSubnetId: number | null }): number =>
-    vlanSortKey((p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId)?.vlan : '') ?? '')
+// ---- Paperwork templates ---------------------------------------------------
+// Every templated export (pull sheet, cable schedule, device list, IP schedule,
+// the load sheet's case list, the Paperwork page) renders through these.
 
-  const devices = listDevices()
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
-  const sortedPorts = <T extends { untaggedSubnetId: number | null; label: string }>(
-    ports: T[]
-  ): T[] =>
-    ports.slice().sort((a, b) => portVlan(a) - portVlan(b) || a.label.localeCompare(b.label))
-
-  // Build a grouped table: `lead(device)` = the merged device-level cells for a
-  // group's first row; `cells(port)` = the per-port cells. Empty devices get one
-  // blank row so they still appear.
-  function groupedTable(
-    heading: string,
-    headers: string[],
-    group: typeof devices,
-    lead: (d: (typeof devices)[number], span: number) => string,
-    cells: (
-      d: (typeof devices)[number],
-      p: (typeof devices)[number]['ports'][number] | null
-    ) => string
-  ): string {
-    if (!group.length) return ''
-    const rows = group
-      .map((d, gi) => {
-        const ports = sortedPorts(d.ports.filter((p) => !p.isUnused))
-        const list = ports.length ? ports : [null]
-        return list
-          .map(
-            (p, i) =>
-              `<tr class="g${gi % 2}">${i === 0 ? lead(d, list.length) : ''}${cells(d, p)}</tr>`
-          )
+/** A template's table(s) as HTML: section headings (+ a bundle's swatch and route),
+ *  merged repeat cells, centered check boxes. */
+function templateHtml(t: PaperworkTemplate, built: BuiltReport, heading = ''): string {
+  const total = built.widths.reduce((a, b) => a + b, 0) || 1
+  const colgroup = `<colgroup>${built.widths
+    .map((w) => `<col style="width:${((w / total) * 100).toFixed(2)}%">`)
+    .join('')}</colgroup>`
+  const align = (i: number): string => (built.center[i] ? ' style="text-align:center"' : '')
+  const head = `<thead><tr>${built.headers.map((h, i) => `<th${align(i)}>${esc(h)}</th>`).join('')}</tr></thead>`
+  const cell = (c: string): string => esc(c).replace(/\n/g, '<br>')
+  const merged = t.mergeRepeats > 0
+  const table = (s: BuiltReport['sections'][number]): string =>
+    `<table class="lxr${merged ? ' grouped' : ''}">${colgroup}${head}<tbody>${s.rows
+      .map((r, ri) => {
+        const tds = r
+          .map((c, ci) => {
+            const span = s.spans?.[ri][ci] ?? 1
+            if (!span) return ''
+            const cls = merged && ci === 0 ? ' class="dcell"' : ''
+            return `<td${span > 1 ? ` rowspan="${span}"` : ''}${cls}${align(ci)}>${cell(c)}</td>`
+          })
           .join('')
+        return `<tr${s.bands ? ` class="g${s.bands[ri]}"` : ''}>${tds}</tr>`
       })
-      .join('')
-    const head = headers.map((h) => `<th>${esc(h)}</th>`).join('')
-    return `<h2 class="sec">${esc(heading)}</h2><table class="grouped"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`
+      .join('')}</tbody></table>`
+  const empty =
+    t.kind === 'count' && t.columns[0]
+      ? `No ${esc(t.columns[0].label)} to list yet.`
+      : 'Nothing to list yet.'
+  const sections = built.sections.length
+    ? built.sections
+        .map(
+          (s) =>
+            (s.title
+              ? `<h2 class="sec">${s.color ? `<span class="sw" style="background:${esc(s.color)}"></span>` : ''}${esc(
+                  s.title
+                )} <span class="meta">(${s.count})</span></h2>${s.note ? `<div class="meta">${esc(s.note)}</div>` : ''}`
+              : '') + table(s)
+        )
+        .join('')
+    : `<p>${empty}</p>`
+  return `<div class="tpl" style="font-size:${t.fontSize}px">${heading ? `<h2 class="sec">${esc(heading)}</h2>` : ''}${sections}</div>`
+}
+
+/** CSV/Excel: one flat table per template; a section title becomes a leading column. */
+function templateTable(
+  t: PaperworkTemplate,
+  built: BuiltReport
+): { table: Table; widths: number[] } {
+  const grouped = built.sections.some((s) => s.title)
+  return {
+    table: {
+      headers: [...(grouped ? [fieldLabel(t.source, t.groupBy)] : []), ...built.headers],
+      rows: built.sections.flatMap((s) => s.rows.map((r) => [...(grouped ? [s.title] : []), ...r]))
+    },
+    widths: [...(grouped ? [16] : []), ...built.widths.map((w) => Math.round(w / 7))]
   }
+}
 
-  const switchTable = groupedTable(
-    'Network switches — port config',
-    ['Switch', 'Mgmt IP', 'OOB IP', 'Port', 'Native VLAN', 'Tagged VLANs'],
-    devices.filter((d) => d.isSwitch),
-    (d, span) =>
-      `<td rowspan="${span}" class="dcell">${esc(d.name)}</td><td rowspan="${span}">${esc(
-        d.managementIp || '—'
-      )}</td><td rowspan="${span}">${esc(d.oobIp || '—')}</td>`,
-    (_d, p) =>
-      `<td>${p ? esc(p.label) : '—'}</td><td>${esc(p ? subLabel(p.untaggedSubnetId) : '')}</td><td>${esc(
-        p
-          ? p.taggedSubnetIds
-              .map((id) => subLabel(id))
-              .filter(Boolean)
-              .join(', ')
-          : ''
-      )}</td>`
+const TEMPLATE_CSS =
+  '<style>table.lxr{table-layout:fixed;width:100%}table.lxr td{overflow-wrap:anywhere}' +
+  '.tpl + .tpl{margin-top:18px}.tpl .sec .meta{font-weight:400;margin:0}</style>'
+
+/** Templated docs as a PDF page body. Several templates print one after the other
+ *  (the IP schedule), each under its name. */
+function templatesPage(
+  title: string,
+  parts: { t: PaperworkTemplate; built: BuiltReport }[],
+  logo: string | null
+): string {
+  const multi = parts.length > 1
+  return page(
+    title,
+    TEMPLATE_CSS + parts.map((p) => templateHtml(p.t, p.built, multi ? p.t.name : '')).join(''),
+    logo
   )
+}
 
-  const deviceTable = groupedTable(
-    'Devices',
-    ['Device', 'MAC', 'Type', 'Location', 'Port', 'IP Address', 'Network', 'VLAN'],
-    devices.filter((d) => !d.isSwitch),
-    (d, span) =>
-      `<td rowspan="${span}" class="dcell">${esc(d.name)}</td><td rowspan="${span}">${esc(
-        d.macAddress || ''
-      )}</td><td rowspan="${span}">${esc(d.deviceType || '')}</td><td rowspan="${span}">${esc(
-        d.location || ''
-      )}</td>`,
-    (_d, p) => {
-      const s = p && p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId) : undefined
-      return `<td>${p ? esc(p.label) : '—'}</td><td>${p && p.ipAddress ? esc(p.ipAddress) : ''}</td><td>${esc(
-        s?.name || ''
-      )}</td><td>${esc(s?.vlan || '')}</td>`
-    }
-  )
-
-  return page('IP Schedule', switchTable + deviceTable || '<p>No devices yet.</p>', logo)
+/** Write templated docs as CSV, Excel (a sheet per template) or PDF. */
+async function writeTemplated(
+  outPath: string,
+  format: ExportOptions['format'],
+  title: string,
+  parts: { t: PaperworkTemplate; built: BuiltReport }[],
+  logo: string | null
+): Promise<void> {
+  if (format === 'csv')
+    writeFileSync(
+      outPath,
+      parts.map((p) => tableCsv(templateTable(p.t, p.built).table)).join('\r\n\r\n'),
+      'utf-8'
+    )
+  else if (format === 'xlsx')
+    writeFileSync(
+      outPath,
+      await sheetsXlsx(
+        parts.map((p) => ({ name: p.t.name, ...templateTable(p.t, p.built) })),
+        logo
+      )
+    )
+  else
+    writeFileSync(
+      outPath,
+      await htmlToPdf(templatesPage(title, parts, logo), parts[0]?.t.orientation === 'landscape')
+    )
 }
 
 // ---- Shop order / receiving checklist ------------------------------------
@@ -1459,6 +1165,24 @@ const DOC_LABEL: Record<ExportOptions['doc'], string> = {
   receiving: 'receiving checklist'
 }
 
+const DOC_TITLE = {
+  pullsheet: 'Pull Sheet',
+  schedule: 'Cable Schedule',
+  devicelist: 'Device List',
+  ipschedule: 'IP Schedule'
+} as const
+
+/** A templated doc's template(s), each built from its rows (cables: the chosen bundles). */
+function docParts(
+  doc: keyof typeof DOC_TITLE,
+  bundles?: Bundle[]
+): { t: PaperworkTemplate; built: BuiltReport }[] {
+  return templatesForDoc(doc).map((t) => ({
+    t,
+    built: buildReport(t, recordsFor(t.source, bundles))
+  }))
+}
+
 export async function exportDocument(opts: ExportOptions): Promise<string | null> {
   const logo = getProjectMeta('logo') // per-show logo stamped onto paperwork
   docShowName = getProjectMeta('showName') // used by page() header + pdf footer
@@ -1534,35 +1258,21 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     return outPath
   }
 
-  // Project-wide device exports (no bundles): the IP schedule and the device list.
+  // Project-wide device exports (no bundles), laid out by their Paperwork templates.
   if (opts.doc === 'ipschedule' || opts.doc === 'devicelist') {
-    const isDeviceList = opts.doc === 'devicelist'
-    const label = isDeviceList ? 'Device list' : 'IP schedule'
+    const label = opts.doc === 'devicelist' ? 'Device list' : 'IP schedule'
     const res = await dialog.showSaveDialog({
       defaultPath: `${label}.${opts.format}`,
       filters: [{ name: opts.format.toUpperCase(), extensions: [opts.format] }]
     })
     if (res.canceled || !res.filePath) return null
-    const outPath = res.filePath
-    const table = isDeviceList ? deviceListTable() : ipScheduleTable()
-    if (opts.format === 'csv') {
-      writeFileSync(outPath, tableCsv(table), 'utf-8')
-    } else if (opts.format === 'xlsx') {
-      writeFileSync(outPath, await tableXlsx(table, logo, isDeviceList ? 'Devices' : 'IP Schedule'))
-    } else {
-      // Device list is a category-sectioned table (portrait); the IP schedule
-      // PDF gets its bespoke sectioned/merged layout (landscape).
-      const html = isDeviceList ? deviceListHtml(logo) : ipScheduleHtml(logo)
-      writeFileSync(outPath, await htmlToPdf(html, !isDeviceList))
-    }
-    shell.openPath(outPath)
-    return outPath
+    await writeTemplated(res.filePath, opts.format, DOC_TITLE[opts.doc], docParts(opts.doc), logo)
+    shell.openPath(res.filePath)
+    return res.filePath
   }
 
   const idx = buildDeviceIndex()
   const bundles = collectBundles(opts)
-  const includeBundle = opts.scope === 'all'
-  const rows = bundles.flatMap((b) => bundleToRows(b, idx))
 
   const base = opts.scope === 'bundle' ? (bundles[0]?.name ?? 'Bundle') : 'All bundles'
   const defaultName = `${base} ${DOC_LABEL[opts.doc]}.${opts.format}`.replace(/[/\\:]/g, '-')
@@ -1574,20 +1284,16 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
   if (res.canceled || !res.filePath) return null
   const outPath = res.filePath
 
-  if (opts.format === 'csv') {
-    writeFileSync(outPath, toCsv(rows, includeBundle), 'utf-8')
-  } else if (opts.format === 'xlsx') {
-    writeFileSync(outPath, await toXlsx(rows, includeBundle, logo))
-  } else {
+  if (opts.doc === 'labels') {
     const html =
-      opts.doc === 'pullsheet'
-        ? pullSheetHtml(bundles, idx, logo)
-        : opts.doc === 'labels'
-          ? opts.labelStyle === 'flag'
-            ? flagLabelsHtml(bundles, idx, logo)
-            : labelsHtml(bundles, idx, logo)
-          : scheduleHtml(rows, logo)
-    writeFileSync(outPath, await htmlToPdf(html, opts.doc === 'schedule'))
+      opts.labelStyle === 'flag'
+        ? flagLabelsHtml(bundles, idx, logo)
+        : labelsHtml(bundles, idx, logo)
+    writeFileSync(outPath, await htmlToPdf(html, false))
+  } else {
+    // pull sheet / cable schedule, laid out by their Paperwork templates
+    const doc = opts.doc === 'pullsheet' ? 'pullsheet' : 'schedule'
+    await writeTemplated(outPath, opts.format, DOC_TITLE[doc], docParts(doc, bundles), logo)
   }
 
   shell.openPath(outPath)
@@ -1602,66 +1308,36 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
 /** The IP schedule as a standalone HTML page. */
 export function ipSchedulePageHtml(): string {
   docShowName = getProjectMeta('showName')
-  return ipScheduleHtml(getProjectMeta('logo'))
+  return templatesPage(DOC_TITLE.ipschedule, docParts('ipschedule'), getProjectMeta('logo'))
 }
 
 /** The device list (category-sectioned) as a standalone HTML page. */
 export function deviceListPageHtml(): string {
   docShowName = getProjectMeta('showName')
-  return deviceListHtml(getProjectMeta('logo'))
+  return templatesPage(DOC_TITLE.devicelist, docParts('devicelist'), getProjectMeta('logo'))
 }
 
-// ---- Lighting paperwork ----------------------------------------------------
+// ---- Paperwork page export ---------------------------------------------------
 
-/** A lighting report template → PDF (column widths and text size as designed), Excel or CSV. */
-export async function exportLightingReport(
-  report: LightingReport,
+/** Export any template from the Paperwork page as PDF, Excel or CSV. */
+export async function exportPaperwork(
+  t: PaperworkTemplate,
   format: 'pdf' | 'xlsx' | 'csv'
 ): Promise<string | null> {
   const logo = getProjectMeta('logo')
   docShowName = getProjectMeta('showName')
-  const built = buildReport(report, listFixtures())
   const res = await dialog.showSaveDialog({
-    defaultPath: `${report.name.replace(/[/\\:*?"<>|]/g, '-') || 'Lighting report'}.${format}`,
+    defaultPath: `${t.name.replace(/[/\\:*?"<>|]/g, '-') || 'Paperwork'}.${format}`,
     filters: [{ name: format.toUpperCase(), extensions: [format] }]
   })
   if (res.canceled || !res.filePath) return null
-  const grouped = built.sections.some((s) => s.title)
-  // CSV/Excel: one flat table; a section title becomes a leading column
-  const flat: Table = {
-    headers: [...(grouped ? [''] : []), ...built.headers],
-    rows: built.sections.flatMap((s) => s.rows.map((r) => [...(grouped ? [s.title] : []), ...r]))
-  }
-  if (format === 'csv') writeFileSync(res.filePath, tableCsv(flat), 'utf-8')
-  else if (format === 'xlsx') {
-    const charWidths = [...(grouped ? [16] : []), ...built.widths.map((w) => Math.round(w / 7))]
-    writeFileSync(res.filePath, await tableXlsx(flat, logo, 'Report', charWidths))
-  } else {
-    const total = built.widths.reduce((a, b) => a + b, 0) || 1
-    const colgroup = `<colgroup>${built.widths
-      .map((w) => `<col style="width:${((w / total) * 100).toFixed(2)}%">`)
-      .join('')}</colgroup>`
-    const head = `<thead><tr>${built.headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead>`
-    const table = (rows: string[][]): string =>
-      `<table class="lxr">${colgroup}${head}<tbody>${rows
-        .map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`)
-        .join('')}</tbody></table>`
-    const body =
-      `<style>table.lxr{table-layout:fixed;width:100%}table.lxr td,table.lxr th{overflow-wrap:anywhere}body{font-size:${report.fontSize}px}</style>` +
-      (built.sections.length
-        ? built.sections
-            .map((s) => (s.title ? `<h2 class="sec">${esc(s.title)}</h2>` : '') + table(s.rows))
-            .join('')
-        : `<p>${
-            report.kind === 'count' && report.columns[0]
-              ? `No fixture has a ${esc(report.columns[0].label)} yet.`
-              : 'No fixtures yet.'
-          }</p>`)
-    writeFileSync(
-      res.filePath,
-      await htmlToPdf(page(report.name, body, logo), report.orientation === 'landscape')
-    )
-  }
+  await writeTemplated(
+    res.filePath,
+    format,
+    t.name,
+    [{ t, built: buildReport(t, recordsFor(t.source)) }],
+    logo
+  )
   shell.openPath(res.filePath)
   return res.filePath
 }

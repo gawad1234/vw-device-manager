@@ -18,12 +18,12 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Cables](#cables)
   - [Loom labels (sticker sheets)](#loom-labels)
 - [Lighting](#lighting)
-  - [Paperwork (lighting reports)](#paperwork)
   - [Live sync with Vectorworks Spotlight](#live-sync-with-vectorworks-spotlight)
 - [Patching](#patching)
 - [Orders](#orders)
   - [Auto-add kits](#auto-add-kits)
   - [Export formats](#export-formats)
+- [Paperwork](#paperwork)
 - [Labels](#labels)
 - [Cases](#cases)
 - [Show Server](#show-server)
@@ -33,7 +33,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Syncing to Vectorworks](#syncing-to-vectorworks)
 - [Troubleshooting](#troubleshooting)
 
-The left sidebar groups these: **Devices** (with Projectors, Wallpapers and Software under it), **Networking** (Subnets, Configs), **Schedule** (Crew, Trucking), **Cables**, **Lighting** (Fixtures, Universes, Fixture types, Paperwork), **Patching**, **Orders**, **Packing** (Labels, Cases) and **Settings**.
+The left sidebar groups these: **Devices** (with Projectors, Wallpapers and Software under it), **Networking** (Subnets, Configs), **Schedule** (Crew, Trucking), **Cables**, **Lighting** (Fixtures, Universes, Fixture types), **Patching**, **Orders**, **Paperwork**, **Packing** (Labels, Cases) and **Settings**.
 
 ---
 
@@ -89,7 +89,7 @@ Unsaved edits on one tab are kept when you switch tabs, and **Save changes** sav
 
 Device **type** and **location** are usually owned by the drawing (read-only in the app) once a device is linked from ConnectCAD.
 
-**Exports** (Devices → **Export ▾**): the **Device list** (name · location · main VLAN · main IP, grouped by category) and the **IP schedule** (every port), each in PDF / Excel / CSV.
+**Exports** (Devices → **Export ▾**): the **Device list** (name · location · main VLAN · main IP, grouped by category) and the **IP schedule** (every port), each in PDF / Excel / CSV. Their columns come from [Paperwork](#paperwork) templates — **Edit layout…** in the menu opens one.
 
 ### Projectors
 
@@ -173,7 +173,7 @@ A printable sheet for the shop — one page per trip:
 - every case on the truck — case name, description, contents — with a **Loaded ☐** box, and a case count,
 - the trip notes and **Loaded by / Date & time / Received by** sign-off lines.
 
-**Save & print load sheet** (in a trip) prints that trip; **Print all load sheets** (on the Trucking page) prints every trip, one per page. A case's description is its *Description* field if it has one, otherwise its other fields.
+**Save & print load sheet** (in a trip) prints that trip; **Print all load sheets** (on the Trucking page) prints every trip, one per page. A case's description is its *Description* field if it has one, otherwise its other fields. The case table's columns come from the **Truck load sheet** template on the [Paperwork](#paperwork) page (**Edit load sheet layout** on the Trucking page) — add a column for any case field, such as Weight.
 
 ---
 
@@ -187,6 +187,8 @@ Manage cable bundles and the individual cables inside them.
 **Exports** (via the **Export ▾** menu):
 - **Pull sheet** — PDF/Excel/CSV checklist for pulling cable.
 - **Cable schedule** — the full run list.
+
+Both are laid out by their [Paperwork](#paperwork) templates — **Edit layout…** in the menu opens one.
 - **Cable labels** — printable labels in two styles: **cards** and wrap-around **flags**.
 
 ### Loom labels
@@ -242,16 +244,7 @@ Several fixtures on one channel is normal, so that isn't flagged.
 
 **Fixture types** — every instrument type in the rig, with its **modes** and how many DMX addresses each takes (**footprint**). The overlap check needs these. Fixture types are shared by every show, so you set a type up once. A type with a single mode doesn't need a mode chosen on each fixture.
 
-### Paperwork
-
-**Lighting → Paperwork** builds lighting reports from your own templates and exports them as **PDF**, **Excel** or **CSV**. It starts with five templates — **Channel hookup**, **Instrument schedule**, **Patch (by address)**, **Color schedule** and **Gobo pull list** — and you can change them, duplicate them or make new ones. Templates are shared by every show and save as you edit.
-
-- **Columns** — **+ Column** adds one. Click a heading to choose what it **shows** (any fixture field, or a blank write-in column), rename the **heading**, set its **width**, move it left/right or remove it. **Drag any column's edge** (in the heading or anywhere down the table; the edge lights up when you can grab it) to resize it. The PDF keeps the same proportions across the page.
-- **Rows** — *One per fixture*, or *Count* for pull lists: one row per distinct combination of the columns with a **Count** (the first column is what's counted — fixtures with nothing in it are left out, so a color schedule skips fixtures with no color).
-- **Section by** starts a new titled section for each value (e.g. each hanging position). **Sort by / Then by** set the order; numbers sort as numbers and `U/A` by universe then address.
-- **Page** (portrait/landscape) and **Text size** apply to the PDF.
-
-The preview under the settings is the report itself, drawn as paper, and updates live with the rig.
+Lighting paperwork (channel hookup, instrument schedule, patch, color and gobo lists) is made on the [Paperwork](#paperwork) page.
 
 ### Live sync with Vectorworks Spotlight
 
@@ -337,6 +330,28 @@ Each format controls:
 Create several — e.g. a tight *"Pull order — compact, landscape"* for the shop and a *"Receiving — large print"* for the floor — and switch between them at export time. Leaving the picker on **Default** produces exactly the same documents as before formats existed.
 
 ---
+
+## Paperwork
+
+**Paperwork** (in the sidebar) lays out every table-style export from templates you control, and lets you make your own. Templates are shared by every show and save as you edit.
+
+| Area | Templates | Used by |
+|---|---|---|
+| Cables | **Pull sheet**, **Cable schedule** | Cables → Export |
+| Devices & network | **Device list**, **IP schedule — switches**, **IP schedule — devices** (printed together as the IP schedule) | Devices → Export |
+| Trucking | **Truck load sheet (case list)** — the case table on each load sheet | Trucking → load sheets |
+| Lighting | **Channel hookup**, **Instrument schedule**, **Patch (by address)**, **Color schedule**, **Gobo pull list** | exported from this page |
+
+A template an export uses says so at the top; changing it changes that export everywhere (PDF, Excel and CSV). **Reset to default** puts a built-in template back the way it came; those can't be deleted. Each export menu's **Edit layout…** jumps straight to its template.
+
+- **Columns** — **+ Column** adds one. Click a heading to choose what it **shows** (any field of that template's rows — for cases, any case field too — or a blank write-in column), rename the **heading**, set its **width**, move it left/right or remove it. **Drag any column's edge** (in the heading or anywhere down the table; the edge lights up when you can grab it) to resize it. The PDF keeps the same proportions across the page.
+- **Rows** — *One per row*, or *Count* for pull lists: one row per distinct combination of the columns with a **Count** (the first column is what's counted — rows with nothing in it are left out, so a color schedule skips fixtures with no color).
+- **Section by** starts a titled section for each value (a bundle — with its color and route — a category, a hanging position). **Sort by / Then by** set the order; numbers sort as numbers and `U/A` by universe then address.
+- **Merge repeats** merges repeated values down the first N columns into one cell — how the IP schedule shows a device once beside all its ports.
+- **Page** (portrait/landscape) and **Text size** apply to the PDF. Colors, stripes and lines come from **Settings → Table style**.
+- **+ New template for…** starts a template from any kind of row: cables, devices, switch ports, device ports (IPs), cases on trucks, or lighting fixtures. Export it from this page as PDF, Excel or CSV.
+
+The preview is the page itself, drawn as paper, and updates live with the show.
 
 ## Labels
 

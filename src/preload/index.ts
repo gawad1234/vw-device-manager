@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { LightingReport } from '../shared/lighting-reports'
+import type { PaperworkSource, PaperworkTemplate } from '../shared/paperwork'
 import type { TableStyle } from '../shared/table-style'
 import type {
   FixtureInput,
@@ -118,11 +118,12 @@ const api: VwDeviceManagerApi = {
     list: () => invoke('fixtureTypes:list'),
     save: (type: FixtureType) => invoke('fixtureTypes:save', type)
   },
-  lightingReports: {
-    list: () => invoke('lightingReports:list'),
-    saveAll: (list: LightingReport[]) => invoke('lightingReports:saveAll', list),
-    export: (report: LightingReport, format: 'pdf' | 'xlsx' | 'csv') =>
-      invoke('lightingReports:export', report, format)
+  paperwork: {
+    list: () => invoke('paperwork:list'),
+    saveAll: (list: PaperworkTemplate[]) => invoke('paperwork:saveAll', list),
+    records: (source: PaperworkSource) => invoke('paperwork:records', source),
+    export: (t: PaperworkTemplate, format: 'pdf' | 'xlsx' | 'csv') =>
+      invoke('paperwork:export', t, format)
   },
   software: {
     list: () => invoke('software:list'),

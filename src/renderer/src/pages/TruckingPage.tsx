@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PackCase, Truck, TruckInput, TruckTrip } from '../../../shared/types'
 import TripModal from '../components/TripModal'
+import { openPaperwork } from '../lib/paperwork'
 import { TRIP_KINDS } from '../lib/trucking'
 
 const BLANK_TRUCK: TruckInput = { name: '', vendor: '', size: '', cost: 0, contact: '', notes: '' }
@@ -59,6 +60,9 @@ function TruckingPage(): React.JSX.Element {
             }
           >
             Print all load sheets
+          </button>
+          <button className="btn" onClick={() => openPaperwork('loadsheet')}>
+            Edit load sheet layout
           </button>
           <button className="btn btn-primary" onClick={() => setEditTrip('new')}>
             + Add trip

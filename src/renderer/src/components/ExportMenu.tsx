@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ExportOptions, OrderExportFormat } from '../../../shared/types'
+import { openPaperwork } from '../lib/paperwork'
 
 interface Props {
   scope: 'bundle' | 'all'
@@ -33,12 +34,15 @@ export interface ExportItem {
 export interface ExportSection {
   label: string
   items: ExportItem[]
+  /** the Paperwork template laying this doc out: adds an "Edit layout…" item */
+  layout?: string
 }
 
 // Sensible document → format offerings (labels are PDF-only, in two styles).
 const CABLE_SECTIONS: ExportSection[] = [
   {
     label: 'Pull sheet',
+    layout: 'pullsheet',
     items: [
       { label: 'PDF', doc: 'pullsheet', format: 'pdf' },
       { label: 'Excel', doc: 'pullsheet', format: 'xlsx' },
@@ -47,6 +51,7 @@ const CABLE_SECTIONS: ExportSection[] = [
   },
   {
     label: 'Cable schedule',
+    layout: 'schedule',
     items: [
       { label: 'Excel', doc: 'schedule', format: 'xlsx' },
       { label: 'CSV', doc: 'schedule', format: 'csv' },
@@ -123,9 +128,7 @@ function ExportMenu({
               <label className="menu-item fmt-pick">
                 <select
                   value={formatId ?? ''}
-                  onChange={(e) =>
-                    onSelectFormat?.(e.target.value ? Number(e.target.value) : null)
-                  }
+                  onChange={(e) => onSelectFormat?.(e.target.value ? Number(e.target.value) : null)}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <option value="">Default (built-in)</option>
@@ -172,6 +175,17 @@ function ExportMenu({
                   {it.label}
                 </button>
               ))}
+              {s.layout && (
+                <button
+                  className="menu-item menu-item-muted"
+                  onClick={() => {
+                    setOpen(false)
+                    openPaperwork(s.layout!)
+                  }}
+                >
+                  Edit layout…
+                </button>
+              )}
             </div>
           ))}
         </div>

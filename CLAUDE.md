@@ -138,9 +138,15 @@ workspace context and the cross-machine handoff log — check those first.
   `notes`/`mode` are app-only). Project meta `lighting` = `{exchangePath, syncOn, universes:
   {[n]: {deviceId, label}}}`; `lightingVw` = the last Vectorworks field list/header/universe table.
   `library.json` → `fixtureTypes` (`{name, modes: [{name, footprint}]}`, shared).
-- **Lighting paperwork:** `library.json` → `lightingReports` (`LightingReport[]`, null = show
-  `REPORT_PRESETS`). Pure builder `src/shared/lighting-reports.ts` (`buildReport`) feeds the
-  Paperwork preview, `exportLightingReport` (PDF/Excel/CSV) and the tests.
+- **Paperwork templates:** `library.json` → `paperwork` (`PaperworkTemplate[]`, null = never
+  saved; v2.9.0's `lightingReports` is read once and migrated). `src/shared/paperwork.ts`: sources
+  (cables, devices, switchPorts, ports, cases, fixtures) with their fields, `PRESETS`, `DOC_TEMPLATES`
+  (which built-ins each export prints — those are re-added if missing and can't be deleted),
+  `buildReport` (sort, sections, count, `mergeRepeats` rowspans). `src/main/paperwork-data.ts`
+  builds the plain records from the DB. `exports.ts` `templateHtml` / `writeTemplated` render the
+  pull sheet, cable schedule, device list, IP schedule (two templates), the load sheet's case
+  table, the Show Server's IP-schedule/device pages and Paperwork-page exports. Labels, projector
+  sheets and orders (their own export formats) are not templated.
 - **Table style:** `library.json` → `tableStyle` (null = default). `src/shared/table-style.ts`;
   `page()` appends `tableStyleCss()` to every PDF, `styleSheet()` paints every Excel sheet.
 

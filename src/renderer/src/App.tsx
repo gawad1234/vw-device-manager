@@ -48,11 +48,21 @@ const NAV_GROUPS: Record<string, Tab[]> = {
   networking: ['subnets', 'configs'],
   schedule: ['crew', 'trucking'],
   packing: ['labels', 'cases'],
-  lighting: ['fixtures', 'universes', 'fixtureTypes', 'paperwork']
+  lighting: ['fixtures', 'universes', 'fixtureTypes']
 }
 
 function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('devices')
+  // an export menu's "Edit layout…" opens Paperwork on that export's template
+  const [paperworkFocus, setPaperworkFocus] = useState<string | null>(null)
+  useEffect(() => {
+    const open = (e: Event): void => {
+      setPaperworkFocus((e as CustomEvent<string>).detail)
+      setTab('paperwork')
+    }
+    window.addEventListener('open-paperwork', open)
+    return () => window.removeEventListener('open-paperwork', open)
+  }, [])
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
 
   const toggleGroup = (key: string): void =>
@@ -250,8 +260,7 @@ function App(): React.JSX.Element {
                   [
                     ['fixtures', 'Fixtures'],
                     ['universes', 'Universes'],
-                    ['fixtureTypes', 'Fixture types'],
-                    ['paperwork', 'Paperwork']
+                    ['fixtureTypes', 'Fixture types']
                   ] as const
                 ).map(([t, label]) => (
                   <button
@@ -276,6 +285,12 @@ function App(): React.JSX.Element {
             onClick={() => setTab('orders')}
           >
             Orders
+          </button>
+          <button
+            className={`side-item ${tab === 'paperwork' ? 'active' : ''}`}
+            onClick={() => setTab('paperwork')}
+          >
+            Paperwork
           </button>
 
           <div className="side-group">
@@ -388,7 +403,7 @@ function App(): React.JSX.Element {
           ) : tab === 'fixtureTypes' ? (
             <FixtureTypesPage key={project?.path} />
           ) : tab === 'paperwork' ? (
-            <PaperworkPage key={project?.path} />
+            <PaperworkPage key={`${project?.path}|${paperworkFocus}`} focusId={paperworkFocus} />
           ) : (
             <SettingsPage
               key={project?.path}

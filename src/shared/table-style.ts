@@ -87,7 +87,9 @@ export function tableStyleCss(s: TableStyle, t = 'table'): string {
         : `${t} th, ${t} td { border: none; }`
   return (
     `${cells} ${t} th { background: ${s.headerFill}; color: ${s.headerText}; }` +
-    ` ${t} tbody tr:nth-child(even) { background: ${s.stripes ? s.stripeColor : 'transparent'}; }`
+    ` ${t} tbody tr:nth-child(even) { background: ${s.stripes ? s.stripeColor : 'transparent'}; }` +
+    // merged-cell tables shade whole groups (a device and its ports) instead of rows
+    ` ${t} tr.g0 > td { background: #fff; } ${t} tr.g1 > td { background: ${s.stripes ? s.stripeColor : '#fff'}; }`
   )
 }
 

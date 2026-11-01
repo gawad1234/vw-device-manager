@@ -6,6 +6,7 @@ import ExportMenu, { type ExportSection } from '../components/ExportMenu'
 const EXPORT_SECTIONS: ExportSection[] = [
   {
     label: 'Device list (name · location · VLAN · IP)',
+    layout: 'devicelist',
     items: [
       { label: 'PDF', doc: 'devicelist', format: 'pdf' },
       { label: 'Excel', doc: 'devicelist', format: 'xlsx' },
@@ -14,6 +15,7 @@ const EXPORT_SECTIONS: ExportSection[] = [
   },
   {
     label: 'IP schedule (every port)',
+    layout: 'ipschedule-devices',
     items: [
       { label: 'PDF', doc: 'ipschedule', format: 'pdf' },
       { label: 'Excel', doc: 'ipschedule', format: 'xlsx' },
@@ -85,7 +87,11 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
   }, [devices, openId])
 
   const openDevice =
-    openId === 'new' ? null : typeof openId === 'number' ? devices.find((d) => d.id === openId) ?? null : null
+    openId === 'new'
+      ? null
+      : typeof openId === 'number'
+        ? (devices.find((d) => d.id === openId) ?? null)
+        : null
 
   function toggle(cat: string): void {
     setCollapsed((prev) => {

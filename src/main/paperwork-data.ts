@@ -1,0 +1,235 @@
+import {
+  listBundles,
+  listCasesByIds,
+  listDevices,
+  listFixtures,
+  listSubnets,
+  listTruckTrips
+} from './repository'
+import { ipInCidr } from './ip-utils'
+import type { Bundle, CableEndpoint, PackCase } from '../shared/types'
+import type {
+  CableRec,
+  CaseRec,
+  DeviceRec,
+  PaperworkSource,
+  PortRec,
+  SwitchPortRec
+} from '../shared/paperwork'
+
+// The rows each Paperwork source lists, read from the open project. Plain records:
+// the shared builder (src/shared/paperwork.ts) turns them into tables.
+
+// ---- Endpoint resolution -------------------------------------------------
+// A cable endpoint is a device (+ optional port) or free text. Resolve it to a
+// readable string using the current device list.
+export type DeviceIndex = Map<number, { name: string; ports: Map<number, string> }>
+
+export function buildDeviceIndex(): DeviceIndex {
+  const idx: DeviceIndex = new Map()
+  for (const d of listDevices()) {
+    idx.set(d.id, { name: d.name, ports: new Map(d.ports.map((p) => [p.id, p.label])) })
+  }
+  return idx
+}
+
+export function resolveEndpoint(ep: CableEndpoint, idx: DeviceIndex): string {
+  if (ep.deviceId != null) {
+    const dev = idx.get(ep.deviceId)
+    if (dev) {
+      const port = ep.portId != null ? dev.ports.get(ep.portId) : undefined
+      return port ? `${dev.name} · ${port}` : dev.name
+    }
+  }
+  return ep.text?.trim() || '—'
+}
+
+interface DeviceEntry {
+  name: string
+  category: string // '' = uncategorized
+  type: string
+  location: string
+  vlan: string
+  ip: string
+}
+
+/** One entry per device: name, category, location, and its "main" VLAN + IP.
+ *  The main IP is the user-designated primary port if set, else a switch's
+ *  management IP (else OOB), else the first port with an IP. The main VLAN is
+ *  that IP's VLAN — the port's untagged subnet when set, otherwise matched by
+ *  CIDR. Sorted by category (uncategorized last), then device name. */
+export function deviceListEntries(): DeviceEntry[] {
+  const subnets = listSubnets()
+  const byId = new Map(subnets.map((s) => [s.id, s]))
+  const vlanFor = (subnetId: number | null, ip: string): string => {
+    if (subnetId != null) {
+      const s = byId.get(subnetId)
+      if (s) return s.vlan ?? '' // the port's assigned network is authoritative
+    }
+    if (ip) {
+      const hit = subnets.find((s) => s.cidr && ipInCidr(ip, s.cidr) === true)
+      if (hit) return hit.vlan ?? ''
+    }
+    return ''
+  }
+
+  const catSortKey = (c: string): string => (c ? c.toLowerCase() : '￿') // uncategorized last
+
+  return listDevices()
+    .map((d) => {
+      let ip = ''
+      let subnetId: number | null = null
+      const chosen = d.ports.find((x) => x.isPrimary && !x.isUnused) // user-designated main port
+      if (chosen) {
+        ip = chosen.ipAddress ?? ''
+        subnetId = chosen.untaggedSubnetId
+      } else if (d.isSwitch && (d.managementIp || d.oobIp)) {
+        ip = d.managementIp || d.oobIp || '' // switch IPs aren't tied to a port subnet
+      } else {
+        // Auto-pick among jacks that are actually in use.
+        const usable = d.ports.filter((x) => !x.isUnused)
+        const p = usable.find((x) => x.ipAddress) ?? usable[0]
+        if (p) {
+          ip = p.ipAddress ?? ''
+          subnetId = p.untaggedSubnetId
+        }
+      }
+      return {
+        name: d.name,
+        category: d.category?.trim() || '',
+        type: d.deviceType ?? '',
+        location: d.location ?? '',
+        vlan: vlanFor(subnetId, ip),
+        ip
+      }
+    })
+    .sort(
+      (a, b) =>
+        catSortKey(a.category).localeCompare(catSortKey(b.category)) || a.name.localeCompare(b.name)
+    )
+}
+
+export const TRIP_KIND_LABEL: Record<string, string> = {
+  delivery: 'Delivery',
+  'load-in': 'Load-in',
+  'load-out': 'Load-out',
+  return: 'Return',
+  other: 'Trip'
+}
+
+/** A case's description: its "Description" field if it has one, else its other fields
+ *  (minus any "Truck" field — on a load sheet the truck is the page itself). */
+export function caseDescription(c: PackCase): string {
+  const desc = c.fields.find((f) => /desc/i.test(f.label) && f.value.trim())
+  if (desc) return desc.value
+  return c.fields
+    .filter((f) => f.value.trim() && !/truck/i.test(f.label))
+    .map((f) => `${f.label}: ${f.value}`)
+    .join(' · ')
+}
+
+export function cableRecords(bundles: Bundle[] = listBundles()): CableRec[] {
+  const idx = buildDeviceIndex()
+  return bundles.flatMap((b) =>
+    b.cables.map((c) => ({
+      bundle: b.name,
+      bundleColor: b.color || '#cccccc',
+      bundleFrom: b.fromLocation ?? '',
+      bundleTo: b.toLocation ?? '',
+      cable: c.name,
+      type: c.cableType ?? '',
+      from: resolveEndpoint(c.source, idx),
+      to: resolveEndpoint(c.destination, idx),
+      length: b.length ?? '',
+      pulled: c.pulled,
+      labeled: c.labeled,
+      notes: c.notes ?? ''
+    }))
+  )
+}
+
+/** Used jacks of every device, split into switch ports and other devices' ports
+ *  (a device with none gets one '—' row so it still appears). */
+function portRecords(): { ports: PortRec[]; switchPorts: SwitchPortRec[] } {
+  const subnets = new Map(listSubnets().map((s) => [s.id, s]))
+  const vlanLabel = (id: number | null): string => {
+    const s = id != null ? subnets.get(id) : undefined
+    if (!s) return ''
+    return s.vlan ? `VLAN ${s.vlan}${s.name ? ` (${s.name})` : ''}` : s.name
+  }
+  const ports: PortRec[] = []
+  const switchPorts: SwitchPortRec[] = []
+  for (const d of listDevices()) {
+    const used = d.ports.filter((p) => !p.isUnused) // jacks flagged "not needed" stay off schedules
+    if (d.isSwitch) {
+      const base = {
+        switch: d.name,
+        mgmtIp: d.managementIp || '—',
+        oobIp: d.oobIp || '—',
+        location: d.location ?? ''
+      }
+      for (const p of used.length ? used : [null])
+        switchPorts.push({
+          ...base,
+          port: p ? p.label : '—',
+          vlan:
+            (p && p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId)?.vlan : '') ?? '',
+          nativeVlan: p ? vlanLabel(p.untaggedSubnetId) : '',
+          taggedVlans: p ? p.taggedSubnetIds.map(vlanLabel).filter(Boolean).join(', ') : ''
+        })
+      continue
+    }
+    const base = {
+      device: d.name,
+      mac: d.macAddress ?? '',
+      type: d.deviceType ?? '',
+      location: d.location ?? '',
+      category: d.category?.trim() || ''
+    }
+    for (const p of used.length ? used : [null]) {
+      const s = p && p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId) : undefined
+      ports.push({
+        ...base,
+        port: p ? p.label : '—',
+        ip: p?.ipAddress ?? '',
+        network: s?.name ?? '',
+        vlan: s?.vlan ?? ''
+      })
+    }
+  }
+  return { ports, switchPorts }
+}
+
+/** Cases on truck trips (one trip, or all). */
+export function caseRecords(tripId?: number): CaseRec[] {
+  return listTruckTrips()
+    .filter((t) => tripId == null || t.id === tripId)
+    .flatMap((t) =>
+      listCasesByIds(t.caseIds).map((c) => ({
+        tripId: t.id,
+        trip: `${TRIP_KIND_LABEL[t.kind] ?? 'Trip'} ${t.date}`.trim(),
+        name: c.name,
+        description: caseDescription(c),
+        contents: c.contents,
+        fields: Object.fromEntries(c.fields.map((f) => [f.label, f.value]))
+      }))
+    )
+}
+
+/** Every record a source lists in the open project (cables: the given bundles, or all). */
+export function recordsFor(source: PaperworkSource, bundles?: Bundle[]): object[] {
+  switch (source) {
+    case 'cables':
+      return cableRecords(bundles)
+    case 'devices':
+      return deviceListEntries() satisfies DeviceRec[]
+    case 'ports':
+      return portRecords().ports
+    case 'switchPorts':
+      return portRecords().switchPorts
+    case 'cases':
+      return caseRecords()
+    case 'fixtures':
+      return listFixtures()
+  }
+}
