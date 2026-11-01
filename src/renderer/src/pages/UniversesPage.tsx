@@ -11,6 +11,9 @@ interface Props {
   devices: Device[]
 }
 
+// one hue per fixture so neighbours in the grid read apart; skips reds, which mean overlap
+const fixtureHue = (i: number): number => 30 + ((i * 137.5) % 300)
+
 const deviceIp = (d: Device): string =>
   d.managementIp || d.ports.find((p) => p.ipAddress)?.ipAddress || ''
 
@@ -63,15 +66,17 @@ function UniversesPage({ devices }: Props): React.JSX.Element {
           .filter((f) => f.universe === u && f.address != null)
           .map((f) => ({ f, start: f.address!, fp: footprintOf(f, types) }))
           .sort((a, b) => a.start - b.start)
-        const used = new Set<number>()
-        rows.forEach((r) => {
-          for (let a = r.start; a < r.start + (r.fp ?? 1); a++) used.add(a)
+        // address → indexes into rows of the fixtures on it
+        const cells = new Map<number, number[]>()
+        rows.forEach((r, i) => {
+          for (let a = r.start; a < r.start + (r.fp ?? 1) && a <= 512; a++)
+            cells.set(a, [...(cells.get(a) ?? []), i])
         })
         return (
           <div key={u} className="lx-universe">
             <div className="lx-universe-head">
               <h3>Universe {u}</h3>
-              <span className="muted">{[...used].filter((a) => a <= 512).length} / 512 used</span>
+              <span className="muted">{cells.size} / 512 used</span>
               <select
                 value={link_.deviceId ?? ''}
                 onChange={(e) =>
@@ -94,18 +99,35 @@ function UniversesPage({ devices }: Props): React.JSX.Element {
                 }
               />
             </div>
-            <div className="lx-bar" title="Addresses 1–512">
-              {rows.map(({ f, start, fp }) => (
-                <span
-                  key={f.id}
-                  className={`lx-bar-seg${overlapIds.has(f.id) ? ' lx-bar-bad' : ''}`}
-                  style={{
-                    left: `${((start - 1) / 512) * 100}%`,
-                    width: `${(Math.min(fp ?? 1, 513 - start) / 512) * 100}%`
-                  }}
-                  title={`${fixtureLabel(f)} ${start}–${start + (fp ?? 1) - 1}`}
-                />
-              ))}
+            <div className="lx-grid" role="grid" aria-label={`Universe ${u} addresses 1–512`}>
+              {Array.from({ length: 512 }, (_, k) => {
+                const addr = k + 1
+                const on = cells.get(addr) ?? []
+                const starter = on.map((i) => rows[i]).find((r) => r.start === addr)
+                const title = on.length
+                  ? `${addr}: ` +
+                    on
+                      .map(
+                        (i) =>
+                          `${fixtureLabel(rows[i].f)}${rows[i].f.channel ? ` (ch ${rows[i].f.channel})` : ''}`
+                      )
+                      .join(' + ')
+                  : String(addr)
+                return (
+                  <span
+                    key={addr}
+                    title={title}
+                    className={`lx-cell${on.length > 1 ? ' lx-cell-bad' : ''}${starter ? ' lx-cell-start' : ''}`}
+                    style={
+                      on.length === 1
+                        ? { background: `hsl(${fixtureHue(on[0])} 55% 42%)` }
+                        : undefined
+                    }
+                  >
+                    {starter ? starter.f.channel || starter.f.unit || '•' : on.length ? '' : addr}
+                  </span>
+                )
+              })}
             </div>
             <table className="table">
               <tbody>

@@ -18,6 +18,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Cables](#cables)
   - [Loom labels (sticker sheets)](#loom-labels)
 - [Lighting](#lighting)
+  - [Paperwork (lighting reports)](#paperwork)
   - [Live sync with Vectorworks Spotlight](#live-sync-with-vectorworks-spotlight)
 - [Patching](#patching)
 - [Orders](#orders)
@@ -32,7 +33,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Syncing to Vectorworks](#syncing-to-vectorworks)
 - [Troubleshooting](#troubleshooting)
 
-The left sidebar groups these: **Devices** (with Projectors, Wallpapers and Software under it), **Networking** (Subnets, Configs), **Schedule** (Crew, Trucking), **Cables**, **Lighting** (Fixtures, Universes, Fixture types), **Patching**, **Orders**, **Packing** (Labels, Cases) and **Settings**.
+The left sidebar groups these: **Devices** (with Projectors, Wallpapers and Software under it), **Networking** (Subnets, Configs), **Schedule** (Crew, Trucking), **Cables**, **Lighting** (Fixtures, Universes, Fixture types, Paperwork), **Patching**, **Orders**, **Packing** (Labels, Cases) and **Settings**.
 
 ---
 
@@ -237,9 +238,20 @@ Tie it to Device Manager with **Export JSON…** here → **Load config…** in 
 
 Several fixtures on one channel is normal, so that isn't flagged.
 
-**Universes** — one card per universe in use: how many of its 512 addresses are used, a bar showing what's patched where (overlaps in red), and the fixture list with address ranges. Pick the **DMX node** (any device from Devices — e.g. an sACN/Art-Net node) the universe comes out of, and type its port or label.
+**Universes** — one card per universe in use: how many of its 512 addresses are used, a **grid of all 512 addresses** that fills in with each fixture (each in its own color, its channel on its first address, overlaps striped red, hover an address to see who is on it), and the fixture list with address ranges. Pick the **DMX node** (any device from Devices — e.g. an sACN/Art-Net node) the universe comes out of, and type its port or label.
 
 **Fixture types** — every instrument type in the rig, with its **modes** and how many DMX addresses each takes (**footprint**). The overlap check needs these. Fixture types are shared by every show, so you set a type up once. A type with a single mode doesn't need a mode chosen on each fixture.
+
+### Paperwork
+
+**Lighting → Paperwork** builds lighting reports from your own templates and exports them as **PDF**, **Excel** or **CSV**. It starts with five templates — **Channel hookup**, **Instrument schedule**, **Patch (by address)**, **Color schedule** and **Gobo pull list** — and you can change them, duplicate them or make new ones. Templates are shared by every show and save as you edit.
+
+- **Columns** — **+ Column** adds one. Click a heading to choose what it **shows** (any fixture field, or a blank write-in column), rename the **heading**, set its **width**, move it left/right or remove it. **Drag any column's edge** (in the heading or anywhere down the table; the edge lights up when you can grab it) to resize it. The PDF keeps the same proportions across the page.
+- **Rows** — *One per fixture*, or *Count* for pull lists: one row per distinct combination of the columns with a **Count** (the first column is what's counted — fixtures with nothing in it are left out, so a color schedule skips fixtures with no color).
+- **Section by** starts a new titled section for each value (e.g. each hanging position). **Sort by / Then by** set the order; numbers sort as numbers and `U/A` by universe then address.
+- **Page** (portrait/landscape) and **Text size** apply to the PDF.
+
+The preview under the settings is the report itself, drawn as paper, and updates live with the rig.
 
 ### Live sync with Vectorworks Spotlight
 
@@ -400,6 +412,7 @@ A joined computer can see the whole show **and the shared library on the host, i
 ## Settings
 
 - **Company branding** — your company name and logo, stamped as a letterhead on every project's paperwork. Shared across all projects.
+- **Table style** — how the tables in every Excel and PDF export look: header color and text color, alternating row colors (on/off and the color), and lines (grid, between rows, or none). Start from a preset (Classic, Dark header, Blue bands, Plain) and adjust; the sample table shows the result. Shared across all projects.
 - **Show branding** — the show **name** and **logo**. These stamp onto exports (pull orders, schedules, labels) and feed the `{Show}` token and the Show-name/logo label elements. Per project.
 - **Network signal types** — the shared library of signal types used by ports. Shared across all projects.
 - **Cable types** — the shared catalog used by cables. Shared across all projects.

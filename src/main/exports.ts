@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, shell } from 'electron'
 import { writeFileSync } from 'fs'
 import ExcelJS from 'exceljs'
+import { buildReport, type LightingReport } from '../shared/lighting-reports'
 import {
   getProjectMeta,
   getOrderExportSnapshot,
@@ -8,6 +9,7 @@ import {
   getShopOrderById,
   listBundles,
   listCasesByIds,
+  listFixtures,
   listTruckTrips,
   listTrucks,
   listDevices,
@@ -21,7 +23,8 @@ import {
   PROJECTOR_SETTINGS,
   projectorValueLabel
 } from '../shared/projector-settings'
-import { getCompanyName, getCompanyLogo } from './library'
+import { getCompanyName, getCompanyLogo, getTableStyle } from './library'
+import { argb, tableStyleCss } from '../shared/table-style'
 import type {
   Bundle,
   CableEndpoint,
@@ -145,6 +148,36 @@ function parseImageDataUrl(
   return { base64: m[2], extension: kind === 'gif' ? 'gif' : kind === 'png' ? 'png' : 'jpeg' }
 }
 
+/** Paint a sheet's table in the shared table style: header colors, stripes, lines. */
+function styleSheet(ws: ExcelJS.Worksheet, headerRowNum: number, cols: number): void {
+  const st = getTableStyle()
+  const line = { style: 'thin' as const, color: { argb: argb(st.borderColor) } }
+  const border: Partial<ExcelJS.Borders> =
+    st.borders === 'grid'
+      ? { top: line, bottom: line, left: line, right: line }
+      : st.borders === 'rows'
+        ? { bottom: line }
+        : {}
+  const fill = (hex: string): ExcelJS.Fill => ({
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: argb(hex) }
+  })
+  for (let r = headerRowNum; r <= ws.rowCount; r++) {
+    const row = ws.getRow(r)
+    const head = r === headerRowNum
+    const striped = !head && st.stripes && (r - headerRowNum) % 2 === 0
+    for (let c = 1; c <= cols; c++) {
+      const cell = row.getCell(c)
+      cell.border = border
+      if (head) {
+        cell.fill = fill(st.headerFill)
+        cell.font = { bold: true, color: { argb: argb(st.headerText) } }
+      } else if (striped) cell.fill = fill(st.stripeColor)
+    }
+  }
+}
+
 async function toXlsx(rows: Row[], includeBundle: boolean, logo: string | null): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet('Cables')
@@ -168,7 +201,6 @@ async function toXlsx(rows: Row[], includeBundle: boolean, logo: string | null):
     const imgId = wb.addImage({ base64: img.base64, extension: img.extension })
     ws.addImage(imgId, { tl: { col: 0, row: 0 }, ext: { width: 170, height: 60 } })
   }
-  ws.getRow(headerRowNum).font = { bold: true }
   ws.views = [{ state: 'frozen', ySplit: headerRowNum }]
   for (const r of rows) {
     ws.addRow({
@@ -183,6 +215,7 @@ async function toXlsx(rows: Row[], includeBundle: boolean, logo: string | null):
       notes: r.notes
     })
   }
+  styleSheet(ws, headerRowNum, ws.columns.length)
   return (await wb.xlsx.writeBuffer()) as unknown as Buffer
 }
 
@@ -201,7 +234,12 @@ const DENSITY_CSS: Record<Density, string> = {
   large: 'body{font-size:13.5px}th,td{padding:7px 9px}h2{font-size:15px}'
 }
 
-function page(title: string, body: string, logo: string | null, density: Density = 'normal'): string {
+function page(
+  title: string,
+  body: string,
+  logo: string | null,
+  density: Density = 'normal'
+): string {
   const titleBlock = docShowName
     ? `<div class="show">${esc(docShowName)}</div><div class="doctitle">${esc(title)}</div>`
     : `<div class="show">${esc(title)}</div>`
@@ -273,6 +311,7 @@ function page(title: string, body: string, logo: string | null, density: Density
              background: repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 3px,#fff 3px,#fff 6px); }
     .fname { font-weight: 700; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .fends { font-size: 8px; color: #555555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    ${tableStyleCss(getTableStyle())}
     ${DENSITY_CSS[density]}
   </style></head><body>${header}${body}</body></html>`
 }
@@ -609,8 +648,14 @@ async function projectorSheetXlsx(logo: string | null): Promise<Buffer> {
   const entries = projectorSheetEntries()
   const img = parseImageDataUrl(logo)
   const imgId = img ? wb.addImage({ base64: img.base64, extension: img.extension }) : null
-  const thin = { style: 'thin' as const, color: { argb: 'FFCFCFCF' } }
-  const box = { top: thin, bottom: thin, left: thin, right: thin }
+  const st = getTableStyle()
+  const thin = { style: 'thin' as const, color: { argb: argb(st.borderColor) } }
+  const box =
+    st.borders === 'grid'
+      ? { top: thin, bottom: thin, left: thin, right: thin }
+      : st.borders === 'rows'
+        ? { bottom: thin }
+        : {}
   const used = new Set<string>()
   for (const e of entries.length ? entries : [null]) {
     // Sheet names: max 31 chars, no []:*?/\ and unique.
@@ -678,9 +723,9 @@ async function projectorSheetXlsx(logo: string | null): Promise<Buffer> {
       ] as const) {
         const cell = ws.getCell(r, c)
         cell.value = text
-        cell.font = { bold: true, size: 12 }
+        cell.font = { bold: true, size: 12, color: { argb: argb(st.headerText) } }
         cell.alignment = { horizontal: 'center' }
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E9EF' } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(st.headerFill) } }
         cell.border = box
       }
       r++
@@ -693,8 +738,12 @@ async function projectorSheetXlsx(logo: string | null): Promise<Buffer> {
         value.font = { bold: true }
         for (const cell of [label, value]) {
           cell.border = box
-          if (i % 2)
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7F8FA' } }
+          if (i % 2 && st.stripes)
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: argb(st.stripeColor) }
+            }
         }
         r++
       })
@@ -862,13 +911,18 @@ function tableCsv(t: Table): string {
   return [t.headers, ...t.rows].map((r) => r.map((c) => csvCell(String(c))).join(',')).join('\r\n')
 }
 
-async function tableXlsx(t: Table, logo: string | null, sheetName = 'Sheet1'): Promise<Buffer> {
+async function tableXlsx(
+  t: Table,
+  logo: string | null,
+  sheetName = 'Sheet1',
+  widths?: number[]
+): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet(sheetName)
-  ws.columns = t.headers.map((h) => ({
+  ws.columns = t.headers.map((h, i) => ({
     header: h,
-    key: h,
-    width: Math.max(10, Math.min(30, h.length + 8))
+    key: `c${i}`,
+    width: widths?.[i] ?? Math.max(10, Math.min(30, h.length + 8))
   }))
   const img = parseImageDataUrl(logo)
   const headerRowNum = img ? 5 : 1
@@ -877,9 +931,9 @@ async function tableXlsx(t: Table, logo: string | null, sheetName = 'Sheet1'): P
     const imgId = wb.addImage({ base64: img.base64, extension: img.extension })
     ws.addImage(imgId, { tl: { col: 0, row: 0 }, ext: { width: 170, height: 60 } })
   }
-  ws.getRow(headerRowNum).font = { bold: true }
   ws.views = [{ state: 'frozen', ySplit: headerRowNum }]
   for (const r of t.rows) ws.addRow(r)
+  styleSheet(ws, headerRowNum, t.headers.length)
   return (await wb.xlsx.writeBuffer()) as unknown as Buffer
 }
 
@@ -898,16 +952,15 @@ function ipScheduleHtml(logo: string | null): string {
     return s.vlan ? `VLAN ${s.vlan}${s.name ? ` (${s.name})` : ''}` : s.name
   }
   const portVlan = (p: { untaggedSubnetId: number | null }): number =>
-    vlanSortKey(
-      (p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId)?.vlan : '') ?? ''
-    )
+    vlanSortKey((p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId)?.vlan : '') ?? '')
 
   const devices = listDevices()
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name))
   const sortedPorts = <T extends { untaggedSubnetId: number | null; label: string }>(
     ports: T[]
-  ): T[] => ports.slice().sort((a, b) => portVlan(a) - portVlan(b) || a.label.localeCompare(b.label))
+  ): T[] =>
+    ports.slice().sort((a, b) => portVlan(a) - portVlan(b) || a.label.localeCompare(b.label))
 
   // Build a grouped table: `lead(device)` = the merged device-level cells for a
   // group's first row; `cells(port)` = the per-port cells. Empty devices get one
@@ -917,7 +970,10 @@ function ipScheduleHtml(logo: string | null): string {
     headers: string[],
     group: typeof devices,
     lead: (d: (typeof devices)[number], span: number) => string,
-    cells: (d: (typeof devices)[number], p: (typeof devices)[number]['ports'][number] | null) => string
+    cells: (
+      d: (typeof devices)[number],
+      p: (typeof devices)[number]['ports'][number] | null
+    ) => string
   ): string {
     if (!group.length) return ''
     const rows = group
@@ -925,7 +981,10 @@ function ipScheduleHtml(logo: string | null): string {
         const ports = sortedPorts(d.ports.filter((p) => !p.isUnused))
         const list = ports.length ? ports : [null]
         return list
-          .map((p, i) => `<tr class="g${gi % 2}">${i === 0 ? lead(d, list.length) : ''}${cells(d, p)}</tr>`)
+          .map(
+            (p, i) =>
+              `<tr class="g${gi % 2}">${i === 0 ? lead(d, list.length) : ''}${cells(d, p)}</tr>`
+          )
           .join('')
       })
       .join('')
@@ -943,7 +1002,12 @@ function ipScheduleHtml(logo: string | null): string {
       )}</td><td rowspan="${span}">${esc(d.oobIp || '—')}</td>`,
     (_d, p) =>
       `<td>${p ? esc(p.label) : '—'}</td><td>${esc(p ? subLabel(p.untaggedSubnetId) : '')}</td><td>${esc(
-        p ? p.taggedSubnetIds.map((id) => subLabel(id)).filter(Boolean).join(', ') : ''
+        p
+          ? p.taggedSubnetIds
+              .map((id) => subLabel(id))
+              .filter(Boolean)
+              .join(', ')
+          : ''
       )}</td>`
   )
 
@@ -980,24 +1044,72 @@ type ColDef = {
   cell: (it: OrderItem, qty: number, recv: number) => string
 }
 const ORDER_COLS: Record<OrderColumnKey, ColDef> = {
-  category: { label: 'Category', short: 'Category', num: false, width: 16, cell: (it) => it.category || '' },
+  category: {
+    label: 'Category',
+    short: 'Category',
+    num: false,
+    width: 16,
+    cell: (it) => it.category || ''
+  },
   item: { label: 'Item', short: 'Item', num: false, width: 28, cell: (it) => it.name || '' },
-  manufacturer: { label: 'Manufacturer', short: 'Manufacturer', num: false, width: 18, cell: (it) => it.manufacturer || '' },
-  model: { label: 'Model', short: 'Model', num: false, width: 18, cell: (it) => it.modelNumber || '' },
-  requested: { label: 'Requested', short: 'Req', num: true, width: 10, cell: (_it, qty) => String(qty) },
-  received: { label: 'Received', short: 'Recv', num: true, width: 10, cell: (_it, _qty, recv) => String(recv) },
-  outstanding: { label: 'Outstanding', short: 'Out', num: true, width: 10, cell: (_it, qty, recv) => String(Math.max(0, qty - recv)) },
+  manufacturer: {
+    label: 'Manufacturer',
+    short: 'Manufacturer',
+    num: false,
+    width: 18,
+    cell: (it) => it.manufacturer || ''
+  },
+  model: {
+    label: 'Model',
+    short: 'Model',
+    num: false,
+    width: 18,
+    cell: (it) => it.modelNumber || ''
+  },
+  requested: {
+    label: 'Requested',
+    short: 'Req',
+    num: true,
+    width: 10,
+    cell: (_it, qty) => String(qty)
+  },
+  received: {
+    label: 'Received',
+    short: 'Recv',
+    num: true,
+    width: 10,
+    cell: (_it, _qty, recv) => String(recv)
+  },
+  outstanding: {
+    label: 'Outstanding',
+    short: 'Out',
+    num: true,
+    width: 10,
+    cell: (_it, qty, recv) => String(Math.max(0, qty - recv))
+  },
   notes: { label: 'Notes', short: 'Notes', num: false, width: 24, cell: (it) => it.notes || '' }
 }
 
 const ALL_KEYS: OrderColumnKey[] = [
-  'category', 'item', 'manufacturer', 'model', 'requested', 'received', 'outstanding', 'notes'
+  'category',
+  'item',
+  'manufacturer',
+  'model',
+  'requested',
+  'received',
+  'outstanding',
+  'notes'
 ]
 
 /** The built-in default format — reproduces the original fixed layout. */
 function defaultFormat(receiving: boolean): OrderExportFormat {
   const shown = new Set<OrderColumnKey>([
-    'item', 'manufacturer', 'model', 'requested', 'received', 'notes'
+    'item',
+    'manufacturer',
+    'model',
+    'requested',
+    'received',
+    'notes'
   ])
   if (receiving) shown.add('outstanding')
   return {
@@ -1181,7 +1293,10 @@ function headCells(cols: OrderColumn[], checkCol: boolean): string {
   return (
     chk +
     cols
-      .map((c) => `<th${ORDER_COLS[c.key].num ? ' class="chk"' : ''}>${esc(ORDER_COLS[c.key].short)}</th>`)
+      .map(
+        (c) =>
+          `<th${ORDER_COLS[c.key].num ? ' class="chk"' : ''}>${esc(ORDER_COLS[c.key].short)}</th>`
+      )
       .join('')
   )
 }
@@ -1247,13 +1362,21 @@ function shopOrderHtml(
     bodyHtml = `<section><table class="fixed">${colg}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
   }
 
-  const meta = [order.vendor, order.orderDate].filter(Boolean).map((x) => esc(x as string)).join(' · ')
+  const meta = [order.vendor, order.orderDate]
+    .filter(Boolean)
+    .map((x) => esc(x as string))
+    .join(' · ')
   const metaBlock = meta ? `<div class="meta">${meta}</div>` : ''
   const legend = prevMap
     ? `<div class="legend"><span class="sw-new"></span> new &nbsp;&nbsp; <span class="sw-chg"></span> changed since last export${baselineDate ? ` (${esc(baselineDate)})` : ''}</div>`
     : ''
   const title = (receiving ? 'Receiving Checklist — ' : 'Shop Order — ') + order.name
-  return page(title, metaBlock + legend + bodyHtml + cableSectionHtml(order, receiving), logo, r.density)
+  return page(
+    title,
+    metaBlock + legend + bodyHtml + cableSectionHtml(order, receiving),
+    logo,
+    r.density
+  )
 }
 
 /** XLSX for an order: an Equipment/Receiving sheet + (if any) a Cables sheet.
@@ -1269,14 +1392,18 @@ async function orderXlsx(
   const img = parseImageDataUrl(logo)
   // Width per header label: Change column + the resolved columns' weights.
   const widthByHeader = new Map<string, number>()
-  for (const c of flatColumns(r)) widthByHeader.set(ORDER_COLS[c.key].label, c.width || ORDER_COLS[c.key].width)
+  for (const c of flatColumns(r))
+    widthByHeader.set(ORDER_COLS[c.key].label, c.width || ORDER_COLS[c.key].width)
   widthByHeader.set('Change', 16)
   const addSheet = (sheetName: string, t: Table, useWidths: boolean): void => {
     const ws = wb.addWorksheet(sheetName)
     ws.columns = t.headers.map((h) => ({
       header: h,
       key: h,
-      width: useWidths && widthByHeader.has(h) ? Math.max(6, widthByHeader.get(h) as number) : Math.max(10, Math.min(30, h.length + 8))
+      width:
+        useWidths && widthByHeader.has(h)
+          ? Math.max(6, widthByHeader.get(h) as number)
+          : Math.max(10, Math.min(30, h.length + 8))
     }))
     const headerRowNum = img ? 5 : 1
     if (img) {
@@ -1284,9 +1411,9 @@ async function orderXlsx(
       const imgId = wb.addImage({ base64: img.base64, extension: img.extension })
       ws.addImage(imgId, { tl: { col: 0, row: 0 }, ext: { width: 170, height: 60 } })
     }
-    ws.getRow(headerRowNum).font = { bold: true }
     ws.views = [{ state: 'frozen', ySplit: headerRowNum }]
     for (const row of t.rows) ws.addRow(row)
+    styleSheet(ws, headerRowNum, t.headers.length)
   }
   addSheet(receiving ? 'Receiving' : 'Equipment', shopOrderTable(order, r, prevMap), true)
   if (order.cables.length) addSheet('Cables', cableOrderTable(order, receiving), false)
@@ -1482,4 +1609,59 @@ export function ipSchedulePageHtml(): string {
 export function deviceListPageHtml(): string {
   docShowName = getProjectMeta('showName')
   return deviceListHtml(getProjectMeta('logo'))
+}
+
+// ---- Lighting paperwork ----------------------------------------------------
+
+/** A lighting report template → PDF (column widths and text size as designed), Excel or CSV. */
+export async function exportLightingReport(
+  report: LightingReport,
+  format: 'pdf' | 'xlsx' | 'csv'
+): Promise<string | null> {
+  const logo = getProjectMeta('logo')
+  docShowName = getProjectMeta('showName')
+  const built = buildReport(report, listFixtures())
+  const res = await dialog.showSaveDialog({
+    defaultPath: `${report.name.replace(/[/\\:*?"<>|]/g, '-') || 'Lighting report'}.${format}`,
+    filters: [{ name: format.toUpperCase(), extensions: [format] }]
+  })
+  if (res.canceled || !res.filePath) return null
+  const grouped = built.sections.some((s) => s.title)
+  // CSV/Excel: one flat table; a section title becomes a leading column
+  const flat: Table = {
+    headers: [...(grouped ? [''] : []), ...built.headers],
+    rows: built.sections.flatMap((s) => s.rows.map((r) => [...(grouped ? [s.title] : []), ...r]))
+  }
+  if (format === 'csv') writeFileSync(res.filePath, tableCsv(flat), 'utf-8')
+  else if (format === 'xlsx') {
+    const charWidths = [...(grouped ? [16] : []), ...built.widths.map((w) => Math.round(w / 7))]
+    writeFileSync(res.filePath, await tableXlsx(flat, logo, 'Report', charWidths))
+  } else {
+    const total = built.widths.reduce((a, b) => a + b, 0) || 1
+    const colgroup = `<colgroup>${built.widths
+      .map((w) => `<col style="width:${((w / total) * 100).toFixed(2)}%">`)
+      .join('')}</colgroup>`
+    const head = `<thead><tr>${built.headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead>`
+    const table = (rows: string[][]): string =>
+      `<table class="lxr">${colgroup}${head}<tbody>${rows
+        .map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`)
+        .join('')}</tbody></table>`
+    const body =
+      `<style>table.lxr{table-layout:fixed;width:100%}table.lxr td,table.lxr th{overflow-wrap:anywhere}body{font-size:${report.fontSize}px}</style>` +
+      (built.sections.length
+        ? built.sections
+            .map((s) => (s.title ? `<h2 class="sec">${esc(s.title)}</h2>` : '') + table(s.rows))
+            .join('')
+        : `<p>${
+            report.kind === 'count' && report.columns[0]
+              ? `No fixture has a ${esc(report.columns[0].label)} yet.`
+              : 'No fixtures yet.'
+          }</p>`)
+    writeFileSync(
+      res.filePath,
+      await htmlToPdf(page(report.name, body, logo), report.orientation === 'landscape')
+    )
+  }
+  shell.openPath(res.filePath)
+  return res.filePath
 }

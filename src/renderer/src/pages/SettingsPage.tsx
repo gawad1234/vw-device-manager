@@ -3,6 +3,7 @@ import type { CableType, SwitchConfigSettings } from '../../../shared/types'
 import UpdatesPanel from '../components/UpdatesPanel'
 import ServerPanel from '../components/ServerPanel'
 import KitModal from '../components/KitModal'
+import TableStylePanel from '../components/TableStylePanel'
 
 interface Props {
   cableTypes: CableType[]
@@ -228,6 +229,8 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           </div>
         </div>
       </div>
+
+      <TableStylePanel />
 
       <div className="panel">
         <h3>Network signal types</h3>

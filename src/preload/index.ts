@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { LightingReport } from '../shared/lighting-reports'
+import type { TableStyle } from '../shared/table-style'
 import type {
   FixtureInput,
   FixtureType,
@@ -36,7 +38,8 @@ import type {
 // Custom APIs for renderer
 /** ipcRenderer.invoke, minus Electron's "Error invoking remote method 'x': Error:" prefix,
  *  so pages can show a handler's message as written. */
-const invoke = (channel: string, ...args: unknown[]): Promise<any> => // eslint-disable-line @typescript-eslint/no-explicit-any
+const invoke = (channel: string, ...args: unknown[]): Promise<any> =>
+  // eslint-disable-line @typescript-eslint/no-explicit-any
   ipcRenderer.invoke(channel, ...args).catch((err: unknown) => {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(msg.replace(/^Error invoking remote method '[^']*': (Error: )?/, ''))
@@ -76,8 +79,7 @@ const api: VwDeviceManagerApi = {
   crew: {
     directory: () => invoke('crew:directory'),
     createMember: (input: CrewMemberInput) => invoke('crew:createMember', input),
-    updateMember: (id: number, input: CrewMemberInput) =>
-      invoke('crew:updateMember', id, input),
+    updateMember: (id: number, input: CrewMemberInput) => invoke('crew:updateMember', id, input),
     removeMember: (id: number) => invoke('crew:removeMember', id),
     assignments: () => invoke('crew:assignments'),
     assign: (input: CrewAssignmentInput) => invoke('crew:assign', input),
@@ -89,12 +91,10 @@ const api: VwDeviceManagerApi = {
   },
   trucking: {
     trucks: () => invoke('trucking:trucks'),
-    saveTruck: (id: number | null, input: TruckInput) =>
-      invoke('trucking:saveTruck', id, input),
+    saveTruck: (id: number | null, input: TruckInput) => invoke('trucking:saveTruck', id, input),
     removeTruck: (id: number) => invoke('trucking:removeTruck', id),
     trips: () => invoke('trucking:trips'),
-    saveTrip: (id: number | null, input: TruckTripInput) =>
-      invoke('trucking:saveTrip', id, input),
+    saveTrip: (id: number | null, input: TruckTripInput) => invoke('trucking:saveTrip', id, input),
     removeTrip: (id: number) => invoke('trucking:removeTrip', id)
   },
   fixtures: {
@@ -118,11 +118,16 @@ const api: VwDeviceManagerApi = {
     list: () => invoke('fixtureTypes:list'),
     save: (type: FixtureType) => invoke('fixtureTypes:save', type)
   },
+  lightingReports: {
+    list: () => invoke('lightingReports:list'),
+    saveAll: (list: LightingReport[]) => invoke('lightingReports:saveAll', list),
+    export: (report: LightingReport, format: 'pdf' | 'xlsx' | 'csv') =>
+      invoke('lightingReports:export', report, format)
+  },
   software: {
     list: () => invoke('software:list'),
     create: (input: SoftwarePackageInput) => invoke('software:create', input),
-    update: (id: number, input: SoftwarePackageInput) =>
-      invoke('software:update', id, input),
+    update: (id: number, input: SoftwarePackageInput) => invoke('software:update', id, input),
     remove: (id: number) => invoke('software:remove', id),
     pickInstaller: () => invoke('software:pickInstaller'),
     buildKit: (deviceId: number) => invoke('software:buildKit', deviceId)
@@ -131,22 +136,17 @@ const api: VwDeviceManagerApi = {
     saveCommands: (deviceId: number) => invoke('projector:saveCommands', deviceId)
   },
   wallpapers: {
-    save: (files: { name: string; dataUrl: string }[]) =>
-      invoke('wallpapers:save', files)
+    save: (files: { name: string; dataUrl: string }[]) => invoke('wallpapers:save', files)
   },
   ports: {
-    create: (deviceId: number, input: PortInput) =>
-      invoke('ports:create', deviceId, input),
+    create: (deviceId: number, input: PortInput) => invoke('ports:create', deviceId, input),
     update: (id: number, input: PortInput) => invoke('ports:update', id, input),
     remove: (id: number) => invoke('ports:remove', id),
     setTaggedVlans: (id: number, subnetIds: number[]) =>
       invoke('ports:setTaggedVlans', id, subnetIds),
-    setPrimary: (id: number, isPrimary: boolean) =>
-      invoke('ports:setPrimary', id, isPrimary),
-    setUnused: (id: number, isUnused: boolean) =>
-      invoke('ports:setUnused', id, isUnused),
-    setLag: (id: number, lagGroup: string | null) =>
-      invoke('ports:setLag', id, lagGroup)
+    setPrimary: (id: number, isPrimary: boolean) => invoke('ports:setPrimary', id, isPrimary),
+    setUnused: (id: number, isUnused: boolean) => invoke('ports:setUnused', id, isUnused),
+    setLag: (id: number, lagGroup: string | null) => invoke('ports:setLag', id, lagGroup)
   },
   networkSignals: {
     list: () => invoke('signals:list'),
@@ -161,8 +161,7 @@ const api: VwDeviceManagerApi = {
     duplicate: (id: number) => invoke('bundles:duplicate', id)
   },
   cables: {
-    create: (bundleId: number, input: CableInput) =>
-      invoke('cables:create', bundleId, input),
+    create: (bundleId: number, input: CableInput) => invoke('cables:create', bundleId, input),
     update: (id: number, input: CableInput) => invoke('cables:update', id, input),
     remove: (id: number) => invoke('cables:remove', id)
   },
@@ -210,6 +209,10 @@ const api: VwDeviceManagerApi = {
   companyName: {
     get: () => invoke('companyName:get'),
     set: (name: string | null) => invoke('companyName:set', name)
+  },
+  tableStyle: {
+    get: () => invoke('tableStyle:get'),
+    set: (style: TableStyle) => invoke('tableStyle:set', style)
   },
   switchConfig: {
     get: () => invoke('switchConfig:get'),
@@ -272,16 +275,14 @@ const api: VwDeviceManagerApi = {
   },
   circuits: {
     list: () => invoke('circuits:list'),
-    setStatus: (id: number, input: CircuitStatusInput) =>
-      invoke('circuits:setStatus', id, input),
+    setStatus: (id: number, input: CircuitStatusInput) => invoke('circuits:setStatus', id, input),
     import: () => invoke('circuits:import'),
     clear: () => invoke('circuits:clear')
   },
   orderFormats: {
     list: () => invoke('orderFormats:list'),
     create: (input: OrderExportFormatInput) => invoke('orderFormats:create', input),
-    update: (id: number, input: OrderExportFormatInput) =>
-      invoke('orderFormats:update', id, input),
+    update: (id: number, input: OrderExportFormatInput) => invoke('orderFormats:update', id, input),
     remove: (id: number) => invoke('orderFormats:remove', id)
   },
   orderKits: {

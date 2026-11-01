@@ -18,6 +18,7 @@ import TruckingPage from './pages/TruckingPage'
 import FixturesPage from './pages/FixturesPage'
 import UniversesPage from './pages/UniversesPage'
 import FixtureTypesPage from './pages/FixtureTypesPage'
+import PaperworkPage from './pages/PaperworkPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjectMenu from './components/ProjectMenu'
 
@@ -39,6 +40,7 @@ type Tab =
   | 'fixtures'
   | 'universes'
   | 'fixtureTypes'
+  | 'paperwork'
   | 'settings'
 
 // Collapsible sidebar groups and the tabs they contain.
@@ -46,7 +48,7 @@ const NAV_GROUPS: Record<string, Tab[]> = {
   networking: ['subnets', 'configs'],
   schedule: ['crew', 'trucking'],
   packing: ['labels', 'cases'],
-  lighting: ['fixtures', 'universes', 'fixtureTypes']
+  lighting: ['fixtures', 'universes', 'fixtureTypes', 'paperwork']
 }
 
 function App(): React.JSX.Element {
@@ -150,7 +152,9 @@ function App(): React.JSX.Element {
         </div>
       )}
       {project?.remote && (
-        <div className={`banner ${project.remote.offline ? 'banner-warning' : 'banner-info'} remote-banner`}>
+        <div
+          className={`banner ${project.remote.offline ? 'banner-warning' : 'banner-info'} remote-banner`}
+        >
           {project.remote.offline
             ? `Can’t reach ${project.remote.host} — retrying. What you see may be out of date.`
             : `Viewing a shared show on ${project.remote.host} (view-only).`}
@@ -246,7 +250,8 @@ function App(): React.JSX.Element {
                   [
                     ['fixtures', 'Fixtures'],
                     ['universes', 'Universes'],
-                    ['fixtureTypes', 'Fixture types']
+                    ['fixtureTypes', 'Fixture types'],
+                    ['paperwork', 'Paperwork']
                   ] as const
                 ).map(([t, label]) => (
                   <button
@@ -336,60 +341,62 @@ function App(): React.JSX.Element {
         </nav>
 
         <main className="app-main">
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : tab === 'devices' ? (
-          <DevicesPage
-            devices={devices}
-            subnets={subnets}
-            categories={categories}
-            onChanged={refresh}
-          />
-        ) : tab === 'projectors' ? (
-          <ProjectorsPage devices={devices} onChanged={refresh} />
-        ) : tab === 'wallpapers' ? (
-          <WallpapersPage devices={devices} onChanged={refresh} />
-        ) : tab === 'software' ? (
-          <SoftwarePage devices={devices} onChanged={refresh} />
-        ) : tab === 'crew' ? (
-          <CrewPage key={project?.path} />
-        ) : tab === 'trucking' ? (
-          <TruckingPage key={project?.path} />
-        ) : tab === 'subnets' ? (
-          <SubnetsPage subnets={subnets} onChanged={refresh} />
-        ) : tab === 'cables' ? (
-          <CablesPage
-            bundles={bundles}
-            devices={devices}
-            cableTypes={cableTypes}
-            onChanged={refresh}
-          />
-        ) : tab === 'loomlabels' ? (
-          <LoomLabelsPage bundles={bundles} onChanged={refresh} />
-        ) : tab === 'configs' ? (
-          <ConfigsPage subnets={subnets} />
-        ) : tab === 'orders' ? (
-          <OrdersPage />
-        ) : tab === 'labels' ? (
-          <LabelsPage />
-        ) : tab === 'cases' ? (
-          <CasesPage />
-        ) : tab === 'patching' ? (
-          <PatchingPage />
-        ) : tab === 'fixtures' ? (
-          <FixturesPage key={project?.path} />
-        ) : tab === 'universes' ? (
-          <UniversesPage key={project?.path} devices={devices} />
-        ) : tab === 'fixtureTypes' ? (
-          <FixtureTypesPage key={project?.path} />
-        ) : (
-          <SettingsPage
-            key={project?.path}
-            cableTypes={cableTypes}
-            categories={categories}
-            onChanged={refresh}
-          />
-        )}
+          {loading ? (
+            <p className="muted">Loading…</p>
+          ) : tab === 'devices' ? (
+            <DevicesPage
+              devices={devices}
+              subnets={subnets}
+              categories={categories}
+              onChanged={refresh}
+            />
+          ) : tab === 'projectors' ? (
+            <ProjectorsPage devices={devices} onChanged={refresh} />
+          ) : tab === 'wallpapers' ? (
+            <WallpapersPage devices={devices} onChanged={refresh} />
+          ) : tab === 'software' ? (
+            <SoftwarePage devices={devices} onChanged={refresh} />
+          ) : tab === 'crew' ? (
+            <CrewPage key={project?.path} />
+          ) : tab === 'trucking' ? (
+            <TruckingPage key={project?.path} />
+          ) : tab === 'subnets' ? (
+            <SubnetsPage subnets={subnets} onChanged={refresh} />
+          ) : tab === 'cables' ? (
+            <CablesPage
+              bundles={bundles}
+              devices={devices}
+              cableTypes={cableTypes}
+              onChanged={refresh}
+            />
+          ) : tab === 'loomlabels' ? (
+            <LoomLabelsPage bundles={bundles} onChanged={refresh} />
+          ) : tab === 'configs' ? (
+            <ConfigsPage subnets={subnets} />
+          ) : tab === 'orders' ? (
+            <OrdersPage />
+          ) : tab === 'labels' ? (
+            <LabelsPage />
+          ) : tab === 'cases' ? (
+            <CasesPage />
+          ) : tab === 'patching' ? (
+            <PatchingPage />
+          ) : tab === 'fixtures' ? (
+            <FixturesPage key={project?.path} />
+          ) : tab === 'universes' ? (
+            <UniversesPage key={project?.path} devices={devices} />
+          ) : tab === 'fixtureTypes' ? (
+            <FixtureTypesPage key={project?.path} />
+          ) : tab === 'paperwork' ? (
+            <PaperworkPage key={project?.path} />
+          ) : (
+            <SettingsPage
+              key={project?.path}
+              cableTypes={cableTypes}
+              categories={categories}
+              onChanged={refresh}
+            />
+          )}
         </main>
       </div>
     </div>

@@ -5,7 +5,9 @@ import { join } from 'path'
 import * as repo from './repository'
 import * as projects from './projects'
 import * as library from './library'
-import { exportDocument } from './exports'
+import { exportDocument, exportLightingReport } from './exports'
+import type { LightingReport } from '../shared/lighting-reports'
+import type { TableStyle } from '../shared/table-style'
 import { generateVlanScript } from './vlan-script'
 import { printCaseLabels, printCasesLabels } from './caselabels'
 import { importCircuitReport } from './circuit-import'
@@ -76,16 +78,12 @@ function handle(channel: string, fn: Handler): void {
 export function registerIpcHandlers(): void {
   handle('subnets:list', () => repo.listSubnets())
   handle('subnets:create', (_e, input: SubnetInput) => repo.createSubnet(input))
-  handle('subnets:update', (_e, id: number, input: SubnetInput) =>
-    repo.updateSubnet(id, input)
-  )
+  handle('subnets:update', (_e, id: number, input: SubnetInput) => repo.updateSubnet(id, input))
   handle('subnets:remove', (_e, id: number) => repo.deleteSubnet(id))
 
   handle('devices:list', () => repo.listDevices())
   handle('devices:create', (_e, input: DeviceInput) => repo.createDevice(input))
-  handle('devices:update', (_e, id: number, input: DeviceInput) =>
-    repo.updateDevice(id, input)
-  )
+  handle('devices:update', (_e, id: number, input: DeviceInput) => repo.updateDevice(id, input))
   handle('devices:remove', (_e, id: number) => repo.deleteDevice(id))
   handle('devices:setWallpaper', (_e, id: number, config: WallpaperConfig | null) =>
     repo.setDeviceWallpaper(id, config)
@@ -114,17 +112,13 @@ export function registerIpcHandlers(): void {
 
   // Crew: shared directory (library.json, gitignored) + this show's bookings.
   handle('crew:directory', () => library.listCrew())
-  handle('crew:createMember', (_e, input: CrewMemberInput) =>
-    library.createCrewMember(input)
-  )
+  handle('crew:createMember', (_e, input: CrewMemberInput) => library.createCrewMember(input))
   handle('crew:updateMember', (_e, id: number, input: CrewMemberInput) =>
     library.updateCrewMember(id, input)
   )
   handle('crew:removeMember', (_e, id: number) => library.deleteCrewMember(id))
   handle('crew:assignments', () => repo.listCrewAssignments())
-  handle('crew:assign', (_e, input: CrewAssignmentInput) =>
-    repo.saveCrewAssignment(null, input)
-  )
+  handle('crew:assign', (_e, input: CrewAssignmentInput) => repo.saveCrewAssignment(null, input))
   handle('crew:updateAssignment', (_e, id: number, input: CrewAssignmentInput) =>
     repo.saveCrewAssignment(id, input)
   )
@@ -161,15 +155,20 @@ export function registerIpcHandlers(): void {
   })
   handle('fixtureTypes:list', () => library.listFixtureTypes())
   handle('fixtureTypes:save', (_e, type: FixtureType) => library.saveFixtureType(type))
+  handle('lightingReports:list', () => library.listLightingReports())
+  handle('lightingReports:saveAll', (_e, list: LightingReport[]) =>
+    library.saveLightingReports(list)
+  )
+  handle('lightingReports:export', (_e, report: LightingReport, format: 'pdf' | 'xlsx' | 'csv') =>
+    exportLightingReport(report, format)
+  )
   handle('lightingSync:status', () => lighting.getLightingSyncStatus())
   handle('lightingSync:set', (_e, on: boolean) => lighting.setLightingSync(on))
   handle('lightingSync:choose', () => lighting.chooseExchangeFile())
 
   // Software library (shared) + per-computer install kits.
   handle('software:list', () => library.listSoftware())
-  handle('software:create', (_e, input: SoftwarePackageInput) =>
-    library.createSoftware(input)
-  )
+  handle('software:create', (_e, input: SoftwarePackageInput) => library.createSoftware(input))
   handle('software:update', (_e, id: number, input: SoftwarePackageInput) =>
     library.updateSoftware(id, input)
   )
@@ -184,41 +183,38 @@ export function registerIpcHandlers(): void {
   })
   // Writes "<Computer> Setup/" (installers\ + Install.ps1 + Install.bat) into a folder
   // the user picks, e.g. a USB stick. Fails up front if any installer file is missing.
-  handle(
-    'software:buildKit',
-    async (_e, deviceId: number): Promise<BuildKitResult | null> => {
-      const device = repo.getDeviceById(deviceId)
-      const byId = new Map(library.listSoftware().map((p) => [p.id, p]))
-      const pkgs = (device?.software ?? []).flatMap((id) => byId.get(id) ?? [])
-      if (!device || !pkgs.length) return { error: 'No software is ticked for this computer.' }
-      const missing = pkgs.filter((p) => !existsSync(p.path))
-      if (missing.length)
-        return {
-          error: `Installer not found on this computer: ${missing.map((p) => `${p.name} (${p.path})`).join('; ')}`
-        }
-      const res = await dialog.showOpenDialog({
-        title: 'Choose where to write the install kit (e.g. a USB stick)',
-        properties: ['openDirectory', 'createDirectory']
-      })
-      if (res.canceled || !res.filePaths[0]) return null
-      const safe = (device.name || 'Computer').replace(/[/\\:*?"<>|]/g, '-')
-      const kitDir = join(res.filePaths[0], `${safe} Setup`)
-      const files = kitFileNames(pkgs.map((p) => p.path))
-      mkdirSync(join(kitDir, 'installers'), { recursive: true })
-      for (let i = 0; i < pkgs.length; i++)
-        await copyFile(pkgs[i].path, join(kitDir, 'installers', files[i]))
-      const items = pkgs.map((p, i) => ({ name: p.name, file: files[i], args: p.args }))
-      // BOM: Windows PowerShell 5.1 reads BOM-less scripts as ANSI and garbles non-ASCII names.
-      writeFileSync(
-        join(kitDir, 'Install.ps1'),
-        '\ufeff' + generateInstallScript(device.name, items).replace(/\r?\n/g, '\r\n'),
-        'utf-8'
-      )
-      writeFileSync(join(kitDir, 'Install.bat'), INSTALL_BAT, 'utf-8')
-      shell.showItemInFolder(join(kitDir, 'Install.bat'))
-      return { path: kitDir, count: pkgs.length }
-    }
-  )
+  handle('software:buildKit', async (_e, deviceId: number): Promise<BuildKitResult | null> => {
+    const device = repo.getDeviceById(deviceId)
+    const byId = new Map(library.listSoftware().map((p) => [p.id, p]))
+    const pkgs = (device?.software ?? []).flatMap((id) => byId.get(id) ?? [])
+    if (!device || !pkgs.length) return { error: 'No software is ticked for this computer.' }
+    const missing = pkgs.filter((p) => !existsSync(p.path))
+    if (missing.length)
+      return {
+        error: `Installer not found on this computer: ${missing.map((p) => `${p.name} (${p.path})`).join('; ')}`
+      }
+    const res = await dialog.showOpenDialog({
+      title: 'Choose where to write the install kit (e.g. a USB stick)',
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (res.canceled || !res.filePaths[0]) return null
+    const safe = (device.name || 'Computer').replace(/[/\\:*?"<>|]/g, '-')
+    const kitDir = join(res.filePaths[0], `${safe} Setup`)
+    const files = kitFileNames(pkgs.map((p) => p.path))
+    mkdirSync(join(kitDir, 'installers'), { recursive: true })
+    for (let i = 0; i < pkgs.length; i++)
+      await copyFile(pkgs[i].path, join(kitDir, 'installers', files[i]))
+    const items = pkgs.map((p, i) => ({ name: p.name, file: files[i], args: p.args }))
+    // BOM: Windows PowerShell 5.1 reads BOM-less scripts as ANSI and garbles non-ASCII names.
+    writeFileSync(
+      join(kitDir, 'Install.ps1'),
+      '\ufeff' + generateInstallScript(device.name, items).replace(/\r?\n/g, '\r\n'),
+      'utf-8'
+    )
+    writeFileSync(join(kitDir, 'Install.bat'), INSTALL_BAT, 'utf-8')
+    shell.showItemInFolder(join(kitDir, 'Install.bat'))
+    return { path: kitDir, count: pkgs.length }
+  })
 
   // Save a projector's command list CSV for Panasonic Multi Monitoring & Control.
   handle('projector:saveCommands', async (_e, deviceId: number) => {
@@ -266,12 +262,8 @@ export function registerIpcHandlers(): void {
   handle('ports:setPrimary', (_e, id: number, isPrimary: boolean) =>
     repo.setPrimaryPort(id, isPrimary)
   )
-  handle('ports:setUnused', (_e, id: number, isUnused: boolean) =>
-    repo.setPortUnused(id, isUnused)
-  )
-  handle('ports:setLag', (_e, id: number, lagGroup: string | null) =>
-    repo.setPortLag(id, lagGroup)
-  )
+  handle('ports:setUnused', (_e, id: number, isUnused: boolean) => repo.setPortUnused(id, isUnused))
+  handle('ports:setLag', (_e, id: number, lagGroup: string | null) => repo.setPortLag(id, lagGroup))
 
   // Network signals + cable types are the shared, cross-project library.
   handle('signals:list', () => library.listNetworkSignals())
@@ -280,18 +272,14 @@ export function registerIpcHandlers(): void {
 
   handle('bundles:list', () => repo.listBundles())
   handle('bundles:create', (_e, input: BundleInput) => repo.createBundle(input))
-  handle('bundles:update', (_e, id: number, input: BundleInput) =>
-    repo.updateBundle(id, input)
-  )
+  handle('bundles:update', (_e, id: number, input: BundleInput) => repo.updateBundle(id, input))
   handle('bundles:remove', (_e, id: number) => repo.deleteBundle(id))
   handle('bundles:duplicate', (_e, id: number) => repo.duplicateBundle(id))
 
   handle('cables:create', (_e, bundleId: number, input: CableInput) =>
     repo.createCable(bundleId, input)
   )
-  handle('cables:update', (_e, id: number, input: CableInput) =>
-    repo.updateCable(id, input)
-  )
+  handle('cables:update', (_e, id: number, input: CableInput) => repo.updateCable(id, input))
   handle('cables:remove', (_e, id: number) => repo.deleteCable(id))
 
   handle('cableTypes:list', () => library.listCableTypes())
@@ -320,22 +308,18 @@ export function registerIpcHandlers(): void {
 
   // Per-show logo stamped onto generated paperwork.
   handle('showLogo:get', () => repo.getProjectMeta('logo'))
-  handle('showLogo:set', (_e, dataUrl: string | null) =>
-    repo.setProjectMeta('logo', dataUrl)
-  )
+  handle('showLogo:set', (_e, dataUrl: string | null) => repo.setProjectMeta('logo', dataUrl))
   handle('showName:get', () => repo.getProjectMeta('showName'))
-  handle('showName:set', (_e, name: string | null) =>
-    repo.setProjectMeta('showName', name)
-  )
+  handle('showName:set', (_e, name: string | null) => repo.setProjectMeta('showName', name))
   // Company branding — shared across all projects (library), unlike the per-show branding above.
   handle('companyLogo:get', () => library.getCompanyLogo())
   handle('companyLogo:set', (_e, dataUrl: string | null) => library.setCompanyLogo(dataUrl))
   handle('companyName:get', () => library.getCompanyName())
   handle('companyName:set', (_e, name: string | null) => library.setCompanyName(name))
+  handle('tableStyle:get', () => library.getTableStyle())
+  handle('tableStyle:set', (_e, style: TableStyle) => library.setTableStyle(style))
   handle('switchConfig:get', () => library.getSwitchConfig())
-  handle('switchConfig:set', (_e, input: SwitchConfigSettings) =>
-    library.setSwitchConfig(input)
-  )
+  handle('switchConfig:set', (_e, input: SwitchConfigSettings) => library.setSwitchConfig(input))
 
   // Host VLAN configs → PowerShell script generation (Configs tab).
   handle('configs:list', () => repo.listHostConfigs())
@@ -430,9 +414,7 @@ export function registerIpcHandlers(): void {
   // Cases (packing manager).
   handle('cases:list', () => repo.listCases())
   handle('cases:create', (_e, input: PackCaseInput) => repo.createCase(input))
-  handle('cases:update', (_e, id: number, input: PackCaseInput) =>
-    repo.updateCase(id, input)
-  )
+  handle('cases:update', (_e, id: number, input: PackCaseInput) => repo.updateCase(id, input))
   handle('cases:remove', (_e, id: number) => repo.deleteCase(id))
 
   // Patching (circuits imported from a ConnectCAD circuit report).

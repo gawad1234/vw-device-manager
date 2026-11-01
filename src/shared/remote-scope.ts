@@ -22,6 +22,7 @@ const READ = new Set([
   'showName:get',
   'companyLogo:get',
   'companyName:get',
+  'tableStyle:get',
   'switchConfig:get',
   'configs:list',
   'orders:list',
@@ -32,7 +33,8 @@ const READ = new Set([
   'circuits:list',
   'fixtures:list',
   'lighting:get',
-  'fixtureTypes:list'
+  'fixtureTypes:list',
+  'lightingReports:list'
 ])
 
 /** Need this machine's files, dialogs or printer but read the open project's data:
@@ -48,7 +50,8 @@ const HOST_ONLY = new Set([
   'configs:exportJson',
   'software:pickInstaller',
   'software:buildKit',
-  'circuits:import'
+  'circuits:import',
+  'lightingReports:export'
 ])
 
 /** Always this machine: app updates, this machine's Show Server, project switching,

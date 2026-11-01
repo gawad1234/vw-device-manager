@@ -1,3 +1,5 @@
+import type { LightingReport } from './lighting-reports'
+import type { TableStyle } from './table-style'
 export interface Subnet {
   id: number
   name: string
@@ -332,13 +334,7 @@ export function defaultOrderColumns(): OrderColumn[] {
 
 /** Where the update flow currently is. Drives the Settings → Updates panel. */
 export type UpdatePhase =
-  | 'idle'
-  | 'checking'
-  | 'available'
-  | 'not-available'
-  | 'downloading'
-  | 'downloaded'
-  | 'error'
+  'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
 
 /** A release newer than the running app (from the GitHub Releases feed). */
 export interface UpdateInfo {
@@ -895,6 +891,13 @@ export interface VwDeviceManagerApi {
     list: () => Promise<FixtureType[]>
     save: (type: FixtureType) => Promise<FixtureType[]>
   }
+  /** Shared lighting paperwork templates (built-in presets until saved) + export. */
+  lightingReports: {
+    list: () => Promise<LightingReport[]>
+    saveAll: (list: LightingReport[]) => Promise<LightingReport[]>
+    /** saves a file the user picks and opens it; null = cancelled */
+    export: (report: LightingReport, format: 'pdf' | 'xlsx' | 'csv') => Promise<string | null>
+  }
   /** Shared library of Windows installers + per-computer install kits. */
   software: {
     list: () => Promise<SoftwarePackage[]>
@@ -995,6 +998,11 @@ export interface VwDeviceManagerApi {
   companyName: {
     get: () => Promise<string | null>
     set: (name: string | null) => Promise<void>
+  }
+  /** How exported tables look (Excel + PDF), shared by every show. */
+  tableStyle: {
+    get: () => Promise<TableStyle>
+    set: (style: TableStyle) => Promise<TableStyle>
   }
   /** Shared switch-config generator settings (base template + admin login). */
   switchConfig: {

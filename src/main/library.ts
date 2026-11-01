@@ -21,6 +21,8 @@ import type {
   SwitchConfigSettings,
   FixtureType
 } from '../shared/types'
+import { REPORT_PRESETS, type LightingReport } from '../shared/lighting-reports'
+import { normalizeTableStyle, type TableStyle } from '../shared/table-style'
 
 /**
  * The universal library — network signals + cable types — is shared across ALL
@@ -53,6 +55,10 @@ interface Library {
   stickerDesigns: StickerDesign[]
   /** Lighting fixture types with their DMX modes + footprints. */
   fixtureTypes: FixtureType[]
+  /** Lighting paperwork templates; null = never saved, so the built-in presets show. */
+  lightingReports: LightingReport[] | null
+  /** How exported tables look (Excel + PDF); null = the default look. */
+  tableStyle: TableStyle | null
 }
 
 function defaultSwitchConfig(): SwitchConfigSettings {
@@ -74,7 +80,9 @@ function readLibrary(): Library {
       crew: raw.crew ?? [],
       stickerSheets: raw.stickerSheets ?? [],
       stickerDesigns: raw.stickerDesigns ?? [],
-      fixtureTypes: raw.fixtureTypes ?? []
+      fixtureTypes: raw.fixtureTypes ?? [],
+      lightingReports: raw.lightingReports ?? null,
+      tableStyle: raw.tableStyle ?? null
     }
   } catch {
     return {
@@ -89,7 +97,9 @@ function readLibrary(): Library {
       crew: [],
       stickerSheets: [],
       stickerDesigns: [],
-      fixtureTypes: []
+      fixtureTypes: [],
+      lightingReports: null,
+      tableStyle: null
     }
   }
 }
@@ -121,7 +131,9 @@ export async function ensureLibrary(): Promise<void> {
     crew: [],
     stickerSheets: [],
     stickerDesigns: [],
-    fixtureTypes: []
+    fixtureTypes: [],
+    lightingReports: null,
+    tableStyle: null
   })
 }
 
@@ -400,7 +412,9 @@ export function listStickerDesigns(): StickerDesign[] {
 export function saveStickerDesign(id: number | null, input: StickerDesignInput): StickerDesign {
   const lib = readLibrary()
   const design: StickerDesign = { ...input, id: id ?? nextId(lib.stickerDesigns) }
-  lib.stickerDesigns = [...lib.stickerDesigns.filter((d) => d.id !== design.id), design].sort(byName)
+  lib.stickerDesigns = [...lib.stickerDesigns.filter((d) => d.id !== design.id), design].sort(
+    byName
+  )
   writeLibrary(lib)
   return design
 }
@@ -425,4 +439,31 @@ export function saveFixtureType(type: FixtureType): FixtureType[] {
   lib.fixtureTypes = modes.length ? [...others, { name: type.name, modes }] : others
   writeLibrary(lib)
   return lib.fixtureTypes
+}
+
+// ---- Lighting paperwork templates (shared) --------------------------------
+
+export function listLightingReports(): LightingReport[] {
+  return readLibrary().lightingReports ?? REPORT_PRESETS
+}
+
+/** Replace the whole template list (the page adds, edits, reorders and deletes). */
+export function saveLightingReports(list: LightingReport[]): LightingReport[] {
+  const lib = readLibrary()
+  lib.lightingReports = list
+  writeLibrary(lib)
+  return list
+}
+
+// ---- Exported table style (shared) ----------------------------------------
+
+export function getTableStyle(): TableStyle {
+  return normalizeTableStyle(readLibrary().tableStyle)
+}
+
+export function setTableStyle(style: TableStyle): TableStyle {
+  const lib = readLibrary()
+  lib.tableStyle = normalizeTableStyle(style)
+  writeLibrary(lib)
+  return lib.tableStyle
 }
