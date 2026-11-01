@@ -138,6 +138,11 @@ workspace context and the cross-machine handoff log — check those first.
   `notes`/`mode` are app-only). Project meta `lighting` = `{exchangePath, syncOn, universes:
   {[n]: {deviceId, label}}}`; `lightingVw` = the last Vectorworks field list/header/universe table.
   `library.json` → `fixtureTypes` (`{name, modes: [{name, footprint}]}`, shared).
+- **Lighting paperwork:** `library.json` → `lightingReports` (`LightingReport[]`, null = show
+  `REPORT_PRESETS`). Pure builder `src/shared/lighting-reports.ts` (`buildReport`) feeds the
+  Paperwork preview, `exportLightingReport` (PDF/Excel/CSV) and the tests.
+- **Table style:** `library.json` → `tableStyle` (null = default). `src/shared/table-style.ts`;
+  `page()` appends `tableStyleCss()` to every PDF, `styleSheet()` paints every Excel sheet.
 
 ## Vectorworks sync (`vectorworks-scripts/`)
 
