@@ -74,6 +74,17 @@ function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg)   { Write-Host "    $msg" -ForegroundColor Green }
 function Write-Note($msg) { Write-Host "    $msg" -ForegroundColor Yellow }
 
+# ShouldProcess writes its "What if:" text straight to the host UI, so a caller
+# capturing output (the GUI's Preview) never sees it. Under -WhatIf, write the
+# plan line ourselves instead so it lands in the information stream.
+function Confirm-Change($target, $action) {
+    if ($WhatIfPreference) {
+        Write-Host "    What if: $action on '$target'" -ForegroundColor DarkGray
+        return $false
+    }
+    return $PSCmdlet.ShouldProcess($target, $action)
+}
+
 # Hyper-V's management service can lag behind right after a switch or vNIC change,
 # producing "object was not found on computer '<name>'" errors. Retry a few times.
 function Invoke-HyperV([scriptblock]$Action, [string]$What, [int]$Tries = 5) {
@@ -188,7 +199,7 @@ function Set-HostAdapterIp($vlan) {
     $idx = $adapter.ifIndex
 
     if ($vlan.Dhcp) {
-        if ($PSCmdlet.ShouldProcess($adapter.Name, "Enable DHCP")) {
+        if ((Confirm-Change $adapter.Name "Enable DHCP")) {
             Get-NetIPAddress -InterfaceIndex $idx -AddressFamily IPv4 -ErrorAction SilentlyContinue |
                 Where-Object PrefixOrigin -ne 'Dhcp' | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
             Get-NetRoute -InterfaceIndex $idx -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
@@ -209,7 +220,7 @@ function Set-HostAdapterIp($vlan) {
     if ($ipMatches -and $gwMatches) {
         Write-Ok "IP $($vlan.IPAddress)/$($vlan.PrefixLength) already set"
     }
-    elseif ($PSCmdlet.ShouldProcess($adapter.Name, "Set static IP $($vlan.IPAddress)/$($vlan.PrefixLength)")) {
+    elseif ((Confirm-Change $adapter.Name "Set static IP $($vlan.IPAddress)/$($vlan.PrefixLength)")) {
 
         # Wait until the IPv4 stack is bound to the new adapter
         $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -286,7 +297,7 @@ function Set-HostAdapterIp($vlan) {
         Write-Ok "IP $($vlan.IPAddress)/$($vlan.PrefixLength)$(if ($vlan.Gateway) { " gw $($vlan.Gateway)" })"
     }
 
-    if ($PSCmdlet.ShouldProcess($adapter.Name, "Set DNS")) {
+    if ((Confirm-Change $adapter.Name "Set DNS")) {
         if ($vlan.DnsServers -and @($vlan.DnsServers).Count -gt 0) {
             Set-DnsClientServerAddress -InterfaceIndex $idx -ServerAddresses $vlan.DnsServers
             Write-Ok "DNS $(@($vlan.DnsServers) -join ', ')"
@@ -320,13 +331,13 @@ if ($Teardown) {
     Write-Step "Removing host adapters"
     foreach ($name in @($vlans.Name) + $SwitchName) {
         $vnic = Get-VMNetworkAdapter -ManagementOS -Name $name -ErrorAction SilentlyContinue
-        if ($vnic -and $PSCmdlet.ShouldProcess($name, "Remove host vNIC")) {
+        if ($vnic -and (Confirm-Change $name "Remove host vNIC")) {
             Remove-VMNetworkAdapter -ManagementOS -Name $name
             Write-Ok "Removed $name"
         }
     }
     $sw = Get-VMSwitch -Name $SwitchName -ErrorAction SilentlyContinue
-    if ($sw -and $PSCmdlet.ShouldProcess($SwitchName, "Remove virtual switch")) {
+    if ($sw -and (Confirm-Change $SwitchName "Remove virtual switch")) {
         Remove-VMSwitch -Name $SwitchName -Force
         Write-Ok "Removed switch $SwitchName"
     }
@@ -357,7 +368,7 @@ if ($switch) {
     if (-not $nic) { throw "Physical adapter '$PhysicalAdapterName' not found." }
     Assert-WiredAdapter $nic
 
-    if ($PSCmdlet.ShouldProcess($PhysicalAdapterName, "Create External switch '$SwitchName'")) {
+    if ((Confirm-Change $PhysicalAdapterName "Create External switch '$SwitchName'")) {
         Write-Note "Network on '$PhysicalAdapterName' will drop for a few seconds."
         New-VMSwitch -Name $SwitchName -NetAdapterName $PhysicalAdapterName -AllowManagementOS $true | Out-Null
         Write-Ok "Created, bound to '$PhysicalAdapterName'"
@@ -377,13 +388,13 @@ foreach ($v in $ordered) {
 
     $vnic = Get-VMNetworkAdapter -ManagementOS -Name $v.Name -ErrorAction SilentlyContinue
     if (-not $vnic) {
-        if ($PSCmdlet.ShouldProcess($v.Name, "Add host vNIC on '$SwitchName'")) {
+        if ((Confirm-Change $v.Name "Add host vNIC on '$SwitchName'")) {
             Invoke-HyperV { Add-VMNetworkAdapter -ManagementOS -Name $v.Name -SwitchName $SwitchName -ErrorAction Stop } "Creating '$($v.Name)'"
             Wait-HostVNic $v.Name
             Write-Ok "Created"
         } else { continue }
     } elseif ($vnic.SwitchName -ne $SwitchName) {
-        if ($PSCmdlet.ShouldProcess($v.Name, "Reconnect to '$SwitchName'")) {
+        if ((Confirm-Change $v.Name "Reconnect to '$SwitchName'")) {
             Invoke-HyperV { Connect-VMNetworkAdapter -ManagementOS -Name $v.Name -SwitchName $SwitchName -ErrorAction Stop } "Reconnecting '$($v.Name)'"
             Write-Ok "Reconnected to '$SwitchName'"
         }
@@ -395,14 +406,14 @@ foreach ($v in $ordered) {
     if ($v.Tagged) {
         if ($vlanSetting.OperationMode -eq 'Access' -and $vlanSetting.AccessVlanId -eq $v.VlanId) {
             Write-Ok "VLAN $($v.VlanId) already set"
-        } elseif ($PSCmdlet.ShouldProcess($v.Name, "Set Access VLAN $($v.VlanId)")) {
+        } elseif ((Confirm-Change $v.Name "Set Access VLAN $($v.VlanId)")) {
             Invoke-HyperV { Set-VMNetworkAdapterVlan -ManagementOS -VMNetworkAdapterName $v.Name -Access -VlanId $v.VlanId -ErrorAction Stop } "Tagging '$($v.Name)'"
             Write-Ok "Tagged VLAN $($v.VlanId)"
         }
     } else {
         if ($vlanSetting.OperationMode -eq 'Untagged') {
             Write-Ok "Already untagged"
-        } elseif ($PSCmdlet.ShouldProcess($v.Name, "Set untagged")) {
+        } elseif ((Confirm-Change $v.Name "Set untagged")) {
             Invoke-HyperV { Set-VMNetworkAdapterVlan -ManagementOS -VMNetworkAdapterName $v.Name -Untagged -ErrorAction Stop } "Untagging '$($v.Name)'"
             Write-Ok "Set untagged"
         }
@@ -415,7 +426,7 @@ foreach ($v in $ordered) {
 $default = Get-VMNetworkAdapter -ManagementOS -Name $SwitchName -ErrorAction SilentlyContinue
 if ($default) {
     Write-Step "Default adapter 'vEthernet ($SwitchName)'"
-    if ($PSCmdlet.ShouldProcess($SwitchName, "Remove default host adapter")) {
+    if ((Confirm-Change $SwitchName "Remove default host adapter")) {
         Remove-VMNetworkAdapter -ManagementOS -Name $SwitchName
         Write-Ok "Removed (replaced by '$(if ($untagged) { $untagged.Name } else { 'nothing - no untagged network defined' })')"
     }

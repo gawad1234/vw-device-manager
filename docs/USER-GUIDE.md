@@ -7,6 +7,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Core concepts](#core-concepts)
 - [Projects (the top-left menu)](#projects)
 - [Devices](#devices)
+  - [IP sheet (edit every IP at once)](#ip-sheet)
   - [Projectors (Panasonic)](#projectors)
   - [Wallpapers](#wallpapers)
   - [Software install kits (Windows)](#software-install-kits)
@@ -88,6 +89,15 @@ Unsaved edits on one tab are kept when you switch tabs, and **Save changes** sav
 - **IP outside subnet** — if a port's IP isn't inside its untagged subnet's CIDR, you're warned.
 
 Device **type** and **location** are usually owned by the drawing (read-only in the app) once a device is linked from ConnectCAD.
+
+### IP sheet
+
+Switch the Devices page from **List** to **IP sheet** (top right) to edit every IP in one spreadsheet: one row per port, with the device, category, port, **IP address**, **VLAN (untagged)** and **Main** ★. Switches add a **Mgmt** and an **OOB** row for their device-level IPs; their ports show VLAN only.
+
+- Click a cell and type — it saves when you leave the cell. **Enter** / **↓** and **↑** move down and up the column, **Esc** undoes a change you haven't left yet.
+- **Paste from Excel:** copy a column of IPs (or IPs plus a VLAN column) and paste into a cell — it fills down from there, skipping rows that can't take a value. VLANs match by number (`20`), name (`Dante`) or `20 · Dante`.
+- The same checks as the device window run on every save: a duplicate IP is refused and an IP outside its VLAN's subnet gets a warning — both show in the **Check** column and turn the cell red or amber.
+- Search and the category filter work as in the list. Unused jacks are hidden unless you tick **Show unused jacks**. Click a device name to open its window (tagged VLANs, LAGs and the rest are edited there).
 
 **Exports** (Devices → **Export ▾**): the **Device list** (name · location · main VLAN · main IP, grouped by category) and the **IP schedule** (every port), each in PDF / Excel / CSV. Their columns come from [Paperwork](#paperwork) templates — **Edit layout…** in the menu opens one.
 
@@ -212,7 +222,7 @@ Builds a **Hyper-V VLAN trunk** for a Windows host — one untagged (native) ada
 
 ### VLAN Manager (host tool)
 
-For a GUI instead of a script, the project repo ships a small **VLAN Manager** in the **`host-tools/`** folder. Run it on the Hyper-V host to:
+For a GUI instead of a script, Device Manager carries a small Windows **VLAN Manager**. Click **Save VLAN Manager…** at the top of the Configs page and pick a folder: it writes a **VLAN Manager** folder with two files (`VlanManager.ps1` and `Apply-VlanConfig.ps1`). Copy that folder to the Hyper-V host (keep the two files together) and right-click **`VlanManager.ps1` → Run with PowerShell**. It asks for administrator rights itself. Use it to:
 
 - **see the VLAN adapters that are there right now,**
 - add / edit / remove them,
@@ -314,18 +324,21 @@ Track equipment and cable purchasing, and receiving.
 Save reusable **export-format templates** ("order types") and pick one per export. In an order's **Export ▾** menu:
 
 - **Format** dropdown — **Default (built-in)** or any format you've saved.
-- **Edit formats…** — opens the format manager.
+- **Edit formats…** — opens the format manager, with a **live preview** of the open order (or sample items) as the PDF lays it out.
 
 Each format controls:
 
 | Setting | What it does |
 |---|---|
 | **Columns** | Show/hide each column (Category, Item, Manufacturer, Model, Requested, Received, Outstanding, Notes), **reorder** them with ↑ / ↓, and set each one's **width**. |
-| **Width** | A relative weight in the PDF (columns share the page by weight) and the character width in Excel. |
+| **Header** | Your own header text for a column (e.g. *Qty* instead of *Req*) — PDF, Excel and CSV. Leave it empty for the built-in name. |
+| **Width** | A relative weight in the PDF (columns share the page by weight) and the character width in Excel. Type it, or **drag any column edge in the preview**. |
 | **Group by category** | On: the PDF prints a section per category; Excel/CSV get a leading Category column and category sort. Off: one flat table. |
 | **Sort rows** | Category-then-name, Name, or Most-outstanding-first. |
 | **Page orientation** | Portrait or Landscape. |
-| **Row density** | Compact / Normal / Large — controls PDF font size and cell padding. |
+| **Text size** | The PDF text size in px (7–20); Excel follows it. Formats saved before v2.11 keep the size their Compact / Normal / Large setting gave. |
+
+Font, header style, colors, stripes, lines and padding come from **Settings → Table style**.
 
 Create several — e.g. a tight *"Pull order — compact, landscape"* for the shop and a *"Receiving — large print"* for the floor — and switch between them at export time. Leaving the picker on **Default** produces exactly the same documents as before formats existed.
 
@@ -348,7 +361,7 @@ A template an export uses says so at the top; changing it changes that export ev
 - **Rows** — *One per row*, or *Count* for pull lists: one row per distinct combination of the columns with a **Count** (the first column is what's counted — rows with nothing in it are left out, so a color schedule skips fixtures with no color).
 - **Section by** starts a titled section for each value (a bundle — with its color and route — a category, a hanging position). **Sort by / Then by** set the order; numbers sort as numbers and `U/A` by universe then address.
 - **Merge repeats** merges repeated values down the first N columns into one cell — how the IP schedule shows a device once beside all its ports.
-- **Page** (portrait/landscape) and **Text size** apply to the PDF. Colors, stripes and lines come from **Settings → Table style**.
+- **Page** (portrait/landscape) and **Text size** apply to the PDF (Excel follows the text size). Font, header style, colors, stripes, lines and padding come from **Settings → Table style**.
 - **+ New template for…** starts a template from any kind of row: cables, devices, switch ports, device ports (IPs), cases on trucks, or lighting fixtures. Export it from this page as PDF, Excel or CSV.
 
 The preview is the page itself, drawn as paper, and updates live with the show.
@@ -427,7 +440,7 @@ A joined computer can see the whole show **and the shared library on the host, i
 ## Settings
 
 - **Company branding** — your company name and logo, stamped as a letterhead on every project's paperwork. Shared across all projects.
-- **Table style** — how the tables in every Excel and PDF export look: header color and text color, alternating row colors (on/off and the color), and lines (grid, between rows, or none). Start from a preset (Classic, Dark header, Blue bands, Plain) and adjust; the sample table shows the result. Shared across all projects.
+- **Table style** — how the tables in every Excel and PDF export look: header color and text color, alternating row colors (on/off and the color), lines (grid, between rows, or none), the **font** (fonts that exist on Mac, Windows and in Excel), **header size** (% of the text), **bold header**, **CAPITALS** and **padding** (tight / normal / roomy). Start from a color preset (Classic, Dark header, Blue bands, Plain — they leave the font and header choices alone) and adjust; the sample table shows the result. Text size is set per template (Paperwork, order formats). Shared across all projects.
 - **Show branding** — the show **name** and **logo**. These stamp onto exports (pull orders, schedules, labels) and feed the `{Show}` token and the Show-name/logo label elements. Per project.
 - **Network signal types** — the shared library of signal types used by ports. Shared across all projects.
 - **Cable types** — the shared catalog used by cables. Shared across all projects.
@@ -482,7 +495,7 @@ The library remembers where each installer lives on the computer you added it fr
 Its silent switches are wrong for that installer. Check `install-log.txt` in the kit folder, look up the vendor's silent-install switches, and fix them in the Software library.
 
 **An export looks off (wrong columns, cramped, etc.).**
-Check which **export format** is selected in the Export menu — switch to **Default**, or open **Edit formats…** and adjust columns/width/density.
+Check which **export format** is selected in the Export menu — switch to **Default**, or open **Edit formats…** and adjust columns, widths and text size.
 
 **Lighting sync isn't picking anything up.**
 Check the sync bar on **Lighting → Fixtures**: it shows which exchange file it's watching and whether it was found. The file appears only after Lightwright data exchange is turned on in Vectorworks' Spotlight preferences and the drawing has been opened. If it says **waiting for Vectorworks**, open the drawing — Vectorworks picks up the app's changes only while the drawing is open.

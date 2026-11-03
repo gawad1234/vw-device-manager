@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     A small GUI for managing a Hyper-V host's VLAN adapters — lists the VLANs
     that are there right now, lets you add / edit / remove them, and applies the

@@ -35,6 +35,13 @@ function ConfigsPage({ subnets }: Props): React.JSX.Element {
       <div className="page-header">
         <h2>Config scripts</h2>
         <div className="page-header-actions">
+          <button
+            className="btn"
+            title="Save the Windows VLAN Manager (a GUI for a Hyper-V host's live VLANs) to a folder"
+            onClick={() => window.api.vlanManager.save()}
+          >
+            Save VLAN Manager…
+          </button>
           <button className="btn btn-primary" onClick={() => setOpenId('new')}>
             + New config
           </button>
@@ -46,8 +53,9 @@ function ConfigsPage({ subnets }: Props): React.JSX.Element {
         VLAN, each with its own IP. Build the VLAN list by hand or pull it straight from this
         project&rsquo;s subnets, then either <strong>Generate script</strong> (a ready-to-run
         PowerShell file) or <strong>Export JSON</strong> for the standalone{' '}
-        <strong>VLAN Manager</strong> tool, which manages a host&rsquo;s live VLANs from a GUI
-        (see <code>host-tools/</code> in the project repo).
+        <strong>VLAN Manager</strong> tool, which manages a host&rsquo;s live VLANs from a GUI.
+        <strong>Save VLAN Manager…</strong> puts it in a folder: copy that folder to the Windows
+        host and right-click <code>VlanManager.ps1</code> → Run with PowerShell.
       </p>
 
       <table className="table">

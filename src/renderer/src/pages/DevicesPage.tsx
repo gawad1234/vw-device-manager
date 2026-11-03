@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Device, Subnet } from '../../../shared/types'
 import DeviceModal from '../components/DeviceModal'
 import ExportMenu, { type ExportSection } from '../components/ExportMenu'
+import IpSheet from '../components/IpSheet'
 
 const EXPORT_SECTIONS: ExportSection[] = [
   {
@@ -38,6 +39,7 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
   const [openId, setOpenId] = useState<number | 'new' | null>(null)
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [view, setView] = useState<'list' | 'sheet'>('list')
 
   const catOf = (d: Device): string => d.category?.trim() || UNCATEGORIZED
 
@@ -130,6 +132,18 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
               <option value={UNCATEGORIZED}>{UNCATEGORIZED}</option>
             </select>
           )}
+          <div className="seg" role="group" aria-label="View">
+            <button className={view === 'list' ? 'is-on' : ''} onClick={() => setView('list')}>
+              List
+            </button>
+            <button
+              className={view === 'sheet' ? 'is-on' : ''}
+              title="Edit every IP and VLAN in one spreadsheet"
+              onClick={() => setView('sheet')}
+            >
+              IP sheet
+            </button>
+          </div>
           {devices.length > 0 && (
             <ExportMenu scope="all" label="Export" sections={EXPORT_SECTIONS} />
           )}
@@ -139,55 +153,59 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
         </div>
       </div>
 
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>MAC</th>
-            <th>Location</th>
-            <th>Ports</th>
-          </tr>
-        </thead>
-        {groups.length === 0 && (
-          <tbody>
+      {view === 'sheet' ? (
+        <IpSheet groups={groups} subnets={subnets} onChanged={onChanged} onOpenDevice={setOpenId} />
+      ) : (
+        <table className="table">
+          <thead>
             <tr>
-              <td colSpan={5} className="empty-cell">
-                {devices.length === 0 ? 'No devices yet.' : 'No devices match your search.'}
-              </td>
+              <th>Name</th>
+              <th>Type</th>
+              <th>MAC</th>
+              <th>Location</th>
+              <th>Ports</th>
             </tr>
-          </tbody>
-        )}
-        {groups.map(([cat, list]) => {
-          const isCollapsed = showHeaders && collapsed.has(cat)
-          return (
-            <tbody key={cat}>
-              {showHeaders && (
-                <tr className="cat-header" onClick={() => toggle(cat)}>
-                  <td colSpan={5}>
-                    <span className="caret">{isCollapsed ? '▸' : '▾'}</span>
-                    {cat}
-                    <span className="cat-count">{list.length}</span>
-                  </td>
-                </tr>
-              )}
-              {!isCollapsed &&
-                list.map((d) => (
-                  <tr key={d.id} className="clickable" onClick={() => setOpenId(d.id)}>
-                    <td>
-                      {d.name}
-                      {d.isSwitch && <span className="badge">switch</span>}
-                    </td>
-                    <td className="muted">{d.deviceType ?? '—'}</td>
-                    <td className="muted mono">{d.macAddress ?? '—'}</td>
-                    <td className="muted">{d.location ?? '—'}</td>
-                    <td className="muted">{d.ports.length}</td>
-                  </tr>
-                ))}
+          </thead>
+          {groups.length === 0 && (
+            <tbody>
+              <tr>
+                <td colSpan={5} className="empty-cell">
+                  {devices.length === 0 ? 'No devices yet.' : 'No devices match your search.'}
+                </td>
+              </tr>
             </tbody>
-          )
-        })}
-      </table>
+          )}
+          {groups.map(([cat, list]) => {
+            const isCollapsed = showHeaders && collapsed.has(cat)
+            return (
+              <tbody key={cat}>
+                {showHeaders && (
+                  <tr className="cat-header" onClick={() => toggle(cat)}>
+                    <td colSpan={5}>
+                      <span className="caret">{isCollapsed ? '▸' : '▾'}</span>
+                      {cat}
+                      <span className="cat-count">{list.length}</span>
+                    </td>
+                  </tr>
+                )}
+                {!isCollapsed &&
+                  list.map((d) => (
+                    <tr key={d.id} className="clickable" onClick={() => setOpenId(d.id)}>
+                      <td>
+                        {d.name}
+                        {d.isSwitch && <span className="badge">switch</span>}
+                      </td>
+                      <td className="muted">{d.deviceType ?? '—'}</td>
+                      <td className="muted mono">{d.macAddress ?? '—'}</td>
+                      <td className="muted">{d.location ?? '—'}</td>
+                      <td className="muted">{d.ports.length}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            )
+          })}
+        </table>
+      )}
 
       {openId != null && (
         <DeviceModal

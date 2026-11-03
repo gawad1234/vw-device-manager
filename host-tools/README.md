@@ -13,6 +13,10 @@ A small GUI for managing a **Hyper-V host's VLAN network adapters** — see the 
 
 Keep both files together.
 
+## Get it
+
+Device Manager carries these files: on the **Networking → Configs** page click **Save VLAN Manager…** and pick a folder — it writes a `VLAN Manager` folder with both scripts. (They're also here in the repo's `host-tools/` folder.)
+
 ## Run it
 
 Right-click **`VlanManager.ps1` → Run with PowerShell**, or from a terminal:

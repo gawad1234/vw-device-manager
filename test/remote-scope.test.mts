@@ -12,6 +12,7 @@ test('a joined computer may only read show data from the host', () => {
 test('unknown channels are writes, so a new handler is refused while joined', () => {
   assert.equal(channelScope('somethingNew:save'), 'write')
   assert.equal(channelScope('project:join'), 'local')
+  assert.equal(channelScope('vlanManager:save'), 'local')
   assert.equal(channelScope('stickers:print'), 'host-only')
 })
 

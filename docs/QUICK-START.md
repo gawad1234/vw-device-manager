@@ -33,7 +33,7 @@ Each show is one **project file** (`.vwdm`). The convention is to keep it **next
 ## 4. Add your networks, then your gear
 
 1. **Subnets tab → add a subnet** for each network/VLAN (name, CIDR like `10.0.10.0/24`, VLAN tag, gateway).
-2. **Devices tab → add a device.** Give it a name, type, and a port; assign the port an IP and its untagged/tagged VLANs. Mark switches as switches — they get management/OOB IPs and VLAN-only ports.
+2. **Devices tab → add a device.** Give it a name, type, and a port; assign the port an IP and its untagged/tagged VLANs. Mark switches as switches — they get management/OOB IPs and VLAN-only ports. Got lots of IPs to enter? Switch Devices to **IP sheet** and type or paste them like a spreadsheet.
 
 The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 
@@ -43,13 +43,15 @@ The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 
 ## 5. Do the paperwork
 
-- **Orders** — build a shop order (or import a bill of materials from the drawing), track received-vs-ordered, and export a **pull order** or **receiving checklist**. You can save custom **export formats** for different order types.
+- **Orders** — build a shop order (or import a bill of materials from the drawing), track received-vs-ordered, and export a **pull order** or **receiving checklist**. You can save custom **export formats** for different order types (columns, header text, drag-to-resize widths, text size).
 - **Cables** — group cables into bundles (looms) and export pull sheets and labels; **Loom labels** prints a sticker for each end of every cable onto manufacturer sticker sheets.
 - **Labels + Cases** — design a road-case label template, list what's in each case, and print a label per case.
 - **Schedule** — book crew and track their days, call times and cost (**Crew**); plan trucks and trips and print **load sheets** for the shop (**Trucking**).
 - **Lighting** — turn on Lightwright data exchange in Vectorworks' Spotlight preferences, tick **Live sync** on **Lighting → Fixtures**, and the rig flows both ways: channels, addresses, purposes, colors, gobos. **Universes** shows each DMX universe as a 512-address grid and flags overlaps. 
 - **Paperwork** — want the pull sheet, IP schedule or any other export laid out differently? Open **Paperwork** (or **Edit layout…** in an Export menu), pick the template, then click headings to change columns and drag their edges to resize. The export follows.
 - **Devices → Projectors / Wallpapers / Software** — Panasonic projector setup sheets, branded desktop wallpapers, and USB install kits for show computers.
+- **Networking → Configs** — a Hyper-V VLAN script for a Windows host, or **Save VLAN Manager…** for a small Windows GUI that shows a host's live VLANs and lets you change them (Preview first, then Apply).
+- **Settings → Table style** — the font, header style, colors and padding every Excel and PDF table uses.
 
 ---
 

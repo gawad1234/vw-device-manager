@@ -253,6 +253,9 @@ const api: VwDeviceManagerApi = {
     generate: (id: number) => invoke('configs:generate', id),
     exportJson: (id: number) => invoke('configs:exportJson', id)
   },
+  vlanManager: {
+    save: () => invoke('vlanManager:save')
+  },
   orders: {
     list: () => invoke('orders:list'),
     create: (input: ShopOrderInput) => invoke('orders:create', input),

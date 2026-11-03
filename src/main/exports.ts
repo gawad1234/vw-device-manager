@@ -36,7 +36,7 @@ import {
   projectorValueLabel
 } from '../shared/projector-settings'
 import { getCompanyName, getCompanyLogo, getTableStyle, templatesForDoc } from './library'
-import { argb, tableStyleCss } from '../shared/table-style'
+import { argb, tableFont, tableStyleCss } from '../shared/table-style'
 import type {
   Bundle,
   ExportOptions,
@@ -46,6 +46,7 @@ import type {
   OrderItem,
   ShopOrder
 } from '../shared/types'
+import { ORDER_COLUMN_META } from '../shared/types'
 
 // The show name for the export in progress — read once in exportDocument and
 // used by the shared page() header and printToPDF footer (avoids threading it
@@ -107,9 +108,16 @@ function parseImageDataUrl(
   return { base64: m[2], extension: kind === 'gif' ? 'gif' : kind === 'png' ? 'png' : 'jpeg' }
 }
 
-/** Paint a sheet's table in the shared table style: header colors, stripes, lines. */
-function styleSheet(ws: ExcelJS.Worksheet, headerRowNum: number, cols: number): void {
+/** PDF text size (px) → the matching Excel point size (12px reads like Excel's 11pt). */
+const excelPt = (px: number): number => Math.round(((px * 11) / 12) * 2) / 2
+
+/** Paint a sheet's table in the shared table style: font, header colors, stripes, lines.
+ *  `fontPx` is the template's text size, when it has one. */
+function styleSheet(ws: ExcelJS.Worksheet, headerRowNum: number, cols: number, fontPx = 12): void {
   const st = getTableStyle()
+  const name = tableFont(st).excel
+  const size = excelPt(fontPx)
+  const headSize = Math.round(size * (st.headerScale / 85) * 2) / 2
   const line = { style: 'thin' as const, color: { argb: argb(st.borderColor) } }
   const border: Partial<ExcelJS.Borders> =
     st.borders === 'grid'
@@ -131,8 +139,17 @@ function styleSheet(ws: ExcelJS.Worksheet, headerRowNum: number, cols: number): 
       cell.border = border
       if (head) {
         cell.fill = fill(st.headerFill)
-        cell.font = { bold: true, color: { argb: argb(st.headerText) } }
-      } else if (striped) cell.fill = fill(st.stripeColor)
+        cell.font = {
+          name,
+          size: headSize,
+          bold: st.headerBold,
+          color: { argb: argb(st.headerText) }
+        }
+        if (st.headerCaps && typeof cell.value === 'string') cell.value = cell.value.toUpperCase()
+      } else {
+        cell.font = { name, size }
+        if (striped) cell.fill = fill(st.stripeColor)
+      }
     }
   }
 }
@@ -145,19 +162,8 @@ function esc(s: string): string {
   )
 }
 
-type Density = 'compact' | 'normal' | 'large'
-const DENSITY_CSS: Record<Density, string> = {
-  compact: 'body{font-size:10.5px}th,td{padding:3px 5px}',
-  normal: '',
-  large: 'body{font-size:13.5px}th,td{padding:7px 9px}h2{font-size:15px}'
-}
-
-function page(
-  title: string,
-  body: string,
-  logo: string | null,
-  density: Density = 'normal'
-): string {
+function page(title: string, body: string, logo: string | null, fontSize = 12): string {
+  const st = getTableStyle()
   const titleBlock = docShowName
     ? `<div class="show">${esc(docShowName)}</div><div class="doctitle">${esc(title)}</div>`
     : `<div class="show">${esc(title)}</div>`
@@ -200,10 +206,11 @@ function page(
     /* Order tables: honor the <colgroup> widths exactly so every category section
        lines its columns up identically (long text wraps instead of widening a cell). */
     table.fixed { table-layout: fixed; }
-    table.fixed td { overflow-wrap: anywhere; }
+    table.fixed td, table.fixed th { overflow-wrap: anywhere; }
     th, td { border: 1px solid #cfcfcf; padding: 5px 7px; text-align: left; vertical-align: top; }
     th { background: #f2f2f2; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
-    td.chk, th.chk { text-align: center; width: 58px; font-size: 15px; }
+    td.chk, th.chk { text-align: center; width: 58px; }
+    td.chk { font-size: 1.25em; }
     tbody tr:nth-child(even) { background: #fafafa; }
     tr.row-new > td { background: #e6f7ea; }
     tr.row-chg > td { background: #fff5d6; }
@@ -229,8 +236,8 @@ function page(
              background: repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 3px,#fff 3px,#fff 6px); }
     .fname { font-weight: 700; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .fends { font-size: 8px; color: #555555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    ${tableStyleCss(getTableStyle())}
-    ${DENSITY_CSS[density]}
+    ${tableStyleCss(st)}
+    body { font-family: ${tableFont(st).css}; font-size: ${fontSize}px; }
   </style></head><body>${header}${body}</body></html>`
 }
 
@@ -592,13 +599,13 @@ function tableCsv(t: Table): string {
 
 /** One workbook, one styled sheet per table (sheet names: max 31 chars, no []:*?/\). */
 async function sheetsXlsx(
-  sheets: { name: string; table: Table; widths?: number[] }[],
+  sheets: { name: string; table: Table; widths?: number[]; fontPx?: number }[],
   logo: string | null
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
-  for (const { name, table: t, widths } of sheets) {
+  for (const { name, table: t, widths, fontPx } of sheets) {
     const ws = wb.addWorksheet(name.replace(/[[\]:*?/\\]/g, '-').slice(0, 31) || 'Sheet')
-    addTableSheet(wb, ws, t, logo, widths)
+    addTableSheet(wb, ws, t, logo, widths, fontPx)
   }
   return (await wb.xlsx.writeBuffer()) as unknown as Buffer
 }
@@ -608,7 +615,8 @@ function addTableSheet(
   ws: ExcelJS.Worksheet,
   t: Table,
   logo: string | null,
-  widths?: number[]
+  widths?: number[],
+  fontPx?: number
 ): void {
   ws.columns = t.headers.map((h, i) => ({
     header: h,
@@ -624,7 +632,7 @@ function addTableSheet(
   }
   ws.views = [{ state: 'frozen', ySplit: headerRowNum }]
   for (const r of t.rows) ws.addRow(r)
-  styleSheet(ws, headerRowNum, t.headers.length)
+  styleSheet(ws, headerRowNum, t.headers.length, fontPx)
 }
 
 // ---- Paperwork templates ---------------------------------------------------
@@ -727,7 +735,11 @@ async function writeTemplated(
     writeFileSync(
       outPath,
       await sheetsXlsx(
-        parts.map((p) => ({ name: p.t.name, ...templateTable(p.t, p.built) })),
+        parts.map((p) => ({
+          name: p.t.name,
+          ...templateTable(p.t, p.built),
+          fontPx: p.t.fontSize
+        })),
         logo
       )
     )
@@ -740,61 +752,31 @@ async function writeTemplated(
 
 // ---- Shop order / receiving checklist ------------------------------------
 
-// The column registry: label (and a short PDF header), whether it's a narrow
-// centered number, a default width weight, and how to read it off an item.
-type ColDef = {
-  label: string
-  short: string
-  num: boolean
-  width: number
+// The column registry: ORDER_COLUMN_META (name, short PDF header, number?, width)
+// plus how to read each column off an item.
+type ColDef = (typeof ORDER_COLUMN_META)[OrderColumnKey] & {
   cell: (it: OrderItem, qty: number, recv: number) => string
 }
-const ORDER_COLS: Record<OrderColumnKey, ColDef> = {
-  category: {
-    label: 'Category',
-    short: 'Category',
-    num: false,
-    width: 16,
-    cell: (it) => it.category || ''
-  },
-  item: { label: 'Item', short: 'Item', num: false, width: 28, cell: (it) => it.name || '' },
-  manufacturer: {
-    label: 'Manufacturer',
-    short: 'Manufacturer',
-    num: false,
-    width: 18,
-    cell: (it) => it.manufacturer || ''
-  },
-  model: {
-    label: 'Model',
-    short: 'Model',
-    num: false,
-    width: 18,
-    cell: (it) => it.modelNumber || ''
-  },
-  requested: {
-    label: 'Requested',
-    short: 'Req',
-    num: true,
-    width: 10,
-    cell: (_it, qty) => String(qty)
-  },
-  received: {
-    label: 'Received',
-    short: 'Recv',
-    num: true,
-    width: 10,
-    cell: (_it, _qty, recv) => String(recv)
-  },
-  outstanding: {
-    label: 'Outstanding',
-    short: 'Out',
-    num: true,
-    width: 10,
-    cell: (_it, qty, recv) => String(Math.max(0, qty - recv))
-  },
-  notes: { label: 'Notes', short: 'Notes', num: false, width: 24, cell: (it) => it.notes || '' }
+const CELL: Record<OrderColumnKey, ColDef['cell']> = {
+  category: (it) => it.category || '',
+  item: (it) => it.name || '',
+  manufacturer: (it) => it.manufacturer || '',
+  model: (it) => it.modelNumber || '',
+  requested: (_it, qty) => String(qty),
+  received: (_it, _qty, recv) => String(recv),
+  outstanding: (_it, qty, recv) => String(Math.max(0, qty - recv)),
+  notes: (it) => it.notes || ''
 }
+const ORDER_COLS = Object.fromEntries(
+  (Object.keys(CELL) as OrderColumnKey[]).map((k) => [
+    k,
+    { ...ORDER_COLUMN_META[k], cell: CELL[k] }
+  ])
+) as Record<OrderColumnKey, ColDef>
+
+/** A column's header: the format's own text, else its name (PDF: the short name). */
+const colHeader = (c: OrderColumn, short = false): string =>
+  c.label?.trim() || (short ? ORDER_COLS[c.key].short : ORDER_COLS[c.key].label)
 
 const ALL_KEYS: OrderColumnKey[] = [
   'category',
@@ -825,7 +807,7 @@ function defaultFormat(receiving: boolean): OrderExportFormat {
     groupByCategory: true,
     sort: 'category',
     orientation: 'portrait',
-    density: 'normal',
+    fontSize: 12,
     createdAt: '',
     updatedAt: ''
   }
@@ -836,7 +818,7 @@ type Resolved = {
   groupByCategory: boolean
   sort: OrderExportFormat['sort']
   orientation: OrderExportFormat['orientation']
-  density: OrderExportFormat['density']
+  fontSize: number
 }
 
 /** Turn a stored format (or the default) into the shown, ordered column list. */
@@ -848,7 +830,13 @@ function resolveFormat(fmt: OrderExportFormat | null, receiving: boolean): Resol
   for (const c of f.columns) {
     if (!ORDER_COLS[c.key] || seen.has(c.key)) continue
     seen.add(c.key)
-    if (c.show) columns.push({ key: c.key, show: true, width: c.width || ORDER_COLS[c.key].width })
+    if (c.show)
+      columns.push({
+        key: c.key,
+        show: true,
+        width: c.width || ORDER_COLS[c.key].width,
+        label: c.label
+      })
   }
   if (columns.length === 0) columns.push({ key: 'item', show: true, width: ORDER_COLS.item.width })
   return {
@@ -856,7 +844,7 @@ function resolveFormat(fmt: OrderExportFormat | null, receiving: boolean): Resol
     groupByCategory: f.groupByCategory,
     sort: f.sort,
     orientation: f.orientation,
-    density: f.density
+    fontSize: f.fontSize || 12
   }
 }
 
@@ -936,7 +924,7 @@ function shopOrderTable(
     const row = cols.map((c) => ORDER_COLS[c.key].cell(it, qty, recv))
     return prevMap ? [changeFor(it, prevMap).label, ...row] : row
   })
-  const headers = cols.map((c) => ORDER_COLS[c.key].label)
+  const headers = cols.map((c) => colHeader(c))
   return { headers: prevMap ? ['Change', ...headers] : headers, rows }
 }
 
@@ -1000,8 +988,7 @@ function headCells(cols: OrderColumn[], checkCol: boolean): string {
     chk +
     cols
       .map(
-        (c) =>
-          `<th${ORDER_COLS[c.key].num ? ' class="chk"' : ''}>${esc(ORDER_COLS[c.key].short)}</th>`
+        (c) => `<th${ORDER_COLS[c.key].num ? ' class="chk"' : ''}>${esc(colHeader(c, true))}</th>`
       )
       .join('')
   )
@@ -1081,7 +1068,7 @@ function shopOrderHtml(
     title,
     metaBlock + legend + bodyHtml + cableSectionHtml(order, receiving),
     logo,
-    r.density
+    r.fontSize
   )
 }
 
@@ -1099,7 +1086,7 @@ async function orderXlsx(
   // Width per header label: Change column + the resolved columns' weights.
   const widthByHeader = new Map<string, number>()
   for (const c of flatColumns(r))
-    widthByHeader.set(ORDER_COLS[c.key].label, c.width || ORDER_COLS[c.key].width)
+    widthByHeader.set(colHeader(c), c.width || ORDER_COLS[c.key].width)
   widthByHeader.set('Change', 16)
   const addSheet = (sheetName: string, t: Table, useWidths: boolean): void => {
     const ws = wb.addWorksheet(sheetName)
@@ -1119,7 +1106,7 @@ async function orderXlsx(
     }
     ws.views = [{ state: 'frozen', ySplit: headerRowNum }]
     for (const row of t.rows) ws.addRow(row)
-    styleSheet(ws, headerRowNum, t.headers.length)
+    styleSheet(ws, headerRowNum, t.headers.length, r.fontSize)
   }
   addSheet(receiving ? 'Receiving' : 'Equipment', shopOrderTable(order, r, prevMap), true)
   if (order.cables.length) addSheet('Cables', cableOrderTable(order, receiving), false)

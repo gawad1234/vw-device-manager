@@ -49,6 +49,7 @@ import type {
   SubnetInput,
   VlanEntry
 } from '../shared/types'
+import { DENSITY_FONT_SIZE } from '../shared/types'
 
 type Row = Record<string, unknown>
 /** Bind values accepted for a positional `?` parameter (matches db.ts). */
@@ -899,11 +900,17 @@ function mapOrderExportFormat(row: Row): OrderExportFormat {
     groupByCategory: Boolean(row.group_by_category),
     sort: (row.sort as OrderExportFormat['sort']) ?? 'category',
     orientation: (row.orientation as OrderExportFormat['orientation']) ?? 'portrait',
-    density: (row.density as OrderExportFormat['density']) ?? 'normal',
+    fontSize:
+      typeof row.font_size === 'number'
+        ? row.font_size
+        : (DENSITY_FONT_SIZE[row.density as keyof typeof DENSITY_FONT_SIZE] ?? 12),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string
   }
 }
+
+/** The nearest old density step, kept so older app versions still read the format. */
+const densityFor = (px: number): string => (px <= 11 ? 'compact' : px >= 13 ? 'large' : 'normal')
 
 export function listOrderExportFormats(): OrderExportFormat[] {
   return queryAll('SELECT * FROM order_export_formats ORDER BY name COLLATE NOCASE').map(
@@ -918,15 +925,16 @@ export function getOrderExportFormatById(id: number): OrderExportFormat | null {
 
 export function createOrderExportFormat(input: OrderExportFormatInput): OrderExportFormat {
   dbRun(
-    `INSERT INTO order_export_formats (name, columns_json, group_by_category, sort, orientation, density)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO order_export_formats (name, columns_json, group_by_category, sort, orientation, density, font_size)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       input.name,
       JSON.stringify(input.columns),
       input.groupByCategory ? 1 : 0,
       input.sort,
       input.orientation,
-      input.density
+      densityFor(input.fontSize),
+      input.fontSize
     ]
   )
   return getOrderExportFormatById(lastInsertRowId()) as OrderExportFormat
@@ -938,7 +946,7 @@ export function updateOrderExportFormat(
 ): OrderExportFormat {
   dbRun(
     `UPDATE order_export_formats SET name = ?, columns_json = ?, group_by_category = ?, sort = ?,
-       orientation = ?, density = ?, updated_at = datetime('now')
+       orientation = ?, density = ?, font_size = ?, updated_at = datetime('now')
      WHERE id = ?`,
     [
       input.name,
@@ -946,7 +954,8 @@ export function updateOrderExportFormat(
       input.groupByCategory ? 1 : 0,
       input.sort,
       input.orientation,
-      input.density,
+      densityFor(input.fontSize),
+      input.fontSize,
       id
     ]
   )

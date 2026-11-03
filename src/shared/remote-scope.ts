@@ -56,8 +56,9 @@ const HOST_ONLY = new Set([
 ])
 
 /** Always this machine: app updates, this machine's Show Server, project switching,
- *  the Vectorworks lighting sync (it runs on the computer that has the show open). */
-const LOCAL_GROUPS = ['updates:', 'server:', 'project:', 'lightingSync:']
+ *  the Vectorworks lighting sync (it runs on the computer that has the show open), saving the
+ *  bundled VLAN Manager scripts. */
+const LOCAL_GROUPS = ['updates:', 'server:', 'project:', 'lightingSync:', 'vlanManager:']
 
 /** Anything not listed is a write — refused while joined, so a new channel is safe by default. */
 export function channelScope(channel: string): ChannelScope {

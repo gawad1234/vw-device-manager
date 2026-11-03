@@ -10,6 +10,8 @@ import { recordsFor } from './paperwork-data'
 import type { PaperworkSource, PaperworkTemplate } from '../shared/paperwork'
 import type { TableStyle } from '../shared/table-style'
 import { generateVlanScript } from './vlan-script'
+import vlanManagerPs1 from '../../host-tools/VlanManager.ps1?raw'
+import applyVlanConfigPs1 from '../../host-tools/Apply-VlanConfig.ps1?raw'
 import { printCaseLabels, printCasesLabels } from './caselabels'
 import { importCircuitReport } from './circuit-import'
 import * as updater from './updater'
@@ -366,6 +368,24 @@ export function registerIpcHandlers(): void {
     writeFileSync(res.filePath, JSON.stringify(json, null, 2), 'utf-8')
     shell.showItemInFolder(res.filePath)
     return res.filePath
+  })
+
+  // The standalone host VLAN Manager (host-tools/, bundled at build time): write both
+  // scripts into a folder the user picks. UTF-8 with BOM, or Windows PowerShell 5.1
+  // misreads non-ASCII characters.
+  handle('vlanManager:save', async () => {
+    const res = await dialog.showOpenDialog({
+      title: 'Choose a folder for the VLAN Manager',
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (res.canceled || !res.filePaths[0]) return null
+    const dir = join(res.filePaths[0], 'VLAN Manager')
+    mkdirSync(dir, { recursive: true })
+    const bom = (s: string): string => '\uFEFF' + s.replace(/^\uFEFF/, '')
+    writeFileSync(join(dir, 'VlanManager.ps1'), bom(vlanManagerPs1), 'utf-8')
+    writeFileSync(join(dir, 'Apply-VlanConfig.ps1'), bom(applyVlanConfigPs1), 'utf-8')
+    shell.showItemInFolder(join(dir, 'VlanManager.ps1'))
+    return dir
   })
 
   // Shop orders (Orders tab).

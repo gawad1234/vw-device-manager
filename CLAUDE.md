@@ -147,8 +147,19 @@ workspace context and the cross-machine handoff log — check those first.
   pull sheet, cable schedule, device list, IP schedule (two templates), the load sheet's case
   table, the Show Server's IP-schedule/device pages and Paperwork-page exports. Labels, projector
   sheets and orders (their own export formats) are not templated.
-- **Table style:** `library.json` → `tableStyle` (null = default). `src/shared/table-style.ts`;
-  `page()` appends `tableStyleCss()` to every PDF, `styleSheet()` paints every Excel sheet.
+- **Table style:** `library.json` → `tableStyle` (null = default). `src/shared/table-style.ts`:
+  colors/stripes/lines plus font (`TABLE_FONTS`, Mac+Windows+Excel safe), header size %/bold/caps and
+  padding. `page()` appends `tableStyleCss()` and the body font to every PDF; `styleSheet()` paints
+  every Excel sheet (font, size from the template's `fontSize` via `excelPt`).
+- **Order export formats** (`order_export_formats`, per show): columns carry an optional custom
+  header `label` (in `columns_json`); `font_size` (REAL, guarded migration, null = from the old
+  `density`) replaced the 3-step density — `density` is still written (nearest step) so older app
+  versions read the format. Editor (`OrderFormatModal`) has a live preview with draggable edges.
+- **VLAN Manager bundling:** `ipc.ts` imports `host-tools/*.ps1?raw` (typed by `src/main/env.d.ts`),
+  so the build carries the current scripts; `vlanManager:save` (local scope) writes both into
+  `<picked folder>/VLAN Manager` as UTF-8 with BOM (Windows PowerShell 5.1 needs it).
+- **Devices › IP sheet** (`components/IpSheet.tsx`): one row per port (+ Mgmt/OOB rows for
+  switches), IP + VLAN cells save on blur through `ports.update` / `devices.update`; paste fills down.
 
 ## Vectorworks sync (`vectorworks-scripts/`)
 

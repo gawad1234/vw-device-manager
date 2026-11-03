@@ -248,6 +248,8 @@ export interface OrderColumn {
   show: boolean
   /** relative width weight for the PDF, and the character width in Excel */
   width: number
+  /** custom header text; empty/missing = the column's own name */
+  label?: string
 }
 
 /** A reusable "order type" format: which columns, how wide, grouping + layout. */
@@ -259,7 +261,8 @@ export interface OrderExportFormat {
   groupByCategory: boolean
   sort: 'category' | 'name' | 'outstanding'
   orientation: 'portrait' | 'landscape'
-  density: 'compact' | 'normal' | 'large'
+  /** PDF text size in px (Excel follows it); was a 3-step density before v2.11 */
+  fontSize: number
   createdAt: string
   updatedAt: string
 }
@@ -300,17 +303,24 @@ export interface SwitchConfigSettings {
   adminPassword: string
 }
 
-/** Display label + default width for each order column (shared by the editor). */
-export const ORDER_COLUMN_META: Record<OrderColumnKey, { label: string; width: number }> = {
-  category: { label: 'Category', width: 16 },
-  item: { label: 'Item', width: 28 },
-  manufacturer: { label: 'Manufacturer', width: 18 },
-  model: { label: 'Model', width: 18 },
-  requested: { label: 'Requested', width: 10 },
-  received: { label: 'Received', width: 10 },
-  outstanding: { label: 'Outstanding', width: 10 },
-  notes: { label: 'Notes', width: 24 }
+/** Each order column's name, its short PDF header, whether it's a centered number,
+ *  and its default width (shared by the export and the format editor). */
+export const ORDER_COLUMN_META: Record<
+  OrderColumnKey,
+  { label: string; short: string; num: boolean; width: number }
+> = {
+  category: { label: 'Category', short: 'Category', num: false, width: 16 },
+  item: { label: 'Item', short: 'Item', num: false, width: 28 },
+  manufacturer: { label: 'Manufacturer', short: 'Manufacturer', num: false, width: 18 },
+  model: { label: 'Model', short: 'Model', num: false, width: 18 },
+  requested: { label: 'Requested', short: 'Req', num: true, width: 10 },
+  received: { label: 'Received', short: 'Recv', num: true, width: 10 },
+  outstanding: { label: 'Outstanding', short: 'Out', num: true, width: 10 },
+  notes: { label: 'Notes', short: 'Notes', num: false, width: 24 }
 }
+
+/** Text sizes the old density setting stood for. */
+export const DENSITY_FONT_SIZE = { compact: 10.5, normal: 12, large: 13.5 } as const
 
 /** A fresh column set for a new format (sensible defaults, all common ones on). */
 export function defaultOrderColumns(): OrderColumn[] {
@@ -1052,6 +1062,11 @@ export interface VwDeviceManagerApi {
     generate: (id: number) => Promise<string | null>
     /** export the VLAN list as JSON for the host VlanManager tool (returns path, or null) */
     exportJson: (id: number) => Promise<string | null>
+  }
+  /** the standalone host VLAN Manager scripts (bundled in the app) */
+  vlanManager: {
+    /** write both scripts into "<picked folder>/VLAN Manager"; returns that folder, or null */
+    save: () => Promise<string | null>
   }
   /** Shop orders: equipment purchasing + receiving tracking. */
   orders: {

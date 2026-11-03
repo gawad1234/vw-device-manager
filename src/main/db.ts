@@ -495,6 +495,14 @@ function migrateAddOrderExportSnapshot(database: DatabaseSync): void {
   `)
 }
 
+/** Adds `order_export_formats.font_size` (exact text size, replacing the 3-step
+ *  density; density is still written for older app versions). Guarded. */
+function migrateAddOrderFormatFontSize(database: DatabaseSync): void {
+  if (!tableExists(database, 'order_export_formats')) return
+  if (tableHasColumn(database, 'order_export_formats', 'font_size')) return
+  database.exec('ALTER TABLE order_export_formats ADD COLUMN font_size REAL')
+}
+
 /** Adds `shop_orders.cables_json` (cable lines, separate from equipment). Guarded. */
 function migrateAddOrderCables(database: DatabaseSync): void {
   if (!tableExists(database, 'shop_orders')) return
@@ -544,6 +552,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateCircuitEnds(database)
   migrateAddDeviceProjector(database)
   migrateAddDeviceSoftware(database)
+  migrateAddOrderFormatFontSize(database)
 }
 
 /**

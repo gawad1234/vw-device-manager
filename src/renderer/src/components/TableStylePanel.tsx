@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   DEFAULT_TABLE_STYLE,
+  TABLE_FONTS,
   TABLE_STYLE_PRESETS,
   tableStyleCss,
   type TableStyle
@@ -46,8 +47,9 @@ function TableStylePanel(): React.JSX.Element {
     <div className="panel">
       <h3>Table style</h3>
       <p className="muted">
-        How the tables in every Excel and PDF export look: header colors, alternating row colors and
-        lines. Shared across all projects.
+        How the tables in every Excel and PDF export look: font, header, alternating row colors,
+        lines and padding. Text size is set per template (Paperwork, order formats). Shared across
+        all projects.
       </p>
       <div className="tstyle-presets">
         {TABLE_STYLE_PRESETS.map((p) => (
@@ -80,6 +82,60 @@ function TableStylePanel(): React.JSX.Element {
           </select>
         </label>
         {style.borders !== 'none' && color('borderColor', 'Line color')}
+      </div>
+      <div className="tstyle-controls">
+        <label className="tstyle-color">
+          Font
+          <select value={style.font} onChange={(e) => change({ font: e.target.value })}>
+            {TABLE_FONTS.map((f) => (
+              <option key={f.key} value={f.key} style={{ fontFamily: f.css }}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="tstyle-color">
+          Header size
+          <input
+            type="number"
+            className="tstyle-num"
+            min={50}
+            max={200}
+            step={5}
+            value={style.headerScale}
+            onChange={(e) =>
+              change({ headerScale: Math.min(200, Math.max(50, Number(e.target.value) || 85)) })
+            }
+          />
+          %
+        </label>
+        <label className="tstyle-color">
+          <input
+            type="checkbox"
+            checked={style.headerBold}
+            onChange={(e) => change({ headerBold: e.target.checked })}
+          />
+          Bold header
+        </label>
+        <label className="tstyle-color">
+          <input
+            type="checkbox"
+            checked={style.headerCaps}
+            onChange={(e) => change({ headerCaps: e.target.checked })}
+          />
+          CAPITALS
+        </label>
+        <label className="tstyle-color">
+          Padding
+          <select
+            value={style.padding}
+            onChange={(e) => change({ padding: e.target.value as TableStyle['padding'] })}
+          >
+            <option value="tight">Tight</option>
+            <option value="normal">Normal</option>
+            <option value="roomy">Roomy</option>
+          </select>
+        </label>
       </div>
       <div className="tstyle-preview">
         <style>{tableStyleCss(style, '.tstyle-preview table')}</style>

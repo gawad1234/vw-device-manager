@@ -689,7 +689,11 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
       </div>
     </Modal>
     {managingFormats && (
-      <OrderFormatModal onClose={() => setManagingFormats(false)} onChanged={refreshFormats} />
+      <OrderFormatModal
+        items={items}
+        onClose={() => setManagingFormats(false)}
+        onChanged={refreshFormats}
+      />
     )}
     </>
   )
