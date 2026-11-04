@@ -155,6 +155,13 @@ workspace context and the cross-machine handoff log — check those first.
   header `label` (in `columns_json`); `font_size` (REAL, guarded migration, null = from the old
   `density`) replaced the 3-step density — `density` is still written (nearest step) so older app
   versions read the format. Editor (`OrderFormatModal`) has a live preview with draggable edges.
+  `layout` (TEXT, guarded `migrateAddOrderFormatLayout`, default 'standard') — 'equipmentList'
+  makes `shopOrderHtml` use `eqCss()` + its own header (no `page()` header). Column `previous`
+  (Old qty) reads `Resolved.last` = the order's last-export snapshot (always loaded, separate
+  from the change-highlight `prevMap`).
+- **Kits in `OrderModal`:** `appliedRef[row][trigger]` = units already applied; `expandKits`
+  adds/takes back the difference on name/model/qty blur, imports and paste; removeItem takes a
+  row's companions back and re-indexes; a loaded order seeds it (no double-add on reopen).
 - **VLAN Manager bundling:** `ipc.ts` imports `host-tools/*.ps1?raw` (typed by `src/main/env.d.ts`),
   so the build carries the current scripts; `vlanManager:save` (local scope) writes both into
   `<picked folder>/VLAN Manager` as UTF-8 with BOM (Windows PowerShell 5.1 needs it).

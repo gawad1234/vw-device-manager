@@ -904,6 +904,7 @@ function mapOrderExportFormat(row: Row): OrderExportFormat {
       typeof row.font_size === 'number'
         ? row.font_size
         : (DENSITY_FONT_SIZE[row.density as keyof typeof DENSITY_FONT_SIZE] ?? 12),
+    layout: row.layout === 'equipmentList' ? 'equipmentList' : 'standard',
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string
   }
@@ -925,8 +926,8 @@ export function getOrderExportFormatById(id: number): OrderExportFormat | null {
 
 export function createOrderExportFormat(input: OrderExportFormatInput): OrderExportFormat {
   dbRun(
-    `INSERT INTO order_export_formats (name, columns_json, group_by_category, sort, orientation, density, font_size)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO order_export_formats (name, columns_json, group_by_category, sort, orientation, density, font_size, layout)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.name,
       JSON.stringify(input.columns),
@@ -934,7 +935,8 @@ export function createOrderExportFormat(input: OrderExportFormatInput): OrderExp
       input.sort,
       input.orientation,
       densityFor(input.fontSize),
-      input.fontSize
+      input.fontSize,
+      input.layout
     ]
   )
   return getOrderExportFormatById(lastInsertRowId()) as OrderExportFormat
@@ -946,7 +948,7 @@ export function updateOrderExportFormat(
 ): OrderExportFormat {
   dbRun(
     `UPDATE order_export_formats SET name = ?, columns_json = ?, group_by_category = ?, sort = ?,
-       orientation = ?, density = ?, font_size = ?, updated_at = datetime('now')
+       orientation = ?, density = ?, font_size = ?, layout = ?, updated_at = datetime('now')
      WHERE id = ?`,
     [
       input.name,
@@ -956,6 +958,7 @@ export function updateOrderExportFormat(
       input.orientation,
       densityFor(input.fontSize),
       input.fontSize,
+      input.layout,
       id
     ]
   )

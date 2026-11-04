@@ -162,7 +162,36 @@ function esc(s: string): string {
   )
 }
 
-function page(title: string, body: string, logo: string | null, fontSize = 12): string {
+/** The equipment-list layout: show name top left, a title band in the Table style header colors, light slate category bands, quiet
+ *  italic column heads, row rules only, and an amber pill on anything outstanding.
+ *  Palette: slate #24313f with a copper #c8742c accent. */
+function eqCss(fill: string, text: string): string {
+  return `
+    .eq-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+    .eq-show { display: flex; align-items: center; gap: 12px; }
+    .eq-show .logo { max-height: 54px; max-width: 180px; }
+    .eq-name { font-size: 1.75em; text-transform: uppercase; line-height: 1.15; }
+    .eq-sub { font-size: 1.35em; text-transform: uppercase; }
+    .eq-title { background: ${fill}; color: ${text}; font-size: 1.75em; font-weight: 800; padding: 6px 10px; margin-bottom: 4px;
+                border-left: 6px solid #c8742c; }
+    .eq-notes { font-size: .95em; color: #444; margin: 6px 2px 10px; white-space: pre-wrap; }
+    body.eq section { margin: 0 0 10px; page-break-inside: auto; }
+    body.eq h2 { background: #e8edf2; color: #24313f; font-size: 1.3em; font-weight: 600; margin: 0 0 4px; padding: 5px 16px;
+                 border-left: 6px solid #24313f; }
+    body.eq h2 .meta { color: #6b7b8c; font-size: .75em; margin: 0; }
+    body.eq table th, body.eq table td { border: none; border-bottom: 1px solid #e3e8ee; }
+    body.eq table th { background: none; color: #6b7b8c; font-style: italic; font-weight: 400;
+                       text-transform: none; letter-spacing: 0; font-size: .9em; padding-bottom: 2px; }
+    body.eq table th.chk { white-space: nowrap; }
+    body.eq table tbody tr:nth-child(even) { background: none; }
+    body.eq td.chk { font-size: 1em; }
+    body.eq td.prev { color: #9aa6b2; }
+    .bal { display: inline-block; min-width: 2.2em; padding: 1px 6px; border-radius: 10px; color: #b8c1ca; }
+    .bal.due { background: #ffcf7a; color: #5a3a00; font-weight: 700; }
+    .eq-note { display: block; color: #a85a1c; font-style: italic; font-weight: 700; font-size: .9em; }`
+}
+
+function page(title: string, body: string, logo: string | null, fontSize = 12, eq = false): string {
   const st = getTableStyle()
   const titleBlock = docShowName
     ? `<div class="show">${esc(docShowName)}</div><div class="doctitle">${esc(title)}</div>`
@@ -238,7 +267,8 @@ function page(title: string, body: string, logo: string | null, fontSize = 12): 
     .fends { font-size: 8px; color: #555555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     ${tableStyleCss(st)}
     body { font-family: ${tableFont(st).css}; font-size: ${fontSize}px; }
-  </style></head><body>${header}${body}</body></html>`
+    ${eq ? eqCss(st.headerFill, st.headerText) : ''}
+  </style></head><body${eq ? ' class="eq"' : ''}>${eq ? '' : header}${body}</body></html>`
 }
 
 function labelsHtml(bundles: Bundle[], idx: DeviceIndex, logo: string | null): string {
@@ -755,7 +785,7 @@ async function writeTemplated(
 // The column registry: ORDER_COLUMN_META (name, short PDF header, number?, width)
 // plus how to read each column off an item.
 type ColDef = (typeof ORDER_COLUMN_META)[OrderColumnKey] & {
-  cell: (it: OrderItem, qty: number, recv: number) => string
+  cell: (it: OrderItem, qty: number, recv: number, last?: OrderItem) => string
 }
 const CELL: Record<OrderColumnKey, ColDef['cell']> = {
   category: (it) => it.category || '',
@@ -763,6 +793,7 @@ const CELL: Record<OrderColumnKey, ColDef['cell']> = {
   manufacturer: (it) => it.manufacturer || '',
   model: (it) => it.modelNumber || '',
   requested: (_it, qty) => String(qty),
+  previous: (_it, _qty, _recv, last) => (last ? String(Number(last.quantity) || 0) : ''),
   received: (_it, _qty, recv) => String(recv),
   outstanding: (_it, qty, recv) => String(Math.max(0, qty - recv)),
   notes: (it) => it.notes || ''
@@ -784,6 +815,7 @@ const ALL_KEYS: OrderColumnKey[] = [
   'manufacturer',
   'model',
   'requested',
+  'previous',
   'received',
   'outstanding',
   'notes'
@@ -808,6 +840,7 @@ function defaultFormat(receiving: boolean): OrderExportFormat {
     sort: 'category',
     orientation: 'portrait',
     fontSize: 12,
+    layout: 'standard',
     createdAt: '',
     updatedAt: ''
   }
@@ -819,6 +852,9 @@ type Resolved = {
   sort: OrderExportFormat['sort']
   orientation: OrderExportFormat['orientation']
   fontSize: number
+  layout: OrderExportFormat['layout']
+  /** items as of the last export (Old qty column), keyed by itemKey */
+  last: Map<string, OrderItem> | null
 }
 
 /** Turn a stored format (or the default) into the shown, ordered column list. */
@@ -844,7 +880,9 @@ function resolveFormat(fmt: OrderExportFormat | null, receiving: boolean): Resol
     groupByCategory: f.groupByCategory,
     sort: f.sort,
     orientation: f.orientation,
-    fontSize: f.fontSize || 12
+    fontSize: f.fontSize || 12,
+    layout: f.layout,
+    last: null
   }
 }
 
@@ -921,7 +959,8 @@ function shopOrderTable(
   const rows = sortItems(order.items, r.sort).map((it) => {
     const qty = Number(it.quantity) || 0
     const recv = Number(it.received) || 0
-    const row = cols.map((c) => ORDER_COLS[c.key].cell(it, qty, recv))
+    const last = r.last?.get(itemKey(it))
+    const row = cols.map((c) => ORDER_COLS[c.key].cell(it, qty, recv, last))
     return prevMap ? [changeFor(it, prevMap).label, ...row] : row
   })
   const headers = cols.map((c) => colHeader(c))
@@ -998,20 +1037,32 @@ function bodyRow(
   it: OrderItem,
   cols: OrderColumn[],
   checkCol: boolean,
-  prevMap: Map<string, OrderItem> | null
+  prevMap: Map<string, OrderItem> | null,
+  r: Resolved
 ): string {
   const qty = Number(it.quantity) || 0
   const recv = Number(it.received) || 0
+  const last = r.last?.get(itemKey(it))
+  const eq = r.layout === 'equipmentList'
   const ch = changeFor(it, prevMap)
   const cls = ch.kind === 'new' ? ' class="row-new"' : ch.kind === 'chg' ? ' class="row-chg"' : ''
   const tag = ch.label ? ` <span class="chg-tag">${esc(ch.label)}</span>` : ''
+  // equipment list: with no Notes column, a note prints under the item name
+  const note =
+    eq && it.notes && !cols.some((c) => c.key === 'notes')
+      ? `<span class="eq-note">${esc(it.notes)}</span>`
+      : ''
   const chk = checkCol ? '<td class="chk">☐</td>' : ''
   const cells = cols
     .map((c) => {
-      const v = esc(ORDER_COLS[c.key].cell(it, qty, recv))
+      const v = esc(ORDER_COLS[c.key].cell(it, qty, recv, last))
+      let inner = v
       // the Change tag rides along on the Item cell
-      const inner = c.key === 'item' ? v + tag : v
-      return `<td${ORDER_COLS[c.key].num ? ' class="chk"' : ''}>${inner}</td>`
+      if (c.key === 'item') inner = v + tag + note
+      else if (eq && c.key === 'outstanding')
+        inner = `<span class="bal${qty - recv > 0 ? ' due' : ''}">${v}</span>`
+      const k = ORDER_COLS[c.key].num ? (c.key === 'previous' ? 'chk prev' : 'chk') : ''
+      return `<td${k ? ` class="${k}"` : ''}>${inner}</td>`
     })
     .join('')
   return `<tr${cls}>${chk}${cells}</tr>`
@@ -1019,7 +1070,8 @@ function bodyRow(
 
 /** PDF: order meta header, then either a section per category or one flat table,
  *  with the resolved columns + widths. Receiving adds a ☐ column; highlighting
- *  colors + tags new/changed rows. */
+ *  colors + tags new/changed rows. The equipment-list layout swaps the page
+ *  header for its own and adds a title band and an end bar. */
 function shopOrderHtml(
   order: ShopOrder,
   receiving: boolean,
@@ -1028,6 +1080,7 @@ function shopOrderHtml(
   baselineDate: string,
   r: Resolved
 ): string {
+  const eq = r.layout === 'equipmentList'
   const cols = bodyColumns(r)
   const items = sortItems(order.items, r.sort)
   const colg = colGroup(cols, receiving)
@@ -1046,12 +1099,12 @@ function shopOrderHtml(
     }
     bodyHtml = groups
       .map((g) => {
-        const body = g.items.map((it) => bodyRow(it, cols, receiving, prevMap)).join('')
+        const body = g.items.map((it) => bodyRow(it, cols, receiving, prevMap, r)).join('')
         return `<section><h2>${esc(g.cat)} <span class="meta">(${g.items.length})</span></h2><table class="fixed">${colg}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
       })
       .join('')
   } else {
-    const body = items.map((it) => bodyRow(it, cols, receiving, prevMap)).join('')
+    const body = items.map((it) => bodyRow(it, cols, receiving, prevMap, r)).join('')
     bodyHtml = `<section><table class="fixed">${colg}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`
   }
 
@@ -1059,17 +1112,28 @@ function shopOrderHtml(
     .filter(Boolean)
     .map((x) => esc(x as string))
     .join(' · ')
-  const metaBlock = meta ? `<div class="meta">${meta}</div>` : ''
   const legend = prevMap
     ? `<div class="legend"><span class="sw-new"></span> new &nbsp;&nbsp; <span class="sw-chg"></span> changed since last export${baselineDate ? ` (${esc(baselineDate)})` : ''}</div>`
     : ''
+  const cables = cableSectionHtml(order, receiving)
+  if (eq) {
+    const docName = receiving ? 'Receiving checklist' : 'Equipment list'
+    const top =
+      `<div class="eq-head"><div class="eq-show">${logo ? `<img class="logo" src="${logo}" alt="">` : ''}<div>` +
+      `<div class="eq-name">${esc(docShowName || order.name)}</div>${meta ? `<div class="eq-sub">${meta}</div>` : ''}</div></div></div>` +
+      `<div class="eq-title">${esc(order.name)}</div>` +
+      (order.notes ? `<div class="eq-notes">${esc(order.notes)}</div>` : '')
+    return page(
+      `${docName} — ${order.name}`,
+      top + legend + bodyHtml + cables,
+      logo,
+      r.fontSize,
+      true
+    )
+  }
+  const metaBlock = meta ? `<div class="meta">${meta}</div>` : ''
   const title = (receiving ? 'Receiving Checklist — ' : 'Shop Order — ') + order.name
-  return page(
-    title,
-    metaBlock + legend + bodyHtml + cableSectionHtml(order, receiving),
-    logo,
-    r.fontSize
-  )
+  return page(title, metaBlock + legend + bodyHtml + cables, logo, r.fontSize)
 }
 
 /** XLSX for an order: an Equipment/Receiving sheet + (if any) a Cables sheet.
@@ -1191,6 +1255,7 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     const baselineDate = fmtTs(order.lastExportAt)
     const fmt = opts.formatId != null ? getOrderExportFormatById(opts.formatId) : null
     const resolved = resolveFormat(fmt, receiving)
+    resolved.last = prevItemMap(getOrderExportSnapshot(order.id))
     const table = shopOrderTable(order, resolved, prevMap)
     if (opts.format === 'csv') {
       const cablesCsv = order.cables.length

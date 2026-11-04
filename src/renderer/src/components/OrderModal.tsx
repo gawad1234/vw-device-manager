@@ -25,6 +25,8 @@ function kitMatches(trigger: string, value: string): boolean {
   return rx.test(v)
 }
 
+const qtyOf = (it: OrderItem): number => Math.max(0, Math.trunc(Number(it.quantity) || 0))
+
 /** All kits whose trigger matches the item's name, model, or manufacturer. */
 function matchingKits(kits: OrderKit[], item: OrderItem): OrderKit[] {
   const fields = [item.name, item.modelNumber ?? '', item.manufacturer ?? '']
@@ -32,7 +34,8 @@ function matchingKits(kits: OrderKit[], item: OrderItem): OrderKit[] {
 }
 
 /** Fold a kit's companions into the item/cable lists, scaled by `qty`, merging
- *  into an existing matching line rather than duplicating. */
+ *  into an existing matching line rather than duplicating. A negative `qty` takes
+ *  companions back off (never below 0). */
 function applyKitToLines(
   items: OrderItem[],
   cables: CableOrderItem[],
@@ -43,7 +46,7 @@ function applyKitToLines(
   let outCables = cables
   for (const a of kit.addons) {
     const addQty = Math.max(0, Math.trunc(Number(a.perUnit) || 0)) * qty
-    if (addQty <= 0) continue
+    if (addQty === 0) continue
     if (a.kind === 'equipment') {
       const key = a.name.trim().toLowerCase()
       if (!key) continue
@@ -51,9 +54,11 @@ function applyKitToLines(
       outItems =
         idx >= 0
           ? outItems.map((it, j) =>
-              j === idx ? { ...it, quantity: (Number(it.quantity) || 0) + addQty } : it
+              j === idx ? { ...it, quantity: Math.max(0, (Number(it.quantity) || 0) + addQty) } : it
             )
-          : [
+          : addQty < 0
+            ? outItems
+            : [
               ...outItems,
               {
                 name: a.name,
@@ -75,9 +80,11 @@ function applyKitToLines(
       outCables =
         idx >= 0
           ? outCables.map((c, j) =>
-              j === idx ? { ...c, quantity: (Number(c.quantity) || 0) + addQty } : c
+              j === idx ? { ...c, quantity: Math.max(0, (Number(c.quantity) || 0) + addQty) } : c
             )
-          : [...outCables, { cableType: a.cableType, length: a.length, quantity: addQty, received: 0, notes: null }]
+          : addQty < 0
+            ? outCables
+            : [...outCables, { cableType: a.cableType, length: a.length, quantity: addQty, received: 0, notes: null }]
     }
   }
   return { items: outItems, cables: outCables }
@@ -141,10 +148,10 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   const [formatId, setFormatId] = useState<number | null>(null)
   const [managingFormats, setManagingFormats] = useState(false)
   const [kits, setKits] = useState<OrderKit[]>([])
-  // Which kit triggers have already been expanded for each row, so re-blurring a
-  // row doesn't keep stacking its companions.
-  // shortcut: tracked by row index; deleting/reordering rows can misalign it, when that bites, switch to a per-row id.
-  const appliedRef = useRef<Record<number, Set<string>>>({})
+  // Per row: how many units of each matching kit are already on the order, so a
+  // quantity change adds/removes only the difference.
+  // shortcut: tracked by row index (removeItem re-indexes); if rows ever get reordered, switch to a per-row id.
+  const appliedRef = useRef<Record<number, Record<string, number>>>({})
 
   const refreshFormats = (): void => {
     window.api.orderFormats.list().then((list) => {
@@ -170,15 +177,45 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     setError(null)
     setImportNote(null)
     setSection('equipment')
-    appliedRef.current = {}
   }, [order?.id])
+
+  // A saved order's companions are already on it: count them as applied, so only
+  // later quantity changes move them.
+  useEffect(() => {
+    appliedRef.current = Object.fromEntries(
+      (order?.items ?? []).map((it, i) => [
+        i,
+        Object.fromEntries(
+          matchingKits(kits, it).map((k) => [k.trigger.trim().toLowerCase(), qtyOf(it)])
+        )
+      ])
+    )
+  }, [order?.id, kits])
 
   // ---- equipment items ----
   function patchItem(i: number, patch: Partial<OrderItem>): void {
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)))
   }
   function removeItem(i: number): void {
-    setItems((prev) => prev.filter((_, idx) => idx !== i))
+    // take the row's companions off with it, then shift later rows' records down
+    let nextCables = cables
+    let nextItems = items
+    const row = appliedRef.current[i] ?? {}
+    for (const kit of kits) {
+      const n = row[kit.trigger.trim().toLowerCase()]
+      if (!n) continue
+      const r = applyKitToLines(nextItems, nextCables, kit, -n)
+      nextItems = r.items
+      nextCables = r.cables
+    }
+    const shifted: typeof appliedRef.current = {}
+    for (const [k, v] of Object.entries(appliedRef.current)) {
+      const idx = Number(k)
+      if (idx !== i) shifted[idx > i ? idx - 1 : idx] = v
+    }
+    appliedRef.current = shifted
+    setItems(nextItems.filter((_, idx) => idx !== i))
+    setCables(nextCables)
   }
   function addItem(): void {
     setItems((prev) => [...prev, { ...BLANK }])
@@ -187,31 +224,57 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
     setItems((prev) => prev.map((it) => ({ ...it, received: it.quantity })))
   }
 
-  // When a row's name/model is committed and matches a kit, auto-add its companions
-  // (once per row+trigger), scaled by the row's quantity.
-  function maybeApplyKit(i: number): void {
-    const it = items[i]
-    if (!it) return
-    const matched = matchingKits(kits, it)
-    if (!matched.length) return
-    const rowSet = appliedRef.current[i] ?? (appliedRef.current[i] = new Set())
-    const qty = Math.max(1, Math.trunc(Number(it.quantity) || 0))
-    let nextItems = items
-    let nextCables = cables
+  /** Bring each listed row's kit companions in line with its quantity: add (or
+   *  take back) companions for the difference since they were last applied. */
+  function expandKits(
+    baseItems: OrderItem[],
+    baseCables: CableOrderItem[],
+    rows: number[]
+  ): { items: OrderItem[]; cables: CableOrderItem[]; applied: string[] } {
+    let nextItems = baseItems
+    let nextCables = baseCables
     const applied: string[] = []
-    for (const kit of matched) {
-      const key = kit.trigger.trim().toLowerCase()
-      if (rowSet.has(key)) continue
-      rowSet.add(key)
-      const r = applyKitToLines(nextItems, nextCables, kit, qty)
-      nextItems = r.items
-      nextCables = r.cables
-      applied.push(kit.trigger)
+    for (const i of rows) {
+      const it = baseItems[i]
+      if (!it) continue
+      const row = { ...appliedRef.current[i] }
+      appliedRef.current[i] = row
+      for (const kit of matchingKits(kits, it)) {
+        const key = kit.trigger.trim().toLowerCase()
+        const delta = qtyOf(it) - (row[key] ?? 0)
+        if (!delta) continue
+        row[key] = qtyOf(it)
+        const r = applyKitToLines(nextItems, nextCables, kit, delta)
+        nextItems = r.items
+        nextCables = r.cables
+        if (!applied.includes(kit.trigger)) applied.push(kit.trigger)
+      }
     }
-    if (!applied.length) return
-    setItems(nextItems)
-    setCables(nextCables)
-    setImportNote(`Added companions for ${applied.map((t) => `"${t}"`).join(', ')}.`)
+    return { items: nextItems, cables: nextCables, applied }
+  }
+
+  /** Run when a row's name, model or quantity is committed. */
+  function syncKits(i: number): void {
+    const r = expandKits(items, cables, [i])
+    if (!r.applied.length) return
+    setItems(r.items)
+    setCables(r.cables)
+    setImportNote(`Updated companions for ${r.applied.map((t) => `"${t}"`).join(', ')}.`)
+  }
+
+  /** Append new rows and expand their kits; returns the kit note (or ''). */
+  function appendWithKits(additions: OrderItem[]): string {
+    const base = [...items, ...additions]
+    const r = expandKits(
+      base,
+      cables,
+      additions.map((_, k) => items.length + k)
+    )
+    setItems(r.items)
+    setCables(r.cables)
+    return r.applied.length
+      ? ` Added companions for ${r.applied.map((t) => `"${t}"`).join(', ')}.`
+      : ''
   }
 
   async function importFromDrawing(): Promise<void> {
@@ -250,12 +313,13 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
       setImportNote('Nothing new to import — every drawing item is already on this order.')
       return
     }
-    setItems((prev) => [...prev, ...additions])
+    const kitNote = appendWithKits(additions)
     const skipped = counts.size - additions.length
     setImportNote(
       `Imported ${additions.length} item type(s) from ${devices.length} device(s)` +
         (skipped > 0 ? ` (${skipped} already on the order)` : '') +
-        '. Review quantities, then Save.'
+        '. Review quantities, then Save.' +
+        kitNote
     )
   }
 
@@ -283,9 +347,10 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
         }
       })
     if (parsed.length === 0) return
-    setItems((prev) => [...prev, ...parsed])
+    const kitNote = appendWithKits(parsed)
     setImportNote(
-      `Pasted ${parsed.length} row(s). Column order: Item, Manufacturer, Model, Ordered, Received, Notes, Category.`
+      `Pasted ${parsed.length} row(s). Column order: Item, Manufacturer, Model, Ordered, Received, Notes, Category.` +
+        kitNote
     )
   }
 
@@ -548,13 +613,13 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
                     return (
                       <tr key={i} className={done ? 'item-received' : ''}>
                         <td>
-                          <input value={it.name} placeholder="Item / description" onChange={(e) => patchItem(i, { name: e.target.value })} onBlur={() => maybeApplyKit(i)} />
+                          <input value={it.name} placeholder="Item / description" onChange={(e) => patchItem(i, { name: e.target.value })} onBlur={() => syncKits(i)} />
                         </td>
                         <td>
                           <input value={it.manufacturer ?? ''} onChange={(e) => patchItem(i, { manufacturer: e.target.value || null })} />
                         </td>
                         <td>
-                          <input value={it.modelNumber ?? ''} onChange={(e) => patchItem(i, { modelNumber: e.target.value || null })} onBlur={() => maybeApplyKit(i)} />
+                          <input value={it.modelNumber ?? ''} onChange={(e) => patchItem(i, { modelNumber: e.target.value || null })} onBlur={() => syncKits(i)} />
                         </td>
                         <td>
                           <CategoryInput
@@ -565,7 +630,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
                           />
                         </td>
                         <td className="num">
-                          <input type="number" min={0} value={it.quantity} onChange={(e) => patchItem(i, { quantity: Number(e.target.value) })} />
+                          <input type="number" min={0} value={it.quantity} onChange={(e) => patchItem(i, { quantity: Number(e.target.value) })} onBlur={() => syncKits(i)} />
                         </td>
                         <td className="num">
                           <input type="number" min={0} value={it.received} onChange={(e) => patchItem(i, { received: Number(e.target.value) })} />

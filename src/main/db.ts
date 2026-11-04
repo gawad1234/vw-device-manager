@@ -503,6 +503,13 @@ function migrateAddOrderFormatFontSize(database: DatabaseSync): void {
   database.exec('ALTER TABLE order_export_formats ADD COLUMN font_size REAL')
 }
 
+/** Adds `order_export_formats.layout` ('standard' | 'equipmentList'). Guarded. */
+function migrateAddOrderFormatLayout(database: DatabaseSync): void {
+  if (!tableExists(database, 'order_export_formats')) return
+  if (tableHasColumn(database, 'order_export_formats', 'layout')) return
+  database.exec("ALTER TABLE order_export_formats ADD COLUMN layout TEXT NOT NULL DEFAULT 'standard'")
+}
+
 /** Adds `shop_orders.cables_json` (cable lines, separate from equipment). Guarded. */
 function migrateAddOrderCables(database: DatabaseSync): void {
   if (!tableExists(database, 'shop_orders')) return
@@ -553,6 +560,7 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
   migrateAddDeviceProjector(database)
   migrateAddDeviceSoftware(database)
   migrateAddOrderFormatFontSize(database)
+  migrateAddOrderFormatLayout(database)
 }
 
 /**

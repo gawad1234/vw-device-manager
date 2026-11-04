@@ -50,11 +50,36 @@ const cellText = (k: OrderColumnKey, it: OrderItem): string => {
     manufacturer: it.manufacturer,
     model: it.modelNumber,
     requested: String(q),
+    // the real export shows the quantity at the last export; the preview has no history
+    previous: String(q),
     received: String(r),
     outstanding: String(Math.max(0, q - r)),
     notes: it.notes
   }[k]
   return v || ''
+}
+
+/** A ready-made format in the equipment-list look (shop paperwork style). */
+const EQUIPMENT_LIST: OrderExportFormatInput = {
+  name: 'Equipment list',
+  columns: (
+    [
+      ['requested', 'New Qty', 8],
+      ['previous', 'Old Qty', 8],
+      ['item', 'Item', 40],
+      ['model', 'Mfr. P/N', 15],
+      ['manufacturer', 'Manufacturer', 14],
+      ['received', 'Filled', 7],
+      ['outstanding', 'Balance', 8],
+      ['category', '', 16],
+      ['notes', '', 24]
+    ] as const
+  ).map(([key, label, width]) => ({ key, label, width, show: label !== '' })),
+  groupByCategory: true,
+  sort: 'category',
+  orientation: 'portrait',
+  fontSize: 11,
+  layout: 'equipmentList'
 }
 
 interface Props {
@@ -72,6 +97,7 @@ type Draft = {
   sort: OrderExportFormat['sort']
   orientation: OrderExportFormat['orientation']
   fontSize: number
+  layout: OrderExportFormat['layout']
 }
 
 function draftFrom(f: OrderExportFormat | null): Draft {
@@ -82,7 +108,8 @@ function draftFrom(f: OrderExportFormat | null): Draft {
       groupByCategory: true,
       sort: 'category',
       orientation: 'portrait',
-      fontSize: 12
+      fontSize: 12,
+      layout: 'standard'
     }
   // Merge any missing keys (a stored format may predate a column).
   const have = new Map(f.columns.map((c) => [c.key, c]))
@@ -98,7 +125,8 @@ function draftFrom(f: OrderExportFormat | null): Draft {
     groupByCategory: f.groupByCategory,
     sort: f.sort,
     orientation: f.orientation,
-    fontSize: f.fontSize
+    fontSize: f.fontSize,
+    layout: f.layout
   }
 }
 
@@ -216,12 +244,19 @@ function OrderFormatModal({ items, onClose, onChanged }: Props): React.JSX.Eleme
       groupByCategory: draft.groupByCategory,
       sort: draft.sort,
       orientation: draft.orientation,
-      fontSize: draft.fontSize
+      fontSize: draft.fontSize,
+      layout: draft.layout
     }
     const saved =
       activeId === 'new'
         ? await window.api.orderFormats.create(input)
         : await window.api.orderFormats.update(activeId, input)
+    await refresh(saved.id)
+    onChanged()
+  }
+
+  async function addEquipmentList(): Promise<void> {
+    const saved = await window.api.orderFormats.create(EQUIPMENT_LIST)
     await refresh(saved.id)
     onChanged()
   }
@@ -276,6 +311,9 @@ function OrderFormatModal({ items, onClose, onChanged }: Props): React.JSX.Eleme
           onClick={() => setActiveId('new')}
         >
           + New
+        </button>
+        <button type="button" className="fmt-tab fmt-new" onClick={addEquipmentList}>
+          + Equipment list
         </button>
       </div>
 
@@ -402,6 +440,17 @@ function OrderFormatModal({ items, onClose, onChanged }: Props): React.JSX.Eleme
         </label>
 
         <label>
+          Layout
+          <select
+            value={draft.layout}
+            onChange={(e) => setDraft((d) => ({ ...d, layout: e.target.value as Draft['layout'] }))}
+          >
+            <option value="standard">Standard table</option>
+            <option value="equipmentList">Equipment list (bands, Balance pill)</option>
+          </select>
+        </label>
+
+        <label>
           Text size
           <input
             type="number"
@@ -426,7 +475,10 @@ function OrderFormatModal({ items, onClose, onChanged }: Props): React.JSX.Eleme
               colors and padding come from Settings → Table style
             </span>
           </div>
-          <div className="lxr-preview fmt-preview" style={{ fontSize: draft.fontSize }}>
+          <div
+            className={`lxr-preview fmt-preview${draft.layout === 'equipmentList' ? ' eq' : ''}`}
+            style={{ fontSize: draft.fontSize }}
+          >
             <style>{tableStyleCss(tableStyle, '.fmt-preview table')}</style>
             {groups.map((g) => (
               <div key={g.cat || 'all'}>
@@ -479,7 +531,15 @@ function OrderFormatModal({ items, onClose, onChanged }: Props): React.JSX.Eleme
                               ORDER_COLUMN_META[c.key].num ? { textAlign: 'center' } : undefined
                             }
                           >
-                            {cellText(c.key, it)}
+                            {draft.layout === 'equipmentList' && c.key === 'outstanding' ? (
+                              <span
+                                className={`bal${Number(cellText(c.key, it)) > 0 ? ' due' : ''}`}
+                              >
+                                {cellText(c.key, it)}
+                              </span>
+                            ) : (
+                              cellText(c.key, it)
+                            )}
                           </td>
                         ))}
                       </tr>

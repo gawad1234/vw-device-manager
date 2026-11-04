@@ -2636,3 +2636,14 @@ body.col-resizing {
 .tstyle-num {
   width: 64px;
 }
+
+/* Export-format preview in the equipment-list layout (mirrors eqCss in exports.ts) */
+.fmt-preview.eq h3 { background: #e8edf2; color: #24313f; padding: 4px 12px; font-weight: 600; margin: 8px 0 2px;
+  border-left: 6px solid #24313f; }
+.fmt-preview.eq h3 .lxr-count { color: #6b7b8c; }
+.fmt-preview.eq table th, .fmt-preview.eq table td { border: none; border-bottom: 1px solid #e3e8ee; }
+.fmt-preview.eq table th { background: none; color: #6b7b8c; font-style: italic; font-weight: 400;
+  text-transform: none; letter-spacing: 0; }
+.fmt-preview.eq table tbody tr:nth-child(even) { background: none; }
+.fmt-preview .bal { display: inline-block; min-width: 2.2em; padding: 0 6px; border-radius: 10px; color: #b8c1ca; }
+.fmt-preview .bal.due { background: #ffcf7a; color: #5a3a00; font-weight: 700; }

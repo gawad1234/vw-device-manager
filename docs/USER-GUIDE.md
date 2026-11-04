@@ -317,7 +317,7 @@ Track equipment and cable purchasing, and receiving.
 
 ### Auto-add kits
 
-**Settings → Manage kits** defines companions that get added automatically: *"when I add X, also add these"* (equipment or cable, per unit). A kit's trigger matches an item's name, model or manufacturer and can use `*` wildcards (e.g. `PT-RZ*`); every matching kit applies, scaled by the quantity. Kits fire when you type an item in (not on import or paste) and are shared by every show.
+**Settings → Manage kits** defines companions that get added automatically: *"when I add X, also add these"* (equipment or cable, per unit). A kit's trigger matches an item's name, model or manufacturer and can use `*` wildcards (e.g. `PT-RZ*`); every matching kit applies, scaled by the quantity. Kits follow the item: change its quantity and the companions go up or down by the same amount, delete the item and its companions come back off (their lines stay at 0). They apply when you type an item in, **Import from drawing** or paste rows, and are shared by every show. Reopening a saved order doesn't add them again.
 
 ### Export formats
 
@@ -325,20 +325,24 @@ Save reusable **export-format templates** ("order types") and pick one per expor
 
 - **Format** dropdown — **Default (built-in)** or any format you've saved.
 - **Edit formats…** — opens the format manager, with a **live preview** of the open order (or sample items) as the PDF lays it out.
+- **+ Equipment list** (in the format manager) — adds a ready-made format in the equipment-list look: New Qty / Old Qty / Item / Mfr. P/N / Manufacturer / Filled / Balance.
 
 Each format controls:
 
 | Setting | What it does |
 |---|---|
-| **Columns** | Show/hide each column (Category, Item, Manufacturer, Model, Requested, Received, Outstanding, Notes), **reorder** them with ↑ / ↓, and set each one's **width**. |
+| **Columns** | Show/hide each column (Category, Item, Manufacturer, Model, Requested, **Old qty**, Received, Outstanding, Notes), **reorder** them with ↑ / ↓, and set each one's **width**. |
 | **Header** | Your own header text for a column (e.g. *Qty* instead of *Req*) — PDF, Excel and CSV. Leave it empty for the built-in name. |
 | **Width** | A relative weight in the PDF (columns share the page by weight) and the character width in Excel. Type it, or **drag any column edge in the preview**. |
 | **Group by category** | On: the PDF prints a section per category; Excel/CSV get a leading Category column and category sort. Off: one flat table. |
 | **Sort rows** | Category-then-name, Name, or Most-outstanding-first. |
 | **Page orientation** | Portrait or Landscape. |
+| **Layout** | **Standard table**, or **Equipment list**: the show name and vendor/date at the top, a title band with the order name, a shaded band per category with its column headings under it, row lines only, an amber **Balance** pill on anything still outstanding, and notes printed under the item when the Notes column is off. PDF only; Excel/CSV stay plain tables. |
 | **Text size** | The PDF text size in px (7–20); Excel follows it. Formats saved before v2.11 keep the size their Compact / Normal / Large setting gave. |
 
-Font, header style, colors, stripes, lines and padding come from **Settings → Table style**.
+Font, header style, colors, stripes, lines and padding come from **Settings → Table style** (in the Equipment list layout, the title band uses the Table style header colors).
+
+**Old qty** is each item's quantity on the previous export of that order (blank for items added since), so a re-sent list shows what changed. Every export becomes the new baseline.
 
 Create several — e.g. a tight *"Pull order — compact, landscape"* for the shop and a *"Receiving — large print"* for the floor — and switch between them at export time. Leaving the picker on **Default** produces exactly the same documents as before formats existed.
 

@@ -238,6 +238,7 @@ export type OrderColumnKey =
   | 'manufacturer'
   | 'model'
   | 'requested'
+  | 'previous'
   | 'received'
   | 'outstanding'
   | 'notes'
@@ -263,6 +264,9 @@ export interface OrderExportFormat {
   orientation: 'portrait' | 'landscape'
   /** PDF text size in px (Excel follows it); was a 3-step density before v2.11 */
   fontSize: number
+  /** PDF look: the plain table, or the equipment-list look (black category bands,
+   *  a heading per section, a red Outstanding pill, an end-of-list bar) */
+  layout: 'standard' | 'equipmentList'
   createdAt: string
   updatedAt: string
 }
@@ -314,6 +318,7 @@ export const ORDER_COLUMN_META: Record<
   manufacturer: { label: 'Manufacturer', short: 'Manufacturer', num: false, width: 18 },
   model: { label: 'Model', short: 'Model', num: false, width: 18 },
   requested: { label: 'Requested', short: 'Req', num: true, width: 10 },
+  previous: { label: 'Qty at last export', short: 'Old qty', num: true, width: 10 },
   received: { label: 'Received', short: 'Recv', num: true, width: 10 },
   outstanding: { label: 'Outstanding', short: 'Out', num: true, width: 10 },
   notes: { label: 'Notes', short: 'Notes', num: false, width: 24 }
