@@ -34,7 +34,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Syncing to Vectorworks](#syncing-to-vectorworks)
 - [Troubleshooting](#troubleshooting)
 
-The left sidebar groups pages by job: **Network** (Devices, Subnets, Configs, Projectors, Wallpapers, Software), **Cables** (Cables, Patching, Loom labels), **Lighting** (Fixtures, Universes, Fixture types), **Paperwork** (Orders, Paperwork), **Schedule** (Crew, Trucking) and **Packing** (Labels, Cases), with **Settings** at the bottom. Click a group's heading to fold it; the app remembers which groups you keep open. Every button and row can be reached with Tab, and Enter opens a row.
+The left sidebar groups pages by job: **Network** (Devices, Subnets, Configs, Projectors, Wallpapers, Software), **Cables** (Cables, Patching, Loom labels), **Lighting** (Fixtures, Universes, Fixture types), **Paperwork** (Orders, Paperwork), **Schedule** (Crew, Trucking) and **Packing** (Case labels, Cases), with **Settings** at the bottom. Click a group's heading to fold it; the app remembers which groups you keep open. Every button and row can be reached with Tab, and Enter opens a row.
 
 ---
 
@@ -145,6 +145,7 @@ Tips:
 Your networks — each doubles as a VLAN/network definition:
 
 - **Name**, **CIDR** (e.g. `10.0.20.0/24`), **VLAN** tag, **Gateway**, **Notes**.
+- Click a subnet to edit it; **Delete subnet** is in its form.
 
 Subnets are what ports reference for their untagged/tagged VLANs, and they drive the IP-outside-subnet checks and the **Configs** VLAN script generator.
 
@@ -243,7 +244,7 @@ Tie it to Device Manager with **Export JSON…** here → **Load config…** in 
 
 **Fixtures** — the rig, grouped by hanging position and sorted by unit number. **Sort by channel** flips it into a channel hookup. Columns: unit, type (and mode), purpose, channel, universe/address (shown as `1/101`), color, gobo, dimmer and notes. Click a row to edit every field: position, unit, instrument type, mode, purpose, channel, universe + address, color, gobo 1/2, accessories, wattage, dimmer, circuit name/number, mark, user fields 1–6 and notes. **Notes** and **mode** stay in Device Manager; everything else is sent to the drawing.
 
-**Patch checks** — a **To check** count in the header and a list under the table, with a **!** on the affected rows:
+**Patch checks** — a **To check** count in the header (click it to jump to the first one), with a **!** on each affected row and the reason right under it. Warnings about a whole universe are listed under the table:
 - two fixtures whose address ranges **overlap** in the same universe,
 - a fixture that **runs past address 512**,
 - a fixture with a **channel but no address** (or an address but no channel),
@@ -361,12 +362,12 @@ Create several — e.g. a tight *"Pull order — compact, landscape"* for the sh
 | Trucking | **Truck load sheet (case list)** — the case table on each load sheet | Trucking → load sheets |
 | Lighting | **Channel hookup**, **Instrument schedule**, **Patch (by address)**, **Color schedule**, **Gobo pull list** | exported from this page |
 
-A template an export uses says so at the top; changing it changes that export everywhere (PDF, Excel and CSV). **Reset to default** puts a built-in template back the way it came; those can't be deleted. Each export menu's **Edit layout…** jumps straight to its template.
+A template an export uses says so at the top; changing it changes that export everywhere (PDF, Excel and CSV). **Duplicate**, **Reset to default** and **Delete** sit beside that line. **Reset to default** puts a built-in template back the way it came; those can't be deleted. Each export menu's **Edit layout…** jumps straight to its template.
 
 - **Columns** — **+ Column** adds one. Click a heading to choose what it **shows** (any field of that template's rows — for cases, any case field too — or a blank write-in column), rename the **heading**, set its **width**, move it left/right or remove it. **Drag any column's edge** (in the heading or anywhere down the table; the edge lights up when you can grab it) to resize it. The PDF keeps the same proportions across the page.
 - **Rows** — *One per row*, or *Count* for pull lists: one row per distinct combination of the columns with a **Count** (the first column is what's counted — rows with nothing in it are left out, so a color schedule skips fixtures with no color).
-- **Section by** starts a titled section for each value (a bundle — with its color and route — a category, a hanging position). **Sort by / Then by** set the order; numbers sort as numbers and `U/A` by universe then address.
-- **Merge repeats** merges repeated values down the first N columns into one cell — how the IP schedule shows a device once beside all its ports.
+- **Section by** starts a titled section for each value (a bundle — with its color and route — a category, a hanging position). **Sort by** (and **Then by** under **More options**) set the order; numbers sort as numbers and `U/A` by universe then address.
+- **Merge same values in the first … columns** (under **More options**) merges repeated values down the first N columns into one cell — how the IP schedule shows a device once beside all its ports.
 - **Page** (portrait/landscape) and **Text size** apply to the PDF (Excel follows the text size). Font, header style, colors, stripes, lines and padding come from **Settings → Table style**.
 - **+ New template for…** starts a template from any kind of row: cables, devices, switch ports, device ports (IPs), cases on trucks, or lighting fixtures. Export it from this page as PDF, Excel or CSV.
 

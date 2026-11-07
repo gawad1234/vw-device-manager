@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { Fixture, FixtureType, LightingSyncStatus } from '../../../shared/types'
 import { checkPatch, type PatchWarning } from '../../../shared/lighting-checks'
 import FixtureModal from '../components/FixtureModal'
@@ -56,7 +56,17 @@ function FixturesPage(): React.JSX.Element {
         <h2>Fixtures</h2>
         <div className="page-header-actions">
           {warnings.length > 0 && (
-            <span className="badge badge-warn">{warnings.length} to check</span>
+            <button
+              className="badge badge-warn lx-warn-jump"
+              title="Go to the first one"
+              onClick={() =>
+                document
+                  .querySelector('.lx-warn-row, .lx-warnings')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }
+            >
+              {warnings.length} to check
+            </button>
           )}
           <button className="btn" onClick={() => setByChannel(!byChannel)}>
             {byChannel ? 'Group by position' : 'Sort by channel'}
@@ -135,32 +145,41 @@ function FixturesPage(): React.JSX.Element {
                 {list.map((f) => {
                   const w = warnFor(f.id)
                   return (
-                    <tr key={f.id} className="clickable" tabIndex={0} onClick={() => setEdit(f)}>
-                      {byChannel && <td className="mono">{f.channel}</td>}
-                      {byChannel && <td>{f.position}</td>}
-                      <td>{f.unit}</td>
-                      <td>
-                        {f.instType}
-                        {f.mode && <small className="muted"> · {f.mode}</small>}
-                      </td>
-                      <td>{f.purpose}</td>
-                      {!byChannel && <td className="mono">{f.channel}</td>}
-                      <td className="mono">
-                        {ua(f)}
-                        {w.length > 0 && (
-                          <span
-                            className="badge badge-warn lx-warn"
-                            title={w.map((x) => x.message).join('\n')}
-                          >
-                            !
-                          </span>
-                        )}
-                      </td>
-                      <td>{f.color}</td>
-                      <td>{[f.gobo1, f.gobo2].filter(Boolean).join(', ')}</td>
-                      <td>{f.dimmer}</td>
-                      <td>{f.notes}</td>
-                    </tr>
+                    <Fragment key={f.id}>
+                      <tr
+                        className="clickable"
+                        tabIndex={0}
+                        onClick={() => setEdit(f)}
+                        onKeyDown={(e) => e.key === 'Enter' && setEdit(f)}
+                      >
+                        {byChannel && <td className="mono">{f.channel}</td>}
+                        {byChannel && <td>{f.position}</td>}
+                        <td>{f.unit}</td>
+                        <td>
+                          {f.instType}
+                          {f.mode && <small className="muted"> · {f.mode}</small>}
+                        </td>
+                        <td>{f.purpose}</td>
+                        {!byChannel && <td className="mono">{f.channel}</td>}
+                        <td className="mono">
+                          {ua(f)}
+                          {w.length > 0 && <span className="badge badge-warn lx-warn">!</span>}
+                        </td>
+                        <td>{f.color}</td>
+                        <td>{[f.gobo1, f.gobo2].filter(Boolean).join(', ')}</td>
+                        <td>{f.dimmer}</td>
+                        <td>{f.notes}</td>
+                      </tr>
+                      {w.length > 0 && (
+                        <tr className="lx-warn-row">
+                          <td colSpan={byChannel ? 11 : 10}>
+                            {w.map((x, i) => (
+                              <div key={i}>⚠ {x.message}</div>
+                            ))}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -169,13 +188,16 @@ function FixturesPage(): React.JSX.Element {
         ))
       )}
 
-      {warnings.length > 0 && (
+      {/* fixture warnings sit under their rows; these are about a whole universe */}
+      {warnings.some((w) => w.ids.length === 0) && (
         <>
-          <h3 style={{ marginTop: 26 }}>To check</h3>
+          <h3 style={{ marginTop: 26 }}>Universes to check</h3>
           <ul className="lx-warnings">
-            {warnings.map((w, i) => (
-              <li key={i}>{w.message}</li>
-            ))}
+            {warnings
+              .filter((w) => w.ids.length === 0)
+              .map((w, i) => (
+                <li key={i}>{w.message}</li>
+              ))}
           </ul>
         </>
       )}

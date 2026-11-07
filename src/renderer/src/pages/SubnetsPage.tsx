@@ -58,6 +58,7 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
       return
     }
     await window.api.subnets.remove(subnet.id)
+    setShowForm(false)
     onChanged()
   }
 
@@ -115,6 +116,19 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
             />
           </label>
           <div className="form-actions span-2">
+            {editingId != null && (
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{ marginRight: 'auto' }}
+                onClick={() => {
+                  const s = subnets.find((x) => x.id === editingId)
+                  if (s) handleDelete(s)
+                }}
+              >
+                Delete subnet
+              </button>
+            )}
             <button type="submit" className="btn btn-primary">
               {editingId != null ? 'Save changes' : 'Create subnet'}
             </button>
@@ -130,19 +144,25 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
             <th>VLAN</th>
             <th>Gateway</th>
             <th>Notes</th>
-            <th />
           </tr>
         </thead>
         <tbody>
           {subnets.length === 0 && (
             <tr>
-              <td colSpan={6} className="empty-cell">
+              <td colSpan={5} className="empty-cell">
                 No subnets yet. Add one to start assigning device IPs.
               </td>
             </tr>
           )}
           {subnets.map((s) => (
-            <tr key={s.id}>
+            <tr
+              key={s.id}
+              className={`clickable${editingId === s.id ? ' selected' : ''}`}
+              tabIndex={0}
+              title="Edit"
+              onClick={() => startEdit(s)}
+              onKeyDown={(e) => e.key === 'Enter' && startEdit(s)}
+            >
               <td>{s.name}</td>
               <td>
                 <code>{s.cidr}</code>
@@ -150,14 +170,6 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
               <td className="mono">{s.vlan ?? '—'}</td>
               <td className="mono">{s.gateway ?? '—'}</td>
               <td className="muted">{s.notes ?? '—'}</td>
-              <td className="row-actions">
-                <button className="btn btn-small" onClick={() => startEdit(s)}>
-                  Edit
-                </button>
-                <button className="btn btn-small btn-danger" onClick={() => handleDelete(s)}>
-                  Delete
-                </button>
-              </td>
             </tr>
           ))}
         </tbody>

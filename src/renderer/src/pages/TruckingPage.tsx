@@ -128,8 +128,21 @@ function TruckingPage(): React.JSX.Element {
           </tr>
         </thead>
         <tbody>
+          {trucks.length === 0 && (
+            <tr>
+              <td colSpan={6} className="empty-cell">
+                No trucks yet. Add the trucks you&rsquo;ve booked to assign them to trips.
+              </td>
+            </tr>
+          )}
           {trucks.map((t) => (
-            <tr key={t.id} className="clickable" tabIndex={0} onClick={() => setTruckDraft({ ...t })}>
+            <tr
+              key={t.id}
+              className="clickable"
+              tabIndex={0}
+              onClick={() => setTruckDraft({ ...t })}
+              onKeyDown={(e) => e.key === 'Enter' && setTruckDraft({ ...t })}
+            >
               <td>{t.name}</td>
               <td>{t.vendor}</td>
               <td>{t.size}</td>
@@ -150,7 +163,9 @@ function TruckingPage(): React.JSX.Element {
               </button>
             </td>
             <td>
-              <strong>{money(trucks.reduce((s, t) => s + t.cost, 0))}</strong>
+              {trucks.length > 0 && (
+                <strong>{money(trucks.reduce((s, t) => s + t.cost, 0))}</strong>
+              )}
             </td>
             <td colSpan={2} />
           </tr>

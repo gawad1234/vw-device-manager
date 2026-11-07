@@ -117,7 +117,7 @@ function ExportMenu({
 
   return (
     <div className="project-menu" ref={ref}>
-      <button className="btn btn-small" onClick={() => setOpen((v) => !v)} disabled={busy}>
+      <button className="btn" onClick={() => setOpen((v) => !v)} disabled={busy}>
         {busy ? 'Exporting…' : label} <span className="caret">▾</span>
       </button>
       {open && (

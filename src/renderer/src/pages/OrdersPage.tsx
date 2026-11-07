@@ -140,7 +140,7 @@ function OrdersPage(): React.JSX.Element {
   return (
     <div className="page">
       <div className="page-header">
-        <h2>Shop orders</h2>
+        <h2>Orders</h2>
         <div className="page-header-actions">
           <select
             className="cat-filter"

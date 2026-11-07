@@ -95,7 +95,7 @@ const NAV: { key: string; label: string; items: [Tab, string][] }[] = [
     key: 'packing',
     label: 'Packing',
     items: [
-      ['labels', 'Labels'],
+      ['labels', 'Case labels'],
       ['cases', 'Cases']
     ]
   }

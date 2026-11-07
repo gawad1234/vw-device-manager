@@ -35,7 +35,7 @@ function CablesPage({ bundles, devices, cableTypes, onChanged }: Props): React.J
   return (
     <div className="page">
       <div className="page-header">
-        <h2>Cable bundles</h2>
+        <h2>Cables</h2>
         <div className="page-header-actions">
           <input
             className="search"

@@ -33,7 +33,7 @@ function ConfigsPage({ subnets }: Props): React.JSX.Element {
   return (
     <div className="page">
       <div className="page-header">
-        <h2>Config scripts</h2>
+        <h2>Configs</h2>
         <div className="page-header-actions">
           <button
             className="btn"

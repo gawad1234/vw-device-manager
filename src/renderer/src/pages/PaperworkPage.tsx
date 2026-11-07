@@ -107,6 +107,12 @@ function PaperworkPage({ focusId }: { focusId?: string | null }): React.JSX.Elem
   const update = (patch: Partial<PaperworkTemplate>): void => {
     if (r) commit(templates.map((x) => (x.id === r.id ? { ...r, ...patch } : x)))
   }
+  const setSort = (i: number, field: string): void => {
+    if (!r) return
+    const sortBy = [...r.sortBy]
+    sortBy[i] = field
+    update({ sortBy: sortBy.filter(Boolean) })
+  }
   const setCol = (i: number, patch: Partial<ReportColumn>): void => {
     if (r) update({ columns: r.columns.map((c, j) => (j === i ? { ...c, ...patch } : c)) })
   }
@@ -269,26 +275,6 @@ function PaperworkPage({ focusId }: { focusId?: string | null }): React.JSX.Elem
               ))}
             </select>
           </label>
-          {r && (
-            <>
-              <button
-                className="btn"
-                onClick={() => add({ ...r, id: crypto.randomUUID(), name: `${r.name} copy` })}
-              >
-                Duplicate
-              </button>
-              {isPreset && (
-                <button className="btn" onClick={reset}>
-                  Reset to default
-                </button>
-              )}
-              {!bound && (
-                <button className="btn btn-danger" onClick={remove}>
-                  Delete
-                </button>
-              )}
-            </>
-          )}
           <p className="muted lxr-hint">Templates are shared by every show.</p>
         </aside>
 
@@ -305,11 +291,35 @@ function PaperworkPage({ focusId }: { focusId?: string | null }): React.JSX.Elem
           />
         ) : r && built ? (
           <div className="lxr-main">
-            {bound && (
-              <p className="muted lxr-bound">
-                Used by <b>{bound}</b> — changes here change that export.
-              </p>
-            )}
+            <div className="lxr-bound">
+              <span className="muted">
+                {bound ? (
+                  <>
+                    Used by <b>{bound}</b> — changes here change that export.
+                  </>
+                ) : isPreset ? (
+                  'A built-in template.'
+                ) : (
+                  'Your own template.'
+                )}
+              </span>
+              <button
+                className="btn btn-small"
+                onClick={() => add({ ...r, id: crypto.randomUUID(), name: `${r.name} copy` })}
+              >
+                Duplicate
+              </button>
+              {isPreset && (
+                <button className="btn btn-small" onClick={reset}>
+                  Reset to default
+                </button>
+              )}
+              {!bound && (
+                <button className="btn btn-small btn-danger" onClick={remove}>
+                  Delete
+                </button>
+              )}
+            </div>
             <div className="lxr-settings">
               <label>
                 Name
@@ -332,39 +342,12 @@ function PaperworkPage({ focusId }: { focusId?: string | null }): React.JSX.Elem
                   {fieldOptions}
                 </select>
               </label>
-              {[0, 1, 2].map((i) => (
-                <label key={i}>
-                  {i ? 'Then by' : 'Sort by'}
-                  <select
-                    value={r.sortBy[i] ?? ''}
-                    onChange={(e) => {
-                      const sortBy = [...r.sortBy]
-                      sortBy[i] = e.target.value
-                      update({ sortBy: sortBy.filter(Boolean) })
-                    }}
-                  >
-                    <option value="">— none —</option>
-                    {fieldOptions}
-                  </select>
-                </label>
-              ))}
-              <label title="Merge repeated values down the first N columns into one cell (e.g. a device and its ports)">
-                Merge repeats
-                <input
-                  type="number"
-                  min={0}
-                  max={r.columns.length}
-                  value={r.mergeRepeats}
-                  disabled={r.kind === 'count'}
-                  onChange={(e) =>
-                    update({
-                      mergeRepeats: Math.min(
-                        r.columns.length,
-                        Math.max(0, Number(e.target.value) || 0)
-                      )
-                    })
-                  }
-                />
+              <label>
+                Sort by
+                <select value={r.sortBy[0] ?? ''} onChange={(e) => setSort(0, e.target.value)}>
+                  <option value="">— none —</option>
+                  {fieldOptions}
+                </select>
               </label>
               <label>
                 Page
@@ -391,6 +374,38 @@ function PaperworkPage({ focusId }: { focusId?: string | null }): React.JSX.Elem
                 />
               </label>
             </div>
+            <details className="lxr-more" open={r.sortBy.length > 1 || r.mergeRepeats > 0}>
+              <summary>More options</summary>
+              <div className="lxr-settings">
+                {[1, 2].map((i) => (
+                  <label key={i}>
+                    Then by
+                    <select value={r.sortBy[i] ?? ''} onChange={(e) => setSort(i, e.target.value)}>
+                      <option value="">— none —</option>
+                      {fieldOptions}
+                    </select>
+                  </label>
+                ))}
+                <label title="Merge repeated values down the first N columns into one cell (e.g. a device and its ports)">
+                  Merge same values in the first … columns
+                  <input
+                    type="number"
+                    min={0}
+                    max={r.columns.length}
+                    value={r.mergeRepeats}
+                    disabled={r.kind === 'count'}
+                    onChange={(e) =>
+                      update({
+                        mergeRepeats: Math.min(
+                          r.columns.length,
+                          Math.max(0, Number(e.target.value) || 0)
+                        )
+                      })
+                    }
+                  />
+                </label>
+              </div>
+            </details>
 
             <div className="lxr-colbar">
               <button
