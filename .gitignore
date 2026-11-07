@@ -5,8 +5,17 @@ out
 .eslintcache
 *.log*
 
-# local SQLite database (lives in this Dropbox-synced folder, not in git)
+# Local databases and project files: crew and show data, never in git
 /data
+*.vwdm
+*.vwdm-*
+*.sqlite3
+*.sqlite3-*
+
+# Local work output
+brag-output*/
+graphify-out/
+*.tsbuildinfo
 
 # Dropbox sync conflict copies
 node_modules 2

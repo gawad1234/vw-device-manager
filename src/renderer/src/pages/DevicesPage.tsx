@@ -190,7 +190,7 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
                 )}
                 {!isCollapsed &&
                   list.map((d) => (
-                    <tr key={d.id} className="clickable" onClick={() => setOpenId(d.id)}>
+                    <tr key={d.id} className="clickable" tabIndex={0} onClick={() => setOpenId(d.id)}>
                       <td>
                         {d.name}
                         {d.isSwitch && <span className="badge">switch</span>}
@@ -214,7 +214,10 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
           categories={categories}
           onClose={() => setOpenId(null)}
           onChanged={onChanged}
-          onCreated={(id) => setOpenId(id)}
+          onCreated={async (id) => {
+            await onChanged() // or the open row looks deleted
+            setOpenId(id)
+          }}
         />
       )}
     </div>

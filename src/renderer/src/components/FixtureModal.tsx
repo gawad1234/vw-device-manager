@@ -40,7 +40,15 @@ function FixtureModal({ fixture, types, onClose, onSaved }: Props): React.JSX.El
     if ((d.universe == null) !== (d.address == null))
       return setError('Set both universe and address, or neither.')
     if (d.address != null && d.address > 512) return setError('Addresses run 1–512.')
-    const { id, ...input } = d
+    // Vectorworks may have changed this fixture while the window was open: start
+    // from the current row and lay on only what was edited here.
+    const current = (await window.api.fixtures.list()).find((f) => f.id === d.id) ?? fixture
+    const edited = Object.fromEntries(
+      Object.entries(d).filter(
+        ([k, v]) => JSON.stringify(v) !== JSON.stringify(fixture[k as keyof Fixture])
+      )
+    )
+    const { id, ...input } = { ...current, ...edited }
     await window.api.fixtures.save(id, input)
     onSaved()
     onClose()

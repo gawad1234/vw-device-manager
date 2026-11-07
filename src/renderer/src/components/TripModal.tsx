@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { PackCase, TripKind, Truck, TruckTrip, TruckTripInput } from '../../../shared/types'
 import Modal from './Modal'
 import { TRIP_KINDS } from '../lib/trucking'
@@ -43,10 +43,13 @@ function TripModal({ trip, trucks, cases, onClose, onSaved }: Props): React.JSX.
       setError('A date is required.')
       return null
     }
-    const saved = await window.api.trucking.saveTrip(trip?.id ?? null, d)
+    const saved = await window.api.trucking.saveTrip(savedId.current ?? trip?.id ?? null, d)
+    savedId.current = saved.id // "Save & print" keeps the window open; the next save updates this trip
     onSaved()
     return saved.id
   }
+
+  const savedId = useRef<number | null>(null)
 
   async function save(e: React.FormEvent): Promise<void> {
     e.preventDefault()

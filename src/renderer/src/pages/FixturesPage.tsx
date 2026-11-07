@@ -135,7 +135,7 @@ function FixturesPage(): React.JSX.Element {
                 {list.map((f) => {
                   const w = warnFor(f.id)
                   return (
-                    <tr key={f.id} className="clickable" onClick={() => setEdit(f)}>
+                    <tr key={f.id} className="clickable" tabIndex={0} onClick={() => setEdit(f)}>
                       {byChannel && <td className="mono">{f.channel}</td>}
                       {byChannel && <td>{f.position}</td>}
                       <td>{f.unit}</td>

@@ -15,13 +15,17 @@ function ipToInt(ip: string): number {
 
 /** Returns true if `ip` falls inside `cidr` (e.g. "10.0.10.0/24"). Returns null if the CIDR itself is malformed. */
 export function ipInCidr(ip: string, cidr: string): boolean | null {
-  const [rangeIp, prefixStr] = cidr.trim().split('/')
-  const prefix = Number(prefixStr)
-  if (!rangeIp || !isValidIpv4(rangeIp) || Number.isNaN(prefix) || prefix < 0 || prefix > 32) {
-    return null
-  }
+  const range = parseCidr(cidr)
+  if (!range) return null
   if (!isValidIpv4(ip)) return false
+  return (ipToInt(ip) & range.mask) >>> 0 === (ipToInt(range.ip) & range.mask) >>> 0
+}
 
-  const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0
-  return (ipToInt(ip) & mask) >>> 0 === (ipToInt(rangeIp) & mask) >>> 0
+/** "10.0.10.0/24" split and checked, or null if malformed. The prefix must be
+ *  written out: "10.0.10.0/" is not /0. */
+export function parseCidr(cidr: string): { ip: string; prefix: number; mask: number } | null {
+  const m = /^([^/]+)\/(\d{1,2})$/.exec(cidr.trim())
+  if (!m || !isValidIpv4(m[1]) || Number(m[2]) > 32) return null
+  const prefix = Number(m[2])
+  return { ip: m[1], prefix, mask: prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0 }
 }

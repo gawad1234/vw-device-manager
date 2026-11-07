@@ -89,7 +89,10 @@ function CrewPage(): React.JSX.Element {
     saveRow({ ...a, days })
   }
 
-  const totals = rows.map((a) => crewTotals(a, Object.values(a.days)))
+  // Days outside the From / To range have no cell left, so they can't count.
+  const totals = rows.map((a) =>
+    crewTotals(a, dates.length ? dates.flatMap((d) => a.days[d] ?? []) : Object.values(a.days))
+  )
   const grand = totals.reduce(
     (s, t) => ({ days: s.days + t.workDays, hours: s.hours + t.hours, cost: s.cost + t.cost }),
     { days: 0, hours: 0, cost: 0 }

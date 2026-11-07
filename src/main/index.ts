@@ -4,7 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { openStartupProject } from './projects'
 import { ensureLibrary } from './library'
-import { getDataVersion } from './db'
+import { getDataVersion, reopenIfReplaced } from './db'
 import { initUpdater } from './updater'
 import { registerIpcHandlers } from './ipc'
 import { setServerWindow, initServer, stopServer, getServerStatus } from './server'
@@ -32,9 +32,19 @@ function createWindow(): void {
     mainWindow.show()
   })
 
+  // Links only ever leave for the browser. The app window must never load another
+  // page: it would keep the preload's full access to the app.
+  const openInBrowser = (url: string): void => {
+    if (url.startsWith('https://')) void shell.openExternal(url)
+  }
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    openInBrowser(details.url)
     return { action: 'deny' }
+  })
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    if (url === mainWindow.webContents.getURL()) return // a reload of the app itself
+    e.preventDefault()
+    openInBrowser(url)
   })
 
   // Auto-refresh: `PRAGMA data_version` bumps only when ANOTHER connection (a
@@ -44,6 +54,12 @@ function createWindow(): void {
   let lastDataVersion = -1
   const checkExternalChanges = (): void => {
     try {
+      if (reopenIfReplaced()) {
+        // Dropbox swapped the file underneath us; the old handle would serve stale rows.
+        lastDataVersion = -1
+        bumpChange()
+        mainWindow.webContents.send('data-changed')
+      }
       const v = getDataVersion()
       if (lastDataVersion !== -1 && v !== lastDataVersion && !mainWindow.isDestroyed()) {
         bumpChange() // computers that joined this show refresh too
@@ -98,8 +114,8 @@ app.whenReady().then(async () => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
+  await ensureLibrary() // first: opening a project can move old kits into it
   await openStartupProject()
-  await ensureLibrary() // create/seed the shared cable-type + signal library once
   registerIpcHandlers()
 
   createWindow()

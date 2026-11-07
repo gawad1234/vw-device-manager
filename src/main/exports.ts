@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, shell } from 'electron'
+import { dialog, shell } from 'electron'
 import { writeFileSync } from 'fs'
 import ExcelJS from 'exceljs'
 import {
@@ -17,7 +17,7 @@ import {
 } from './paperwork-data'
 import {
   getProjectMeta,
-  getOrderExportSnapshot,
+  getOrderBaseline,
   getOrderExportFormatById,
   getShopOrderById,
   listBundles,
@@ -29,6 +29,7 @@ import {
   markOrderExported
 } from './repository'
 import { ipInCidr } from './ip-utils'
+import { withPrintWindow } from './print-html'
 import { maskFromCidr } from './switch-config'
 import {
   PROJECTOR_GROUPS,
@@ -94,8 +95,19 @@ function collectBundles(opts: ExportOptions): Bundle[] {
 
 // ---- CSV -----------------------------------------------------------------
 function csvCell(v: string): string {
-  return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+  // A leading = + - @ makes Excel run the cell as a formula. Plain numbers are fine.
+  const safe = /^[=+\-@\t\r]/.test(v) && !/^[+-]?\d[\d.,]*$/.test(v) ? "'" + v : v
+  return /[",\n\r]/.test(safe) ? '"' + safe.replace(/"/g, '""') + '"' : safe
 }
+
+/** The byte-order mark tells Excel on Windows this is UTF-8 (☐, →, accents). */
+function writeCsv(path: string, text: string): void {
+  writeFileSync(path, '\ufeff' + text, 'utf-8')
+}
+
+/** Text order that reads numbers as numbers: 25ft before 100ft, PJ2 before PJ10. */
+const natural = (a: string, b: string): number =>
+  a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 
 // ---- XLSX (exceljs) ------------------------------------------------------
 function parseImageDataUrl(
@@ -201,12 +213,12 @@ function page(title: string, body: string, logo: string | null, fontSize = 12, e
   const companyLogo = getCompanyLogo()
   const companyBlock =
     companyName || companyLogo
-      ? `<div class="company">${companyLogo ? `<img class="clogo" src="${companyLogo}" alt="">` : ''}${
+      ? `<div class="company">${companyLogo ? `<img class="clogo" src="${esc(companyLogo)}" alt="">` : ''}${
           companyName ? `<span class="cname">${esc(companyName)}</span>` : ''
         }</div>`
       : ''
   const header = `<header class="ph"><div class="ph-l">${companyBlock}${titleBlock}</div>${
-    logo ? `<img class="logo" src="${logo}" alt="logo">` : ''
+    logo ? `<img class="logo" src="${esc(logo)}" alt="logo">` : ''
   }</header>`
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
     * { box-sizing: border-box; }
@@ -254,13 +266,12 @@ function page(title: string, body: string, logo: string | null, fontSize = 12, e
     .label .name { font-weight: 700; font-size: 13px; }
     .label .ends { font-size: 11px; margin-top: 2px; }
     .label .type { font-size: 10px; color: #666; margin-top: 2px; }
-    /* wrap-around flag labels: [ end ][ striped wrap zone ][ mirrored end ] */
+    /* wrap-around flag labels: [ end ][ striped wrap zone ][ end ] */
     .flags { display: flex; flex-wrap: wrap; gap: 8px; }
     .flag { display: flex; align-items: stretch; height: 0.5in; width: 3.4in;
             border: 1px solid #bbbbbb; border-radius: 3px; overflow: hidden; }
     .fend { flex: 0 0 1.2in; padding: 2px 7px; overflow: hidden; display: flex;
             flex-direction: column; justify-content: center; border-top: 3px solid var(--c, #888); }
-    .fend.mir { transform: scaleX(-1); }
     .fwrap { flex: 1; border-left: 1px dashed #999999; border-right: 1px dashed #999999;
              background: repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 3px,#fff 3px,#fff 6px); }
     .fname { font-weight: 700; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -291,18 +302,16 @@ function labelsHtml(bundles: Bundle[], idx: DeviceIndex, logo: string | null): s
 /**
  * Wrap-around flag labels. Each cable is a strip: [ end ][ wrap zone ][ end ].
  * Lay the cable across the striped wrap zone, wrap it once, and stick the two
- * ends together to form the flag. The right end is mirrored so both faces of the
- * finished flag read correctly.
+ * ends together to form the flag. Both ends print the same way round: folding
+ * only turns the right end to the back, where it reads normally.
  */
 function flagLabelsHtml(bundles: Bundle[], idx: DeviceIndex, logo: string | null): string {
   const flags =
     bundles
       .flatMap((b) =>
         bundleToRows(b, idx).map((r) => {
-          const end = `<div class="fname">${esc(r.cable)}</div><div class="fends">${esc(
-            `${r.from} → ${r.to}`
-          )}</div>`
-          return `<div class="flag" style="--c:${b.color || '#888888'}"><div class="fend">${end}</div><div class="fwrap"></div><div class="fend mir">${end}</div></div>`
+          const end = `<div class="fname">${esc(r.cable)}</div><div class="fends">${esc(r.from)}</div><div class="fends">→ ${esc(r.to)}</div>`
+          return `<div class="flag" style="--c:${esc(b.color || '#888888')}"><div class="fend">${end}</div><div class="fwrap"></div><div class="fend">${end}</div></div>`
         })
       )
       .join('') || '<p>No cables.</p>'
@@ -336,7 +345,7 @@ function projectorSheetEntries(): ProjectorSheetEntry[] {
   const byId = new Map(subnets.map((s) => [s.id, s]))
   return listDevices()
     .filter((d) => d.projector)
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => natural(a.name, b.name))
     .map((d) => {
       const cfg = d.projector!
       const usable = d.ports.filter((p) => !p.isUnused)
@@ -633,8 +642,13 @@ async function sheetsXlsx(
   logo: string | null
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
+  const used = new Set<string>()
   for (const { name, table: t, widths, fontPx } of sheets) {
-    const ws = wb.addWorksheet(name.replace(/[[\]:*?/\\]/g, '-').slice(0, 31) || 'Sheet')
+    const base = name.replace(/[[\]:*?/\\]/g, '-').replace(/^'+|'+$/g, '').slice(0, 28) || 'Sheet'
+    let sheetName = base
+    for (let n = 2; used.has(sheetName.toLowerCase()); n++) sheetName = `${base} ${n}`
+    used.add(sheetName.toLowerCase())
+    const ws = wb.addWorksheet(sheetName)
     addTableSheet(wb, ws, t, logo, widths, fontPx)
   }
   return (await wb.xlsx.writeBuffer()) as unknown as Buffer
@@ -683,6 +697,8 @@ function templateHtml(t: PaperworkTemplate, built: BuiltReport, heading = ''): s
   const table = (s: BuiltReport['sections'][number]): string =>
     `<table class="lxr${merged ? ' grouped' : ''}">${colgroup}${head}<tbody>${s.rows
       .map((r, ri) => {
+        // Each merged group is its own tbody so it moves to the next page whole.
+        const split = merged && ri > 0 && s.spans?.[ri][0] ? '</tbody><tbody>' : ''
         const tds = r
           .map((c, ci) => {
             const span = s.spans?.[ri][ci] ?? 1
@@ -691,7 +707,7 @@ function templateHtml(t: PaperworkTemplate, built: BuiltReport, heading = ''): s
             return `<td${span > 1 ? ` rowspan="${span}"` : ''}${cls}${align(ci)}>${cell(c)}</td>`
           })
           .join('')
-        return `<tr${s.bands ? ` class="g${s.bands[ri]}"` : ''}>${tds}</tr>`
+        return `${split}<tr${s.bands ? ` class="g${s.bands[ri]}"` : ''}>${tds}</tr>`
       })
       .join('')}</tbody></table>`
   const empty =
@@ -719,17 +735,32 @@ function templateTable(
   built: BuiltReport
 ): { table: Table; widths: number[] } {
   const grouped = built.sections.some((s) => s.title)
+  const noted = built.sections.some((s) => s.note) // a bundle's route and length
   return {
     table: {
-      headers: [...(grouped ? [fieldLabel(t.source, t.groupBy)] : []), ...built.headers],
-      rows: built.sections.flatMap((s) => s.rows.map((r) => [...(grouped ? [s.title] : []), ...r]))
+      headers: [
+        ...(grouped ? [fieldLabel(t.source, t.groupBy)] : []),
+        ...(noted ? ['Route'] : []),
+        ...built.headers
+      ],
+      rows: built.sections.flatMap((s) =>
+        s.rows.map((r) => [
+          ...(grouped ? [s.title] : []),
+          ...(noted ? [s.note ?? ''] : []),
+          ...r
+        ])
+      )
     },
-    widths: [...(grouped ? [16] : []), ...built.widths.map((w) => Math.round(w / 7))]
+    widths: [
+      ...(grouped ? [16] : []),
+      ...(noted ? [26] : []),
+      ...built.widths.map((w) => Math.round(w / 7))
+    ]
   }
 }
 
 const TEMPLATE_CSS =
-  '<style>table.lxr{table-layout:fixed;width:100%}table.lxr td{overflow-wrap:anywhere}' +
+  '<style>table.lxr.grouped tbody{break-inside:avoid}table.lxr{table-layout:fixed;width:100%}table.lxr td{overflow-wrap:anywhere}' +
   '.tpl + .tpl{margin-top:18px}.tpl .sec .meta{font-weight:400;margin:0}</style>'
 
 /** Templated docs as a PDF page body. Several templates print one after the other
@@ -756,11 +787,7 @@ async function writeTemplated(
   logo: string | null
 ): Promise<void> {
   if (format === 'csv')
-    writeFileSync(
-      outPath,
-      parts.map((p) => tableCsv(templateTable(p.t, p.built).table)).join('\r\n\r\n'),
-      'utf-8'
-    )
+    writeCsv(outPath, parts.map((p) => tableCsv(templateTable(p.t, p.built).table)).join('\r\n\r\n'))
   else if (format === 'xlsx')
     writeFileSync(
       outPath,
@@ -854,7 +881,9 @@ type Resolved = {
   fontSize: number
   layout: OrderExportFormat['layout']
   /** items as of the last export (Old qty column), keyed by itemKey */
-  last: Map<string, OrderItem> | null
+  last: PrevItems | null
+  /** lines on the baseline that are no longer on the order (when highlighting) */
+  removed: OrderItem[]
 }
 
 /** Turn a stored format (or the default) into the shown, ordered column list. */
@@ -882,7 +911,8 @@ function resolveFormat(fmt: OrderExportFormat | null, receiving: boolean): Resol
     orientation: f.orientation,
     fontSize: f.fontSize || 12,
     layout: f.layout,
-    last: null
+    last: null,
+    removed: []
   }
 }
 
@@ -902,18 +932,22 @@ function bodyColumns(r: Resolved): OrderColumn[] {
   return r.groupByCategory ? r.columns.filter((c) => c.key !== 'category') : r.columns
 }
 
-function sortItems(items: ShopOrder['items'], sort: OrderExportFormat['sort']): ShopOrder['items'] {
+function sortItems(
+  items: ShopOrder['items'],
+  sort: OrderExportFormat['sort'] | 'categoryOnly'
+): ShopOrder['items'] {
   const out = items.slice()
-  if (sort === 'name') out.sort((a, b) => a.name.localeCompare(b.name))
+  if (sort === 'categoryOnly') out.sort((a, b) => (a.category || '￿').localeCompare(b.category || '￿'))
+  else if (sort === 'name') out.sort((a, b) => natural(a.name, b.name))
   else if (sort === 'outstanding')
     out.sort((a, b) => {
       const oa = Math.max(0, (Number(a.quantity) || 0) - (Number(a.received) || 0))
       const ob = Math.max(0, (Number(b.quantity) || 0) - (Number(b.received) || 0))
-      return ob - oa || a.name.localeCompare(b.name)
+      return ob - oa || natural(a.name, b.name)
     })
   else
     out.sort(
-      (a, b) => (a.category || '￿').localeCompare(b.category || '￿') || a.name.localeCompare(b.name)
+      (a, b) => (a.category || '￿').localeCompare(b.category || '￿') || natural(a.name, b.name)
     )
   return out
 }
@@ -922,16 +956,33 @@ type ItemChange = { label: string; kind: 'new' | 'chg' | '' }
 const itemKey = (it: OrderItem): string =>
   (it.name + '|' + (it.modelNumber || '')).trim().toLowerCase()
 
-/** Map the previous (last-export) items by identity, or null if not highlighting. */
-function prevItemMap(prev: OrderItem[] | null): Map<string, OrderItem> | null {
+type PrevItems = Map<OrderItem, OrderItem>
+
+/** Pair each line with its line at the baseline, or null if there's no baseline.
+ *  The same name and model listed twice pairs up in order. */
+function matchPrevious(items: OrderItem[], prev: OrderItem[] | null): PrevItems | null {
   if (!prev) return null
-  return new Map(prev.map((p) => [itemKey(p), p]))
+  const pool = new Map<string, OrderItem[]>()
+  for (const p of prev) pool.set(itemKey(p), [...(pool.get(itemKey(p)) ?? []), p])
+  const out: PrevItems = new Map()
+  for (const it of items) {
+    const p = pool.get(itemKey(it))?.shift()
+    if (p) out.set(it, p)
+  }
+  return out
+}
+
+/** Baseline lines with no match on the order now: they came off since last time. */
+function removedItems(prev: OrderItem[] | null, map: PrevItems | null): OrderItem[] {
+  if (!prev || !map) return []
+  const kept = new Set(map.values())
+  return prev.filter((p) => !kept.has(p))
 }
 
 /** What changed for this item vs. the last export. */
-function changeFor(it: OrderItem, prevMap: Map<string, OrderItem> | null): ItemChange {
+function changeFor(it: OrderItem, prevMap: PrevItems | null): ItemChange {
   if (!prevMap) return { label: '', kind: '' }
-  const p = prevMap.get(itemKey(it))
+  const p = prevMap.get(it)
   if (!p) return { label: 'NEW', kind: 'new' }
   const parts: string[] = []
   if ((Number(p.quantity) || 0) !== (Number(it.quantity) || 0))
@@ -953,25 +1004,45 @@ function fmtTs(ts: string | null): string {
 function shopOrderTable(
   order: ShopOrder,
   r: Resolved,
-  prevMap: Map<string, OrderItem> | null
+  prevMap: PrevItems | null
 ): Table {
   const cols = flatColumns(r)
   const rows = sortItems(order.items, r.sort).map((it) => {
     const qty = Number(it.quantity) || 0
     const recv = Number(it.received) || 0
-    const last = r.last?.get(itemKey(it))
+    const last = r.last?.get(it)
     const row = cols.map((c) => ORDER_COLS[c.key].cell(it, qty, recv, last))
     return prevMap ? [changeFor(it, prevMap).label, ...row] : row
   })
   const headers = cols.map((c) => colHeader(c))
+  if (prevMap) {
+    for (const p of r.removed) {
+      const qty = Number(p.quantity) || 0
+      const recv = Number(p.received) || 0
+      rows.push(['REMOVED', ...cols.map((c) => ORDER_COLS[c.key].cell(p, qty, recv, p))])
+    }
+  }
   return { headers: prevMap ? ['Change', ...headers] : headers, rows }
+}
+
+/** Vendor, date and notes for CSV/XLSX, which have no page header to carry them. */
+function orderInfoTable(order: ShopOrder): Table {
+  const rows: [string, string | null][] = [
+    ['Vendor', order.vendor],
+    ['Date', order.orderDate],
+    ['Notes', order.notes]
+  ]
+  return {
+    headers: ['Order', order.name],
+    rows: rows.filter(([, v]) => v).map(([k, v]) => [k, v as string])
+  }
 }
 
 /** Cable lines (type · length · qty) flat table for CSV/XLSX. */
 function cableOrderTable(order: ShopOrder, receiving: boolean): Table {
   const rows = order.cables
     .slice()
-    .sort((a, b) => a.cableType.localeCompare(b.cableType) || a.length.localeCompare(b.length))
+    .sort((a, b) => natural(a.cableType, b.cableType) || natural(a.length, b.length))
     .map((c) => {
       const qty = Number(c.quantity) || 0
       const recv = Number(c.received) || 0
@@ -991,7 +1062,7 @@ function cableSectionHtml(order: ShopOrder, receiving: boolean): string {
   if (!order.cables.length) return ''
   const rows = order.cables
     .slice()
-    .sort((a, b) => a.cableType.localeCompare(b.cableType) || a.length.localeCompare(b.length))
+    .sort((a, b) => natural(a.cableType, b.cableType) || natural(a.length, b.length))
   const head = receiving
     ? '<th class="chk">✓</th><th>Cable type</th><th>Length</th><th class="chk">Req</th><th class="chk">Recv</th><th class="chk">Out</th><th>Notes</th>'
     : '<th>Cable type</th><th>Length</th><th class="chk">Req</th><th class="chk">Recv</th><th>Notes</th>'
@@ -1037,12 +1108,12 @@ function bodyRow(
   it: OrderItem,
   cols: OrderColumn[],
   checkCol: boolean,
-  prevMap: Map<string, OrderItem> | null,
+  prevMap: PrevItems | null,
   r: Resolved
 ): string {
   const qty = Number(it.quantity) || 0
   const recv = Number(it.received) || 0
-  const last = r.last?.get(itemKey(it))
+  const last = r.last?.get(it)
   const eq = r.layout === 'equipmentList'
   const ch = changeFor(it, prevMap)
   const cls = ch.kind === 'new' ? ' class="row-new"' : ch.kind === 'chg' ? ' class="row-chg"' : ''
@@ -1076,7 +1147,7 @@ function shopOrderHtml(
   order: ShopOrder,
   receiving: boolean,
   logo: string | null,
-  prevMap: Map<string, OrderItem> | null,
+  prevMap: PrevItems | null,
   baselineDate: string,
   r: Resolved
 ): string {
@@ -1091,7 +1162,7 @@ function shopOrderHtml(
     bodyHtml = '<p>No items on this order.</p>'
   } else if (r.groupByCategory) {
     const groups: { cat: string; items: ShopOrder['items'] }[] = []
-    for (const it of sortItems(order.items, 'category')) {
+    for (const it of sortItems(sortItems(order.items, r.sort === 'outstanding' ? 'outstanding' : 'name'), 'categoryOnly')) {
       const label = it.category?.trim() || 'Uncategorized'
       const last = groups[groups.length - 1]
       if (last && last.cat === label) last.items.push(it)
@@ -1116,24 +1187,31 @@ function shopOrderHtml(
     ? `<div class="legend"><span class="sw-new"></span> new &nbsp;&nbsp; <span class="sw-chg"></span> changed since last export${baselineDate ? ` (${esc(baselineDate)})` : ''}</div>`
     : ''
   const cables = cableSectionHtml(order, receiving)
+  const gone = r.removed.length
+    ? `<section><h2>Removed since last export <span class="meta">(${r.removed.length})</span></h2><ul>${r.removed
+        .map((p) => `<li>${esc(p.name)}${p.modelNumber ? ` · ${esc(p.modelNumber)}` : ''} × ${Number(p.quantity) || 0}</li>`)
+        .join('')}</ul></section>`
+    : ''
   if (eq) {
     const docName = receiving ? 'Receiving checklist' : 'Equipment list'
     const top =
-      `<div class="eq-head"><div class="eq-show">${logo ? `<img class="logo" src="${logo}" alt="">` : ''}<div>` +
+      `<div class="eq-head"><div class="eq-show">${logo ? `<img class="logo" src="${esc(logo)}" alt="">` : ''}<div>` +
       `<div class="eq-name">${esc(docShowName || order.name)}</div>${meta ? `<div class="eq-sub">${meta}</div>` : ''}</div></div></div>` +
       `<div class="eq-title">${esc(order.name)}</div>` +
       (order.notes ? `<div class="eq-notes">${esc(order.notes)}</div>` : '')
     return page(
       `${docName} — ${order.name}`,
-      top + legend + bodyHtml + cables,
+      top + legend + bodyHtml + gone + cables,
       logo,
       r.fontSize,
       true
     )
   }
-  const metaBlock = meta ? `<div class="meta">${meta}</div>` : ''
+  const metaBlock =
+    (meta ? `<div class="meta">${meta}</div>` : '') +
+    (order.notes ? `<p>${esc(order.notes).replace(/\n/g, '<br>')}</p>` : '')
   const title = (receiving ? 'Receiving Checklist — ' : 'Shop Order — ') + order.name
-  return page(title, metaBlock + legend + bodyHtml + cables, logo, r.fontSize)
+  return page(title, metaBlock + legend + bodyHtml + gone + cables, logo, r.fontSize)
 }
 
 /** XLSX for an order: an Equipment/Receiving sheet + (if any) a Cables sheet.
@@ -1141,7 +1219,7 @@ function shopOrderHtml(
 async function orderXlsx(
   order: ShopOrder,
   receiving: boolean,
-  prevMap: Map<string, OrderItem> | null,
+  prevMap: PrevItems | null,
   logo: string | null,
   r: Resolved
 ): Promise<Buffer> {
@@ -1174,13 +1252,13 @@ async function orderXlsx(
   }
   addSheet(receiving ? 'Receiving' : 'Equipment', shopOrderTable(order, r, prevMap), true)
   if (order.cables.length) addSheet('Cables', cableOrderTable(order, receiving), false)
+  const info = orderInfoTable(order)
+  if (info.rows.length) addSheet('Order info', info, false)
   return (await wb.xlsx.writeBuffer()) as unknown as Buffer
 }
 
 async function htmlToPdf(html: string, landscape: boolean, footerNote?: string): Promise<Buffer> {
-  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: false } })
-  try {
-    await win.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+  return withPrintWindow(html, async (win) => {
     // Running footer on every page: show name (left) + optional note (center,
     // e.g. the export timestamp) + "Page X of Y" (right).
     const footer =
@@ -1198,9 +1276,7 @@ async function htmlToPdf(html: string, landscape: boolean, footerNote?: string):
       margins: { top: 0.5, bottom: 0.6, left: 0.5, right: 0.5 }
     })
     return pdf
-  } finally {
-    win.destroy()
-  }
+  })
 }
 
 // ---- Public entry --------------------------------------------------------
@@ -1251,17 +1327,22 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     if (res.canceled || !res.filePath) return null
     const outPath = res.filePath
     // Change highlighting compares against the snapshot from the last export.
-    const prevMap = opts.highlightChanges ? prevItemMap(getOrderExportSnapshot(order.id)) : null
-    const baselineDate = fmtTs(order.lastExportAt)
+    const baseline = getOrderBaseline(order.id, order.items)
+    const previous = matchPrevious(order.items, baseline?.items ?? null)
+    const prevMap = opts.highlightChanges ? previous : null
+    const baselineDate = fmtTs(baseline?.at ?? null)
     const fmt = opts.formatId != null ? getOrderExportFormatById(opts.formatId) : null
     const resolved = resolveFormat(fmt, receiving)
-    resolved.last = prevItemMap(getOrderExportSnapshot(order.id))
+    resolved.last = previous
+    resolved.removed = prevMap ? removedItems(baseline?.items ?? null, previous) : []
     const table = shopOrderTable(order, resolved, prevMap)
     if (opts.format === 'csv') {
       const cablesCsv = order.cables.length
         ? '\r\n\r\nCABLES\r\n' + tableCsv(cableOrderTable(order, receiving))
         : ''
-      writeFileSync(outPath, tableCsv(table) + cablesCsv, 'utf-8')
+      const info = orderInfoTable(order)
+      const infoCsv = info.rows.length ? '\r\n\r\n' + tableCsv(info) : ''
+      writeCsv(outPath, tableCsv(table) + cablesCsv + infoCsv)
     } else if (opts.format === 'xlsx')
       writeFileSync(outPath, await orderXlsx(order, receiving, prevMap, logo, resolved))
     else
@@ -1273,8 +1354,8 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
           `Exported ${new Date().toLocaleString()}`
         )
       )
-    // Snapshot the current items as the new baseline for the next export's diff.
-    markOrderExported(order.id, order.items)
+    // Only what goes to the shop moves the baseline; a receiving checklist doesn't.
+    if (!receiving) markOrderExported(order.id, order.items)
     shell.openPath(outPath)
     return outPath
   }
@@ -1290,7 +1371,13 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
       filters: [{ name: 'PDF', extensions: ['pdf'] }]
     })
     if (res.canceled || !res.filePath) return null
-    writeFileSync(res.filePath, await htmlToPdf(loadSheetHtml(opts.tripId, logo), false))
+    writeFileSync(
+      res.filePath,
+      await htmlToPdf(
+        loadSheetHtml(opts.tripId, logo),
+        templatesForDoc('loadsheet')[0].orientation === 'landscape'
+      )
+    )
     shell.openPath(res.filePath)
     return res.filePath
   }
@@ -1303,7 +1390,7 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     })
     if (res.canceled || !res.filePath) return null
     const outPath = res.filePath
-    if (opts.format === 'csv') writeFileSync(outPath, tableCsv(projectorSheetTable()), 'utf-8')
+    if (opts.format === 'csv') writeCsv(outPath, tableCsv(projectorSheetTable()))
     else if (opts.format === 'xlsx') writeFileSync(outPath, await projectorSheetXlsx(logo))
     else writeFileSync(outPath, await htmlToPdf(projectorSheetHtml(logo), false))
     shell.openPath(outPath)

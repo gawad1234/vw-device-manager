@@ -56,12 +56,19 @@ function Get-ExternalSwitchNames {
     } catch { return @() }
 }
 
-function Read-LiveVlans {
+# Only adapters on the chosen switch: Apply moves and Teardown deletes whatever is
+# on the list, so a neighbouring switch's adapters must never reach it.
+$script:RemovedNames = @()
+
+function Read-LiveVlans([string]$SwitchName) {
     Import-Module Hyper-V -ErrorAction Stop
     $rows = @()
     foreach ($vlan in (Get-VMNetworkAdapterVlan -ManagementOS -ErrorAction SilentlyContinue)) {
         $name = $vlan.ParentAdapter.Name
         if (-not $name) { continue }
+        if ($SwitchName -and $vlan.ParentAdapter.SwitchName -ne $SwitchName) { continue }
+        if ($name -eq $vlan.ParentAdapter.SwitchName) { continue } # the switch's default adapter
+        if ($vlan.OperationMode -notin 'Access', 'Untagged') { continue } # trunk: not ours to reset
         $alias = "vEthernet ($name)"
         $tagged = $vlan.OperationMode -eq 'Access'
         $ipi = Get-NetIPInterface -InterfaceAlias $alias -AddressFamily IPv4 -ErrorAction SilentlyContinue
@@ -89,7 +96,7 @@ function Read-LiveVlans {
 # JSON load / save (Device Manager schema)
 # ---------------------------------------------------------------------------
 function ConvertFrom-ConfigJson($path) {
-    $json = Get-Content $path -Raw | ConvertFrom-Json
+    $json = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
     $rows = @()
     foreach ($o in @($json)) {
         $rows += @{
@@ -356,13 +363,17 @@ function Invoke-Engine([switch]$WhatIf, [switch]$Teardown) {
     $cmd = @{ ConfigPath = $tmp; SwitchName = $sw }
     if ($cboNic.Text.Trim()) { $cmd.PhysicalAdapterName = $cboNic.Text.Trim() }
     if ($Teardown) { $cmd.Teardown = $true }
+    elseif ($script:RemovedNames.Count) { $cmd.RemoveAdapters = @($script:RemovedNames) }
 
     Set-Log ("$(if ($Teardown) { 'Teardown' } elseif ($WhatIf) { 'Preview (no changes made)' } else { 'Applying…' })`r`n")
     $form.Enabled = $false
     [System.Windows.Forms.Application]::DoEvents()
     try {
-        $out = & $EngineScript @cmd -WhatIf:$WhatIf *>&1 | Out-String
-        Write-Log $out
+        # Line by line, so a failure part way through still shows what already changed.
+        & $EngineScript @cmd -WhatIf:$WhatIf *>&1 | ForEach-Object {
+            Write-Log ([string]$_)
+            [System.Windows.Forms.Application]::DoEvents()
+        }
     } catch {
         Write-Log "ERROR: $($_.Exception.Message)"
     } finally {
@@ -371,18 +382,20 @@ function Invoke-Engine([switch]$WhatIf, [switch]$Teardown) {
     }
     if (-not $WhatIf) {
         # Re-read live state so the list reflects what's actually on the host now.
-        try { $script:Vlans = Read-LiveVlans; Render-List } catch {}
+        $script:RemovedNames = @()
+        try { $script:Vlans = Read-LiveVlans $sw; Render-List } catch {}
     }
 }
 
 # --- wire up events --------------------------------------------------------
 $btnRefresh.Add_Click({
     try {
-        $script:Vlans = Read-LiveVlans
-        Render-List
         $names = Get-ExternalSwitchNames
         $cboSwitch.Items.Clear(); $cboSwitch.Items.AddRange([object[]]$names)
         if ($names.Count -and -not $cboSwitch.Text) { $cboSwitch.Text = $names[0] }
+        $script:RemovedNames = @()
+        $script:Vlans = Read-LiveVlans $cboSwitch.Text.Trim()
+        Render-List
         $nics = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue |
             Where-Object Status -eq 'Up' | Select-Object -ExpandProperty Name)
         $cboNic.Items.Clear(); $cboNic.Items.AddRange([object[]]$nics)
@@ -408,6 +421,8 @@ $btnRemove.Add_Click({
     if ($i -lt 0) { return }
     # Rebuild by index (identical hashtables aren't safely comparable with -ne).
     $kept = @(); for ($j = 0; $j -lt $script:Vlans.Count; $j++) { if ($j -ne $i) { $kept += $script:Vlans[$j] } }
+    # Apply deletes it from the host too, and Preview shows that first.
+    $script:RemovedNames = @($script:RemovedNames) + [string]$script:Vlans[$i].Name
     $script:Vlans = @($kept)
     Render-List
 })

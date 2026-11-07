@@ -147,7 +147,7 @@ function ExportMenu({
                     onManageFormats()
                   }}
                 >
-                  Edit formats…
+                  Edit formats in Paperwork…
                 </button>
               )}
               <div className="menu-sep" />

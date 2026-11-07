@@ -1,9 +1,11 @@
-import { app } from 'electron'
+import { app, dialog } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { readCatalogsFromFile } from './db'
 import { getDbPath } from './paths'
+import { getProjectMeta, setProjectMeta } from './repository'
+import { readSettings, writeSettings } from './settings'
 import { DEFAULT_SWITCH_BASE_CONFIG } from './switch-config'
 import type {
   CableType,
@@ -19,19 +21,35 @@ import type {
   StickerSheetInput,
   SoftwarePackageInput,
   SwitchConfigSettings,
-  FixtureType
+  FixtureType,
+  LibraryLocation,
+  SwitchMonitoring
 } from '../shared/types'
 import { DOC_TEMPLATES, withBuiltIns, type PaperworkTemplate } from '../shared/paperwork'
 import { normalizeTableStyle, type TableStyle } from '../shared/table-style'
 
+const LIBRARY_FILE = 'library.json'
+
+/** Set when the chosen shared folder can't be reached, for this run only, so the
+ *  app still works on this machine's own copy. */
+let sharedFolderMissing = false
+
+/** This machine's own library (where it lives until a shared folder is chosen). */
+function localLibraryPath(): string {
+  if (is.dev) return join(process.cwd(), 'data', LIBRARY_FILE)
+  return join(app.getPath('userData'), LIBRARY_FILE)
+}
+
 /**
- * The universal library — network signals + cable types — is shared across ALL
- * projects (and machines). It's a single JSON file in the Dropbox-synced
- * workspace, NOT stored per project. Managed once in the Settings tab.
+ * The universal library (crew, kits, cable types, templates...) is one JSON file
+ * shared across ALL projects, NOT stored per project. To share it between
+ * machines, each machine points at the same synced folder in Settings; that
+ * choice is per-machine because the path differs on Mac and Windows.
  */
 function libraryPath(): string {
-  if (is.dev) return join(process.cwd(), 'data', 'library.json')
-  return join(app.getPath('userData'), 'library.json')
+  const folder = readSettings().libraryFolder
+  if (folder && !sharedFolderMissing) return join(folder, LIBRARY_FILE)
+  return localLibraryPath()
 }
 
 interface Library {
@@ -43,12 +61,12 @@ interface Library {
   /** Your company's letterhead, stamped on every project's paperwork. */
   companyName: string
   companyLogo: string | null
-  /** Switch-config generator settings (base template + admin login), shared. */
-  switchConfig: SwitchConfigSettings
+  /** Switch-config generator settings (base template + admin user), shared. */
+  switchConfig: StoredSwitchConfig
   /** Windows installers for per-computer install kits, shared like kits. */
   software: SoftwarePackage[]
-  /** Crew directory (names, contacts, default rates). library.json lives in
-   *  the gitignored data/ folder, so this never reaches GitHub. */
+  /** Crew directory (names, contacts, default rates). library.json is never in
+   *  the repo (data/ is gitignored), so this doesn't reach GitHub. */
   crew: CrewMember[]
   /** Cable loom sticker sheet types + designs. */
   stickerSheets: StickerSheet[]
@@ -61,70 +79,28 @@ interface Library {
   lightingReports?: Omit<PaperworkTemplate, 'source' | 'mergeRepeats'>[] | null
   /** How exported tables look (Excel + PDF); null = the default look. */
   tableStyle: TableStyle | null
+  /** Next id per list, so a deleted row's id is never handed to someone new:
+   *  projects keep these ids (crew bookings, a computer's software). */
+  nextIds?: Partial<Record<IdList, number>>
 }
 
-function defaultSwitchConfig(): SwitchConfigSettings {
-  return { baseTemplate: DEFAULT_SWITCH_BASE_CONFIG, adminUser: 'admin', adminPassword: '' }
+type IdList = 'crew' | 'software' | 'orderKits' | 'stickerSheets' | 'stickerDesigns'
+
+/** What the library itself stores for switches. The password and everything under
+ *  monitoring are added on read: see getSwitchConfig. */
+type StoredSwitchConfig = Pick<SwitchConfigSettings, 'baseTemplate' | 'adminUser'> & {
+  /** only in older libraries: moved to this computer's settings at launch */
+  adminPassword?: string
 }
 
-function readLibrary(): Library {
-  try {
-    const raw = JSON.parse(readFileSync(libraryPath(), 'utf-8')) as Partial<Library>
-    return {
-      networkSignals: raw.networkSignals ?? [],
-      cableTypes: raw.cableTypes ?? [],
-      deviceCategories: raw.deviceCategories ?? [],
-      orderKits: raw.orderKits ?? [],
-      companyName: raw.companyName ?? '',
-      companyLogo: raw.companyLogo ?? null,
-      switchConfig: { ...defaultSwitchConfig(), ...(raw.switchConfig ?? {}) },
-      software: raw.software ?? [],
-      crew: raw.crew ?? [],
-      stickerSheets: raw.stickerSheets ?? [],
-      stickerDesigns: raw.stickerDesigns ?? [],
-      fixtureTypes: raw.fixtureTypes ?? [],
-      paperwork: raw.paperwork ?? null,
-      lightingReports: raw.lightingReports,
-      tableStyle: raw.tableStyle ?? null
-    }
-  } catch {
-    return {
-      networkSignals: [],
-      cableTypes: [],
-      deviceCategories: [],
-      orderKits: [],
-      companyName: '',
-      companyLogo: null,
-      switchConfig: defaultSwitchConfig(),
-      software: [],
-      crew: [],
-      stickerSheets: [],
-      stickerDesigns: [],
-      fixtureTypes: [],
-      paperwork: null,
-      tableStyle: null
-    }
-  }
+function defaultSwitchConfig(): StoredSwitchConfig {
+  return { baseTemplate: DEFAULT_SWITCH_BASE_CONFIG, adminUser: 'admin' }
 }
 
-function writeLibrary(lib: Library): void {
-  mkdirSync(dirname(libraryPath()), { recursive: true })
-  writeFileSync(libraryPath(), JSON.stringify(lib, null, 2))
-}
-
-/**
- * Create the shared library on first run, seeding it from the **pre-split legacy
- * database** (the single DB used before per-project files) so the catalogs the
- * user already built are carried over — regardless of which project happens to
- * be open. Defaults to a single 'LAN' signal if there's nothing to seed (fresh
- * install with no legacy DB).
- */
-export async function ensureLibrary(): Promise<void> {
-  if (existsSync(libraryPath())) return
-  const seed = await readCatalogsFromFile(getDbPath())
-  writeLibrary({
-    networkSignals: seed.networkSignals.length ? seed.networkSignals : ['LAN'],
-    cableTypes: seed.cableTypes,
+function emptyLibrary(): Library {
+  return {
+    networkSignals: [],
+    cableTypes: [],
     deviceCategories: [],
     orderKits: [],
     companyName: '',
@@ -137,22 +113,236 @@ export async function ensureLibrary(): Promise<void> {
     fixtureTypes: [],
     paperwork: null,
     tableStyle: null
+  }
+}
+
+function parseLibrary(path: string): Partial<Library> {
+  return JSON.parse(readFileSync(path, 'utf-8')) as Partial<Library>
+}
+
+/** The file, or the copy kept by the last save if the file itself is damaged.
+ *  Any other failure throws: treating it as empty would save over the library. */
+function loadRaw(): Partial<Library> {
+  const path = libraryPath()
+  try {
+    return parseLibrary(path)
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return {}
+    try {
+      return parseLibrary(path + '.bak')
+    } catch {
+      throw new Error(
+        `The shared library at ${path} can't be read, so nothing was changed. ` +
+          `Restore it from Dropbox's version history, or fix the file. (${(e as Error).message})`
+      )
+    }
+  }
+}
+
+function readLibrary(): Library {
+  const raw = loadRaw()
+  return {
+    // First, so fields from a newer app version survive a save by this one.
+    ...raw,
+    networkSignals: raw.networkSignals ?? [],
+    cableTypes: raw.cableTypes ?? [],
+    deviceCategories: raw.deviceCategories ?? [],
+    orderKits: raw.orderKits ?? [],
+    companyName: raw.companyName ?? '',
+    companyLogo: raw.companyLogo ?? null,
+    switchConfig: { ...defaultSwitchConfig(), ...(raw.switchConfig ?? {}) },
+    software: raw.software ?? [],
+    crew: raw.crew ?? [],
+    stickerSheets: raw.stickerSheets ?? [],
+    stickerDesigns: raw.stickerDesigns ?? [],
+    fixtureTypes: raw.fixtureTypes ?? [],
+    paperwork: raw.paperwork ?? null,
+    lightingReports: raw.lightingReports,
+    tableStyle: raw.tableStyle ?? null
+  }
+}
+
+/** Windows and Dropbox can hold a file for a moment; a short retry rides that out. */
+function renameWithRetry(from: string, to: string): void {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return renameSync(from, to)
+    } catch (e) {
+      if (attempt === 10) throw e
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)
+    }
+  }
+}
+
+/** Temp file then rename, so a crash can't leave a half-written library. */
+function writeLibrary(lib: Library): void {
+  const path = libraryPath()
+  mkdirSync(dirname(path), { recursive: true })
+  const tmp = `${path}.${process.pid}.tmp`
+  writeFileSync(tmp, JSON.stringify(lib, null, 2))
+  if (existsSync(path)) {
+    try {
+      parseLibrary(path)
+      copyFileSync(path, path + '.bak')
+    } catch {
+      // Keep the last good .bak rather than backing up a damaged file.
+    }
+  }
+  renameWithRetry(tmp, path)
+}
+
+function newId(lib: Library, list: IdList, rows: { id: number }[]): number {
+  const max = rows.reduce((m, r) => Math.max(m, r.id), 0)
+  const id = Math.max(lib.nextIds?.[list] ?? 1, max + 1)
+  lib.nextIds = { ...lib.nextIds, [list]: id + 1 }
+  return id
+}
+
+/** Remember a deleted id so it can't be reused; older libraries have no counter. */
+function retireId(lib: Library, list: IdList, id: number): void {
+  lib.nextIds = { ...lib.nextIds, [list]: Math.max(lib.nextIds?.[list] ?? 1, id + 1) }
+}
+
+/**
+ * Create the shared library on first run, seeding it from the **pre-split legacy
+ * database** (the single DB used before per-project files) so the catalogs the
+ * user already built are carried over — regardless of which project happens to
+ * be open. Defaults to a single 'LAN' signal if there's nothing to seed (fresh
+ * install with no legacy DB).
+ */
+export async function ensureLibrary(): Promise<void> {
+  const folder = readSettings().libraryFolder
+  if (folder && !existsSync(join(folder, LIBRARY_FILE))) {
+    // Never start an empty library in the shared folder: it would sync over the
+    // real one if Dropbox simply hasn't arrived yet.
+    sharedFolderMissing = true
+    dialog.showMessageBoxSync({
+      type: 'warning',
+      message: 'Shared library not found',
+      detail: `Nothing was found at ${folder}. Device Manager will use this computer's own library until the folder is back. Restart once it syncs.`
+    })
+  }
+  if (existsSync(libraryPath())) {
+    moveAdminPasswordOffLibrary()
+    return
+  }
+  const seed = await readCatalogsFromFile(getDbPath())
+  writeLibrary({
+    ...emptyLibrary(),
+    networkSignals: seed.networkSignals.length ? seed.networkSignals : ['LAN'],
+    cableTypes: seed.cableTypes
   })
+}
+
+export function getLibraryLocation(): LibraryLocation {
+  return {
+    path: libraryPath(),
+    shared: !!readSettings().libraryFolder && !sharedFolderMissing,
+    missing: sharedFolderMissing
+  }
+}
+
+/** Point this machine at a shared folder. If the folder is empty the current
+ *  library moves in; if it already holds one, this machine adopts it and keeps
+ *  its old library as library.before-sharing.json in the local folder. */
+export async function chooseLibraryFolder(): Promise<LibraryLocation | null> {
+  const res = await dialog.showOpenDialog({
+    title: 'Choose a shared folder for the library',
+    message: 'Pick a folder that syncs between your computers, such as one in Dropbox.',
+    properties: ['openDirectory', 'createDirectory']
+  })
+  if (res.canceled || res.filePaths.length === 0) return null
+  const folder = res.filePaths[0]
+  const target = join(folder, LIBRARY_FILE)
+  const current = libraryPath()
+  if (target === current) return getLibraryLocation()
+  if (existsSync(target)) {
+    const lib = parseLibrary(target) // throws, changing nothing, if it isn't a library
+    const answer = await dialog.showMessageBox({
+      type: 'question',
+      buttons: ['Use the library in that folder', 'Cancel'],
+      cancelId: 1,
+      defaultId: 1,
+      message: 'That folder already has a library',
+      detail: `It holds ${lib.crew?.length ?? 0} crew and ${lib.orderKits?.length ?? 0} kits. This computer will use it from now on. Its current library is kept as a backup, not merged.`
+    })
+    if (answer.response !== 0) return null
+    if (existsSync(current)) {
+      copyFileSync(current, join(dirname(localLibraryPath()), 'library.before-sharing.json'))
+    }
+  } else {
+    const lib = readLibrary()
+    mkdirSync(folder, { recursive: true })
+    writeFileSync(target, JSON.stringify(lib, null, 2))
+  }
+  sharedFolderMissing = false
+  writeSettings({ ...readSettings(), libraryFolder: folder })
+  return getLibraryLocation()
+}
+
+/** Stop sharing: this machine keeps a copy of the shared library as its own. */
+export function useLocalLibrary(): LibraryLocation {
+  const lib = readLibrary()
+  writeSettings({ ...readSettings(), libraryFolder: undefined })
+  sharedFolderMissing = false
+  writeLibrary(lib)
+  return getLibraryLocation()
 }
 
 // ---- Switch-config generator settings (shared) --------------------------
 
+const MONITORING_META = 'switchMonitoring'
+
 export function getSwitchConfig(): SwitchConfigSettings {
-  return readLibrary().switchConfig
+  const { baseTemplate, adminUser, adminPassword } = readLibrary().switchConfig
+  const settings = readSettings()
+  let show: Partial<SwitchMonitoring> = {}
+  try {
+    show = JSON.parse(getProjectMeta(MONITORING_META) ?? '{}')
+  } catch {
+    // a damaged value just means the fields start blank
+  }
+  return {
+    baseTemplate,
+    adminUser,
+    adminPassword: settings.switchAdminPassword ?? adminPassword ?? '',
+    monitoring: {
+      logServers: show.logServers ?? '',
+      syslogPort: show.syslogPort ?? 514,
+      m4300Snmp: show.m4300Snmp ?? false,
+      poeAlerts: show.poeAlerts ?? false,
+      snmpCommunity: settings.snmpCommunity ?? ''
+    }
+  }
 }
 
 export function setSwitchConfig(input: SwitchConfigSettings): void {
   const lib = readLibrary()
   lib.switchConfig = {
     baseTemplate: input.baseTemplate,
-    adminUser: (input.adminUser ?? '').trim() || 'admin',
-    adminPassword: input.adminPassword ?? ''
+    adminUser: (input.adminUser ?? '').trim() || 'admin'
   }
+  writeLibrary(lib)
+  const { snmpCommunity, ...show } = input.monitoring
+  writeSettings({
+    ...readSettings(),
+    switchAdminPassword: input.adminPassword ?? '',
+    snmpCommunity: (snmpCommunity ?? '').trim()
+  })
+  setProjectMeta(MONITORING_META, JSON.stringify(show))
+}
+
+/** Older libraries hold the admin password. Move it to this computer's settings, and
+ *  save twice so the .bak copy of the old file goes too. */
+function moveAdminPasswordOffLibrary(): void {
+  const lib = readLibrary()
+  const { adminPassword } = lib.switchConfig
+  if (adminPassword === undefined) return
+  if (adminPassword && !readSettings().switchAdminPassword) {
+    writeSettings({ ...readSettings(), switchAdminPassword: adminPassword })
+  }
+  delete lib.switchConfig.adminPassword
+  writeLibrary(lib)
   writeLibrary(lib)
 }
 
@@ -256,10 +446,6 @@ export function removeDeviceCategory(name: string): string[] {
 
 // ---- Auto-add kits (shared) ---------------------------------------------
 
-function nextKitId(kits: OrderKit[]): number {
-  return kits.reduce((m, k) => Math.max(m, k.id), 0) + 1
-}
-
 export function listOrderKits(): OrderKit[] {
   return readLibrary().orderKits
 }
@@ -268,7 +454,7 @@ export function createOrderKit(input: OrderKitInput): OrderKit {
   const lib = readLibrary()
   const now = new Date().toISOString()
   const kit: OrderKit = {
-    id: nextKitId(lib.orderKits),
+    id: newId(lib, 'orderKits', lib.orderKits),
     trigger: input.trigger,
     addons: input.addons,
     createdAt: now,
@@ -295,6 +481,7 @@ export function updateOrderKit(id: number, input: OrderKitInput): OrderKit {
 export function deleteOrderKit(id: number): void {
   const lib = readLibrary()
   lib.orderKits = lib.orderKits.filter((k) => k.id !== id)
+  retireId(lib, 'orderKits', id)
   writeLibrary(lib)
 }
 
@@ -303,12 +490,12 @@ export function deleteOrderKit(id: number): void {
 export function importOrderKits(kits: OrderKitInput[]): void {
   if (!kits.length) return
   const lib = readLibrary()
-  let id = nextKitId(lib.orderKits)
   const now = new Date().toISOString()
   for (const k of kits) {
     const t = k.trigger.trim()
     if (!t || lib.orderKits.some((x) => x.trigger.toLowerCase() === t.toLowerCase())) continue
-    lib.orderKits.push({ id: id++, trigger: t, addons: k.addons, createdAt: now, updatedAt: now })
+    const id = newId(lib, 'orderKits', lib.orderKits)
+    lib.orderKits.push({ id, trigger: t, addons: k.addons, createdAt: now, updatedAt: now })
   }
   lib.orderKits.sort((a, b) => a.trigger.localeCompare(b.trigger))
   writeLibrary(lib)
@@ -325,7 +512,7 @@ export function createSoftware(input: SoftwarePackageInput): SoftwarePackage {
   const now = new Date().toISOString()
   const pkg: SoftwarePackage = {
     ...input,
-    id: lib.software.reduce((m, p) => Math.max(m, p.id), 0) + 1,
+    id: newId(lib, 'software', lib.software),
     createdAt: now,
     updatedAt: now
   }
@@ -348,6 +535,7 @@ export function updateSoftware(id: number, input: SoftwarePackageInput): Softwar
 export function deleteSoftware(id: number): void {
   const lib = readLibrary()
   lib.software = lib.software.filter((p) => p.id !== id)
+  retireId(lib, 'software', id)
   writeLibrary(lib)
 }
 
@@ -359,7 +547,7 @@ export function listCrew(): CrewMember[] {
 
 export function createCrewMember(input: CrewMemberInput): CrewMember {
   const lib = readLibrary()
-  const member: CrewMember = { ...input, id: lib.crew.reduce((m, c) => Math.max(m, c.id), 0) + 1 }
+  const member: CrewMember = { ...input, id: newId(lib, 'crew', lib.crew) }
   lib.crew.push(member)
   lib.crew.sort((a, b) => a.name.localeCompare(b.name))
   writeLibrary(lib)
@@ -379,13 +567,13 @@ export function updateCrewMember(id: number, input: CrewMemberInput): CrewMember
 export function deleteCrewMember(id: number): void {
   const lib = readLibrary()
   lib.crew = lib.crew.filter((c) => c.id !== id)
+  retireId(lib, 'crew', id)
   writeLibrary(lib)
 }
 
 // ---- Cable loom stickers (shared) -------------------------------------------
 
 type Keyed = { id: number; name: string }
-const nextId = (rows: Keyed[]): number => rows.reduce((m, r) => Math.max(m, r.id), 0) + 1
 const byName = (a: Keyed, b: Keyed): number => a.name.localeCompare(b.name)
 
 export function listStickerSheets(): StickerSheet[] {
@@ -394,7 +582,7 @@ export function listStickerSheets(): StickerSheet[] {
 
 export function saveStickerSheet(id: number | null, input: StickerSheetInput): StickerSheet {
   const lib = readLibrary()
-  const sheet: StickerSheet = { ...input, id: id ?? nextId(lib.stickerSheets) }
+  const sheet: StickerSheet = { ...input, id: id ?? newId(lib, 'stickerSheets', lib.stickerSheets) }
   lib.stickerSheets = [...lib.stickerSheets.filter((s) => s.id !== sheet.id), sheet].sort(byName)
   writeLibrary(lib)
   return sheet
@@ -404,6 +592,8 @@ export function saveStickerSheet(id: number | null, input: StickerSheetInput): S
 export function deleteStickerSheet(id: number): void {
   const lib = readLibrary()
   lib.stickerSheets = lib.stickerSheets.filter((s) => s.id !== id)
+  retireId(lib, 'stickerSheets', id)
+  for (const d of lib.stickerDesigns) if (d.sheetId === id) retireId(lib, 'stickerDesigns', d.id)
   lib.stickerDesigns = lib.stickerDesigns.filter((d) => d.sheetId !== id)
   writeLibrary(lib)
 }
@@ -414,7 +604,7 @@ export function listStickerDesigns(): StickerDesign[] {
 
 export function saveStickerDesign(id: number | null, input: StickerDesignInput): StickerDesign {
   const lib = readLibrary()
-  const design: StickerDesign = { ...input, id: id ?? nextId(lib.stickerDesigns) }
+  const design: StickerDesign = { ...input, id: id ?? newId(lib, 'stickerDesigns', lib.stickerDesigns) }
   lib.stickerDesigns = [...lib.stickerDesigns.filter((d) => d.id !== design.id), design].sort(
     byName
   )
@@ -425,6 +615,7 @@ export function saveStickerDesign(id: number | null, input: StickerDesignInput):
 export function deleteStickerDesign(id: number): void {
   const lib = readLibrary()
   lib.stickerDesigns = lib.stickerDesigns.filter((d) => d.id !== id)
+  retireId(lib, 'stickerDesigns', id)
   writeLibrary(lib)
 }
 

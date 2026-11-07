@@ -75,7 +75,7 @@ function ConfigsPage({ subnets }: Props): React.JSX.Element {
             </tr>
           )}
           {configs.map((c) => (
-            <tr key={c.id} className="clickable" onClick={() => setOpenId(c.id)}>
+            <tr key={c.id} className="clickable" tabIndex={0} onClick={() => setOpenId(c.id)}>
               <td>{c.name}</td>
               <td className="muted">{c.switchName}</td>
               <td className="muted">{c.vlans.length}</td>
@@ -90,7 +90,10 @@ function ConfigsPage({ subnets }: Props): React.JSX.Element {
           subnets={subnets}
           onClose={() => setOpenId(null)}
           onChanged={refresh}
-          onCreated={(id) => setOpenId(id)}
+          onCreated={async (id) => {
+            await refresh() // or the open row looks deleted
+            setOpenId(id)
+          }}
         />
       )}
     </div>

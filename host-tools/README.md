@@ -30,9 +30,9 @@ It relaunches itself **as administrator** automatically (accept the UAC prompt).
 ## Using it
 
 1. **Read host** — fills the list with the VLAN adapters currently on the host, and populates the **Virtual switch** and **Physical NIC** pickers.
-2. **Add / Edit / Remove** — change the list. Each entry is an adapter: a name, whether it's **tagged** (and its VLAN ID) or the one **untagged/native** network, and either **DHCP** or a static **IP / prefix / gateway / DNS**.
+2. **Add / Edit / Remove** — change the list. **Read host** only lists adapters on the chosen switch. An adapter you Remove is deleted from the host at the next Apply, and Preview shows that. Each entry is an adapter: a name, whether it's **tagged** (and its VLAN ID) or the one **untagged/native** network, and either **DHCP** or a static **IP / prefix / gateway / DNS**.
 3. **Virtual switch** — the name of the external Hyper-V switch to create or reuse. **Physical NIC** — the wired adapter to bind a *new* switch to (only needed when the switch doesn't exist yet).
-4. **Preview changes** — a dry run: shows exactly what *would* happen, changing nothing.
+4. **Preview changes** — a dry run: lists the planned switch, VLAN, IP, gateway and DNS changes, changing nothing.
 5. **Apply to host** — makes the changes (after a confirm). This can briefly drop the network on the bound NIC. The list re-reads from the host afterward.
 6. **Teardown** — removes the listed adapters and the switch.
 
@@ -45,7 +45,8 @@ In Device Manager's **Configs** tab, build your VLAN list (or pull it from the p
 - **Preview first.** Always Preview before Apply so you can see the plan.
 - The engine is **idempotent** — running it again reconciles the host to the list rather than duplicating anything.
 - It only binds a new switch to a **wired** Ethernet adapter (Wi-Fi/cellular are skipped).
-- Only **one** adapter can be the untagged/native network.
+- Only **one** adapter can be the untagged/native network. Without one, the switch's default adapter stays, because it may hold the host's address.
+- Addresses, prefixes and gateways are checked before anything changes. If an address won't take, the previous one goes back on.
 - Setting a gateway on more than one adapter usually causes routing problems — the engine warns about it.
 
 ## Troubleshooting

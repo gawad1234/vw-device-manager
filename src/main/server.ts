@@ -1,9 +1,19 @@
 import http from 'node:http'
+import net from 'node:net'
 import os from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { app, type BrowserWindow } from 'electron'
 import QRCode from 'qrcode'
-import type { ServerPins, ServerStatus, ShopOrder, Subnet } from '../shared/types'
+import { readFileSync } from 'node:fs'
+import appIcon from '../../resources/icon.png?asset'
+import type {
+  Device,
+  OrderItem,
+  ServerPins,
+  ServerStatus,
+  ShopOrder,
+  Subnet
+} from '../shared/types'
 import {
   getShowServerEnabled,
   setShowServerEnabled,
@@ -31,7 +41,7 @@ import type { Circuit } from '../shared/types'
 import { getCurrentProject } from './projects'
 import { ipSchedulePageHtml, deviceListPageHtml } from './exports'
 import { renderTemplateSheetHtml, renderCasesSheetHtml } from './caselabels'
-import { generateSwitchConfig } from './switch-config'
+import { generateSwitchConfig, type SwitchConfigOptions } from './switch-config'
 import { getSwitchConfig } from './library'
 import { handlers, bumpChange, getChangeSeq } from './rpc-registry'
 import { remoteReadable } from '../shared/remote-scope'
@@ -47,6 +57,29 @@ let lastError: string | null = null
 type Role = 'crew' | 'manager'
 // kind 'app' = another Device Manager that joined this show (bearer token, /rpc/*).
 const sessions = new Map<string, { role: Role; kind?: 'app' }>()
+
+// Wrong PINs per address. A 4-digit PIN would otherwise fall to a script in seconds.
+const MAX_PIN_TRIES = 5
+const PIN_LOCK_MS = 30_000
+const pinFailures = new Map<string, { count: number; until: number }>()
+
+function pinLocked(req: http.IncomingMessage): boolean {
+  const f = pinFailures.get(req.socket.remoteAddress ?? '')
+  return !!f && f.count >= MAX_PIN_TRIES && Date.now() < f.until
+}
+function notePinResult(req: http.IncomingMessage, ok: boolean): void {
+  const key = req.socket.remoteAddress ?? ''
+  if (ok) return void pinFailures.delete(key)
+  const f = pinFailures.get(key)
+  const count = f && Date.now() < f.until ? f.count + 1 : 1
+  pinFailures.set(key, { count, until: Date.now() + PIN_LOCK_MS })
+}
+
+/** Log everyone out: what they logged in to has changed (a new PIN, another show). */
+export function resetSessions(): void {
+  sessions.clear()
+  emitStatus()
+}
 
 // Serialize all DB writes (crew check-ins) so two browsers can't clobber the
 // whole-order JSON blob — each write re-reads inside the chain.
@@ -137,6 +170,7 @@ export function startServer(): Promise<ServerStatus> {
 
 export function stopServer(): Promise<ServerStatus> {
   sessions.clear()
+  pinFailures.clear()
   return new Promise((resolve) => {
     if (!server) return resolve(getServerStatus())
     const s = server
@@ -194,6 +228,7 @@ export function getPins(): ServerPins {
 export function setPins(pins: ServerPins): void {
   setProjectMeta('serverCrewPin', (pins.crew ?? '').trim())
   setProjectMeta('serverManagerPin', (pins.manager ?? '').trim())
+  resetSessions()
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +289,10 @@ function readBody(req: http.IncomingMessage): Promise<string> {
     let data = ''
     req.on('data', (c) => {
       data += c
-      if (data.length > 1_000_000) reject(new Error('body too large'))
+      if (data.length > 1_000_000) {
+        reject(new Error('body too large'))
+        req.destroy() // stop reading, or a huge upload keeps filling memory
+      }
     })
     req.on('end', () => resolve(data))
     req.on('error', reject)
@@ -270,30 +308,68 @@ async function qrSvg(url: string, size = 180): Promise<string> {
 // ---------------------------------------------------------------------------
 function layout(title: string, body: string, role: Role | null, active = ''): string {
   const show = getProjectMeta('showName') || getCurrentProject()?.name || 'Device Manager'
+  const tab = (href: string, id: string, label: string): string =>
+    `<a href="${href}"${active === id ? ' class="on" aria-current="page"' : ''}>${label}</a>`
   const nav = role
-    ? `<nav class="nav">
-        <a href="/" class="${active === 'home' ? 'on' : ''}">Home</a>
-        <a href="/orders" class="${active === 'orders' ? 'on' : ''}">Receiving</a>
-        <a href="/devices" class="${active === 'devices' ? 'on' : ''}">Devices</a>
-        <a href="/paperwork" class="${active === 'paper' ? 'on' : ''}">Paperwork</a>
-        <a href="/labels" class="${active === 'labels' ? 'on' : ''}">Labels</a>
-      </nav>`
+    ? `<nav class="tabs" aria-label="Main">${tab('/', 'home', 'Home')}${tab('/orders', 'orders', 'Receive')}${tab('/devices', 'devices', 'Devices')}${tab('/patching', 'patch', 'Patch')}</nav>`
     : ''
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1217">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Crew">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/app-icon.png">
 <title>${esc(title)} · ${esc(show)}</title>
 <style>
   :root { --bg:#0e1217; --card:#151b22; --line:#2a3440; --text:#e4eef7; --muted:#9aacbd; --accent:#22c7b8; --ink:#052421; --ok:#2e9e5b; }
   .mono, code { font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif; font-size:16px; }
-  header.top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); }
+  header.top { padding:calc(12px + env(safe-area-inset-top)) 16px 12px; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; background:var(--bg); }
   header.top .show { font-weight:700; font-size:17px; }
   header.top .tag { color:var(--muted); font-size:12px; }
-  .nav { display:flex; gap:4px; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid var(--line); overflow-x:auto; }
-  .nav a { color:var(--muted); text-decoration:none; padding:7px 12px; border-radius:8px; white-space:nowrap; }
-  .nav a.on, .nav a:active { background:var(--card); color:var(--text); }
-  main { padding:16px; max-width:760px; margin:0 auto; }
+  main { padding:16px 16px 110px; max-width:760px; margin:0 auto; }
+  .tabs { position:fixed; left:0; right:0; bottom:0; z-index:10; display:grid; grid-template-columns:repeat(4,1fr); background:var(--card); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  .tabs a { min-height:56px; display:flex; align-items:center; justify-content:center; color:var(--muted); text-decoration:none; font-size:14px; }
+  .tabs a.on { color:var(--accent); font-weight:600; }
+  .stack { display:flex; flex-direction:column; gap:10px; }
+  .home-card { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:76px; padding:12px 16px; background:var(--card); border:1px solid var(--line); border-radius:12px; color:var(--text); text-decoration:none; }
+  .home-card b { display:block; font-size:17px; }
+  .home-card span.sub { color:var(--muted); font-size:14px; }
+  .back { display:inline-flex; align-items:center; min-height:44px; text-decoration:none; }
+  .line { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px 14px; background:var(--card); border:1px solid var(--line); border-radius:10px; }
+  .line .grow { flex:1 1 100%; min-width:0; }
+  .line .name { font-weight:600; }
+  .line .sub { display:block; color:var(--muted); font-size:14px; }
+  .line .sub.done { color:#7fe0a1; }
+  .line .sub.out { color:#f0c674; }
+  .stepper { display:flex; align-items:center; gap:6px; }
+  .stepper button, .line .all { min-width:48px; height:48px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--text); font-size:20px; }
+  .line .all { font-size:14px; padding:0 12px; }
+  .stepper output { min-width:40px; text-align:center; font:600 18px ui-monospace,'SF Mono',Menlo,Consolas,monospace; }
+  .line details { flex:1 1 100%; color:var(--muted); font-size:14px; }
+  .line summary { min-height:32px; display:flex; align-items:center; }
+  .savebar { position:fixed; left:0; right:0; bottom:calc(57px + env(safe-area-inset-bottom)); z-index:9; padding:10px 16px; background:var(--bg); border-top:1px solid var(--line); }
+  .savebar .btn { width:100%; min-height:52px; font-size:17px; }
+  .savebar .btn:disabled { background:#1c232c; color:var(--muted); }
+  .savebar .err { margin:0 0 8px; font-size:14px; }
+  .pcard { padding:12px 14px; background:var(--card); border:1px solid var(--line); border-radius:10px; }
+  .pcard b { display:block; margin-bottom:4px; }
+  .pcard div { display:flex; justify-content:space-between; gap:14px; padding:3px 0; }
+  .pcard div span:first-child { color:var(--muted); flex:none; }
+  .pcard div span:last-child { text-align:right; min-width:0; overflow-wrap:anywhere; }
+  .ends { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; width:100%; }
+  .ends button, .tested { min-height:52px; padding:4px 8px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--text); font-size:14px; }
+  .ends button.on, .tested.on { border-color:var(--accent); background:rgba(34,199,184,.14); }
+  .tested { width:100%; min-height:44px; }
+  .filters { display:flex; gap:8px; margin-bottom:10px; }
+  .filters select { flex:1 1 0; min-width:0; min-height:48px; padding:0 10px; border-radius:8px; background:var(--card); color:var(--text); border:1px solid var(--line); }
+  input[type=text], input[type=password], input[type=number] { min-height:48px; font-size:16px; }
+  .btn { min-height:48px; }
+  @media print { .tabs, header.top, .savebar { display:none; } main { padding:0; } }
   h1 { font-size:20px; margin:4px 0 14px; }
   h2 { font-size:16px; margin:20px 0 8px; }
   a { color:var(--accent); }
@@ -303,7 +379,10 @@ function layout(title: string, body: string, role: Role | null, active = ''): st
   .card span { color:var(--muted); font-size:13px; }
   .list { list-style:none; margin:0; padding:0; }
   .list li { border:1px solid var(--line); border-radius:10px; margin-bottom:8px; background:var(--card); }
-  .list li a { display:flex; justify-content:space-between; gap:10px; padding:14px 16px; text-decoration:none; color:var(--text); }
+  .list li a { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:60px; padding:10px 16px; text-decoration:none; color:var(--text); }
+  .list .name { font-weight:600; }
+  .list .sub { color:var(--muted); font-size:14px; }
+  .list .ip { color:#8ff0e6; font-size:14px; white-space:nowrap; }
   .pill { font-size:12px; padding:2px 9px; border-radius:999px; background:#242a33; color:var(--muted); white-space:nowrap; }
   .pill.ok { background:#13351f; color:#7fe0a1; }
   .pill.warn { background:#3a2f12; color:#f0c674; }
@@ -328,11 +407,9 @@ function layout(title: string, body: string, role: Role | null, active = ''): st
   form.login { max-width:320px; margin:12vh auto 0; }
   @media (max-width:520px){ .cards{grid-template-columns:1fr;} }
 </style></head><body>
-<header class="top"><div><div class="show">${esc(show)}</div><div class="tag">Device Manager — Show Server</div></div>${
-    role ? `<form method="POST" action="/logout" style="margin:0"><button class="btn sec">Sign out</button></form>` : ''
-  }</header>
-${nav}
+<header class="top"><div class="show">${esc(show)}</div></header>
 <main>${body}</main>
+${nav}
 </body></html>`
 }
 
@@ -361,9 +438,13 @@ async function handleRpc(
     }
     // The crew directory and every contact detail are readable once joined,
     // so joining needs the Manager PIN — never an open, PIN-less show.
+    if (pinLocked(req))
+      return sendJson(res, 429, { ok: false, error: 'Too many wrong PINs. Wait 30 seconds and try again.' })
     if (managerPin() === '')
       return sendJson(res, 403, { ok: false, error: 'Set a Manager PIN on the host (Settings → Show Server) to let other computers join.' })
-    if (String(body.pin ?? '').trim() !== managerPin())
+    const pinOk = String(body.pin ?? '').trim() === managerPin()
+    notePinResult(req, pinOk)
+    if (!pinOk)
       return sendJson(res, 401, { ok: false, error: 'That isn’t the host’s Manager PIN.' })
     if (body.appVersion !== app.getVersion())
       return sendJson(res, 409, { ok: false, error: `The host runs Device Manager ${app.getVersion()} and this computer runs ${String(body.appVersion)}. Update both to the same version.` })
@@ -407,10 +488,44 @@ async function handleRpc(
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
+const APP_MANIFEST = {
+  name: 'Device Manager Crew',
+  short_name: 'Crew',
+  start_url: '/',
+  scope: '/',
+  display: 'standalone',
+  background_color: '#0e1217',
+  theme_color: '#0e1217',
+  icons: [{ src: '/app-icon.png', sizes: '512x512', type: 'image/png', purpose: 'any' }]
+}
+
+/** Refuse names that aren't this machine on the LAN. A web page can point its own
+ *  public domain at this address (DNS rebinding) to read the crew pages. */
+function hostAllowed(req: http.IncomingMessage): boolean {
+  const host = (req.headers.host ?? '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase()
+  return net.isIP(host) !== 0 || !host.includes('.') || host.endsWith('.local')
+}
+
 async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost')
   const path = url.pathname
   const method = req.method ?? 'GET'
+
+  if (!hostAllowed(req)) return sendJson(res, 403, { ok: false, error: 'not allowed' })
+
+  // What a phone fetches to install the app, before anyone signs in.
+  if (path === '/manifest.webmanifest') {
+    res.writeHead(200, { 'Content-Type': 'application/manifest+json' })
+    return void res.end(JSON.stringify(APP_MANIFEST))
+  }
+  if (path === '/app-icon.png') {
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=86400' })
+    return void res.end(readFileSync(appIcon))
+  }
+  // A plain web form can't send this type, so another site can't post to the API.
+  if (path.startsWith('/api/') && !(req.headers['content-type'] ?? '').includes('application/json')) {
+    return sendJson(res, 415, { ok: false, error: 'send JSON' })
+  }
 
   // Other Device Manager apps that joined this show (JSON, bearer token).
   if (path.startsWith('/rpc/')) return handleRpc(req, res, path, method)
@@ -434,6 +549,8 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
   if (!allow(req, 'crew')) return redirect(res, '/login')
 
   if (path === '/' ) return sendHtml(res, 200, homePage(req))
+  if (path === '/install') return sendHtml(res, 200, installPage())
+  if (path === '/patching') return sendHtml(res, 200, patchingPage())
   if (path === '/orders') return sendHtml(res, 200, ordersListPage())
   if (path.startsWith('/orders/')) return sendHtml(res, 200, orderPage(Number(path.slice(8))))
   if (path === '/api/receive' && method === 'POST') return apiReceive(req, res)
@@ -444,7 +561,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
     if (!d || !d.isSwitch) {
       return sendHtml(res, 404, layout('Not found', '<h1>Not a switch</h1>', roleOf(req)))
     }
-    const cfg = generateSwitchConfig(d, listSubnets(), getSwitchConfig())
+    const cfg = generateSwitchConfig(d, listSubnets(), switchConfigFor(req))
     res.writeHead(200, {
       'Content-Type': 'text/plain; charset=utf-8',
       'Content-Disposition': `attachment; filename="${cfgFilename(d.name)}"`
@@ -452,7 +569,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
     res.end(cfg)
     return
   }
-  if (path.startsWith('/device/')) return sendHtml(res, 200, await devicePage(Number(path.slice(8))))
+  if (path.startsWith('/device/')) return sendHtml(res, 200, await devicePage(Number(path.slice(8)), req))
   if (path === '/api/patch' && method === 'POST') return apiPatch(req, res)
 
   if (path === '/paperwork') return sendHtml(res, 200, paperworkHubPage())
@@ -480,28 +597,31 @@ function loginPage(err?: string): string {
   return layout(
     'Sign in',
     `<form class="login" method="POST" action="/login">
-       <h1>Enter PIN</h1>
+       <h1>Join the show</h1>
+       <p class="muted">Works on the show WiFi. Your phone talks to the computer running the show.</p>
        ${err ? `<p class="err">${esc(err)}</p>` : ''}
        ${hint}
-       <input type="password" name="pin" inputmode="numeric" autocomplete="off" placeholder="Show PIN" autofocus>
-       <p><button class="btn" type="submit" style="width:100%">Continue</button></p>
+       <input type="password" name="pin" inputmode="numeric" autocomplete="off" placeholder="Show PIN" aria-label="Show PIN" autofocus>
+       <p><button class="btn" type="submit" style="width:100%">Join</button></p>
      </form>`,
     null
   )
 }
 async function doLogin(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (pinLocked(req)) return sendHtml(res, 429, loginPage('Too many wrong PINs. Wait 30 seconds.'))
   const body = await readBody(req)
-  const pin = decodeURIComponent((new URLSearchParams(body).get('pin') ?? '').trim())
+  const pin = (new URLSearchParams(body).get('pin') ?? '').trim()
   let role: Role | null = null
   if (managerPin() !== '' && pin === managerPin()) role = 'manager'
   else if (crewPin() !== '' && pin === crewPin()) role = 'crew'
   else if (managerPin() === '' && crewPin() === '') role = 'manager' // nothing set → open
   else if (crewPin() === '') role = 'crew'
+  notePinResult(req, !!role)
   if (!role) return sendHtml(res, 401, loginPage('That PIN didn’t match.'))
   const sid = randomUUID()
   sessions.set(sid, { role })
   emitStatus()
-  redirect(res, '/', `sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`)
+  redirect(res, '/', `sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${14 * 86400}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -509,22 +629,49 @@ async function doLogin(req: http.IncomingMessage, res: http.ServerResponse): Pro
 // ---------------------------------------------------------------------------
 function homePage(req: http.IncomingMessage): string {
   const manager = roleOf(req) === 'manager' || managerPin() === ''
-  const orders = listShopOrders()
-  const open = orders.filter((o) => outstanding(o) > 0).length
-  const cards = [
-    ['/orders', 'Receiving', `${open} order${open === 1 ? '' : 's'} with items outstanding`],
-    ['/devices', 'Devices', 'How each device should be configured'],
-    ['/paperwork', 'Paperwork', 'IP schedule & device list'],
-    ['/labels', 'Case labels', 'View & print label sheets']
-  ]
-  if (manager) cards.push(['/admin/qr-sheet', 'QR sheet', 'Printable device QR codes'])
+  const out = listShopOrders().reduce((n, o) => n + outstanding(o), 0)
+  const circuits = listCircuits()
+  const full = circuits.filter((c) => c.srcPatched && c.dstPatched).length
+  const card = (href: string, name: string, sub: string, pill = ''): string =>
+    `<a class="home-card" href="${href}"><span><b>${esc(name)}</b><span class="sub">${esc(sub)}</span></span>${pill}</a>`
+  const status = (done: boolean, label: string): string =>
+    `<span class="pill ${done ? 'ok' : 'warn'}">${esc(label)}</span>`
   return layout(
     'Home',
-    `<h1>Show Server</h1>
-     <div class="cards">${cards
-       .map(([href, b, s]) => `<a class="card" href="${href}"><b>${esc(b)}</b><span>${esc(s)}</span></a>`)
-       .join('')}</div>`,
-    roleOf(req),
+    `<h1>Home</h1>
+     <div class="stack">
+       ${card('/orders', 'Receive', `${out} item${out === 1 ? '' : 's'} still out`, status(out === 0, out ? 'open' : 'done'))}
+       ${card('/devices', 'Devices', 'Ports, IPs, VLANs and patching')}
+       ${card('/patching', 'Patch', circuits.length ? `${full}/${circuits.length} fully patched` : 'Nothing imported yet', circuits.length ? status(full === circuits.length, full === circuits.length ? 'done' : 'open') : '')}
+       ${card('/paperwork', 'Paperwork', 'IP schedule and device list')}
+       ${card('/labels', 'Case labels', 'View and print label sheets')}
+       ${manager ? card('/admin/qr-sheet', 'QR sheet', 'Printable device QR codes') : ''}
+     </div>
+     <p class="muted">To find a device, scan its QR code with your Camera app.</p>
+     <p id="install"><a class="back" href="/install">Add to Home Screen ›</a></p>
+     ${roleOf(req) ? '<form method="POST" action="/logout"><button class="btn sec">Sign out</button></form>' : ''}
+     <script>
+       if (window.navigator.standalone || matchMedia('(display-mode: standalone)').matches)
+         document.getElementById('install').hidden = true;
+     </script>`,
+    roleOf(req) ?? 'crew',
+    'home'
+  )
+}
+
+function installPage(): string {
+  const steps = (items: string[]): string =>
+    items.map((t) => `<div class="line"><span class="grow">${esc(t)}</span></div>`).join('')
+  return layout(
+    'Add to Home Screen',
+    `<a class="back" href="/">‹ Home</a>
+     <h1>Keep it on your phone</h1>
+     <p class="muted">No App Store. It gets its own icon and opens full screen. It still needs the show WiFi.</p>
+     <h2>iPhone</h2>
+     <div class="stack">${steps(['Open this page in Safari', 'Tap Share, then Add to Home Screen', 'Tap Add'])}</div>
+     <h2>Android</h2>
+     <div class="stack">${steps(['Open this page in Chrome', 'Tap the ⋮ menu, then Add to Home screen', 'Tap Add'])}</div>`,
+    'crew',
     'home'
   )
 }
@@ -540,84 +687,127 @@ function ordersListPage(): string {
   const items = orders
     .map((o) => {
       const out = outstanding(o)
-      const pill = out === 0 ? '<span class="pill ok">complete</span>' : `<span class="pill warn">${out} outstanding</span>`
+      const pill = out === 0 ? '<span class="pill ok">complete</span>' : `<span class="pill warn">${out} out</span>`
       return `<li><a href="/orders/${o.id}"><span class="grow"><span class="name">${esc(o.name)}</span>${
         o.vendor ? `<br><span class="sub">${esc(o.vendor)}</span>` : ''
       }</span>${pill}</a></li>`
     })
     .join('')
   return layout(
-    'Receiving',
-    `<h1>Receiving</h1>${orders.length ? `<ul class="list">${items}</ul>` : '<p class="muted">No orders yet.</p>'}`,
+    'Receive',
+    `<h1>Receive</h1>${orders.length ? `<ul class="list">${items}</ul>` : '<p class="muted">No orders yet.</p>'}`,
     'crew',
     'orders'
   )
 }
 function orderPage(id: number): string {
   const o = getShopOrderById(id)
-  if (!o) return layout('Order', '<h1>Order not found</h1><p><a href="/orders">Back</a></p>', 'crew', 'orders')
+  if (!o) return layout('Order', '<h1>Order not found</h1><p>It may have been deleted on the host.</p><a class="back" href="/orders">‹ Receive</a>', 'crew', 'orders')
   const rows = o.items
     .map((it, i) => {
-      const out = Math.max(0, (it.quantity || 0) - (it.received || 0))
-      return `<div class="row" data-i="${i}">
+      const qty = it.quantity || 0
+      const recv = it.received || 0
+      const facts = [it.manufacturer, it.modelNumber].filter(Boolean).join(' · ')
+      return `<div class="line" data-i="${i}" data-key="${esc(lineKey(it))}" data-max="${qty}" data-was="${recv}">
         <span class="grow"><span class="name">${esc(it.name)}</span>
-          <span class="sub">${esc([it.manufacturer, it.modelNumber].filter(Boolean).join(' · '))}${
-        it.manufacturer || it.modelNumber ? ' · ' : ''
-      }ordered ${it.quantity || 0}${out ? ` · <b>${out} out</b>` : ''}</span></span>
-        <label class="muted" style="font-size:13px">recv
-          <input class="qty rc" type="number" min="0" max="${it.quantity || 0}" value="${it.received || 0}"></label>
-        <input class="nt" type="text" placeholder="notes" value="${esc(it.notes ?? '')}" style="flex:1 1 150px">
-        <button class="btn save">Save</button>
-        <span class="saved" style="display:none">✓ saved</span>
+          ${facts ? `<span class="sub">${esc(facts)}</span>` : ''}
+          <span class="sub left"></span></span>
+        <span class="stepper">
+          <button type="button" class="minus" aria-label="One fewer ${esc(it.name)}">−</button>
+          <output class="rc">${recv}</output>
+          <button type="button" class="plus" aria-label="One more ${esc(it.name)}">+</button>
+        </span>
+        <button type="button" class="all">All ${qty}</button>
+        <details${it.notes ? ' open' : ''}><summary>Note</summary>
+          <input class="nt" type="text" aria-label="Note for ${esc(it.name)}" value="${esc(it.notes ?? '')}" data-was="${esc(it.notes ?? '')}">
+        </details>
       </div>`
     })
     .join('')
   return layout(
-    esc(o.name),
-    `<h1>${esc(o.name)}</h1>
-     <p class="muted">Enter how many of each item actually arrived, add a note if needed, and press Save.</p>
-     <div id="items" data-order="${o.id}">${rows || '<p class="muted">No items on this order.</p>'}</div>
-     <p><a href="/orders">← all orders</a></p>
+    o.name,
+    `<a class="back" href="/orders">‹ Receive</a>
+     <h1>${esc(o.name)}</h1>
+     <p class="muted">Tap + as items arrive, then save once.</p>
+     <div id="items" class="stack" data-order="${o.id}">${rows || '<p class="muted">No items on this order.</p>'}</div>
+     ${rows ? '<div class="savebar"><p class="err" id="saveErr" hidden></p><button class="btn" id="save" type="button" disabled>Nothing to save</button></div>' : ''}
      <script>
-       document.querySelectorAll('.row').forEach(function(row){
-         var btn = row.querySelector('.save'); if(!btn) return;
-         btn.addEventListener('click', function(){
-           var i = +row.getAttribute('data-i');
-           var received = +row.querySelector('.rc').value || 0;
-           var notes = row.querySelector('.nt').value;
-           btn.disabled = true;
-           fetch('/api/receive', { method:'POST', headers:{'Content-Type':'application/json'},
-             body: JSON.stringify({ orderId: +document.getElementById('items').getAttribute('data-order'), index:i, received:received, notes:notes }) })
-             .then(function(r){ return r.json(); })
-             .then(function(d){
-               btn.disabled = false;
-               if(d && d.ok){ var s=row.querySelector('.saved'); s.style.display='inline'; row.querySelector('.rc').value=d.received; setTimeout(function(){s.style.display='none';},1500); }
-               else { alert((d&&d.error)||'Save failed'); }
-             })
-             .catch(function(){ btn.disabled=false; alert('Network error'); });
+       var lines = [].slice.call(document.querySelectorAll('.line'));
+       var bar = document.getElementById('save'), errBox = document.getElementById('saveErr');
+       function count(l){ return +l.querySelector('.rc').textContent; }
+       function changed(l){
+         return count(l) !== +l.getAttribute('data-was') ||
+           l.querySelector('.nt').value !== l.querySelector('.nt').getAttribute('data-was');
+       }
+       function draw(saved){
+         lines.forEach(function(l){
+           var left = +l.getAttribute('data-max') - count(l), sub = l.querySelector('.left');
+           sub.textContent = l.getAttribute('data-max') + ' ordered · ' + (left ? left + ' out' : 'all here');
+           sub.className = 'sub left ' + (left ? 'out' : 'done');
          });
+         var n = lines.filter(changed).length;
+         if (!bar) return;
+         bar.disabled = !n;
+         bar.textContent = n ? 'Save ' + n + ' line' + (n === 1 ? '' : 's') : (saved ? '✓ Saved' : 'Nothing to save');
+       }
+       lines.forEach(function(l){
+         var max = +l.getAttribute('data-max'), rc = l.querySelector('.rc');
+         function set(v){ rc.textContent = Math.max(0, Math.min(max, v)); draw(); }
+         l.querySelector('.minus').addEventListener('click', function(){ set(count(l) - 1); });
+         l.querySelector('.plus').addEventListener('click', function(){ set(count(l) + 1); });
+         l.querySelector('.all').addEventListener('click', function(){ set(max); });
+         l.querySelector('.nt').addEventListener('input', function(){ draw(); });
        });
+       function saveLine(l){
+         return fetch('/api/receive', { method:'POST', headers:{'Content-Type':'application/json'},
+           body: JSON.stringify({ orderId:+document.getElementById('items').getAttribute('data-order'), index:+l.getAttribute('data-i'), key:l.getAttribute('data-key'), received:count(l), notes:l.querySelector('.nt').value }) })
+           .then(function(r){ return r.json(); })
+           .then(function(d){
+             if (!d || !d.ok) throw new Error((d && d.error) || 'Save failed.');
+             l.setAttribute('data-was', d.received);
+             l.querySelector('.nt').setAttribute('data-was', l.querySelector('.nt').value);
+           });
+       }
+       if (bar) bar.addEventListener('click', function(){
+         bar.disabled = true; bar.textContent = 'Saving…'; errBox.hidden = true;
+         // One at a time: each save rereads the order, so together they could overwrite each other.
+         lines.filter(changed).reduce(function(p, l){ return p.then(function(){ return saveLine(l); }); }, Promise.resolve())
+           .then(function(){ draw(true); })
+           .catch(function(e){ errBox.textContent = e.message === 'Failed to fetch' || e.name === 'TypeError' ? 'Couldn’t reach the show. Check the WiFi and try again.' : e.message; errBox.hidden = false; draw(); });
+       });
+       document.addEventListener('click', function(e){
+         var a = e.target.closest && e.target.closest('a');
+         if (a && lines.some(changed) && !confirm('Leave without saving these counts?')) e.preventDefault();
+       });
+       draw();
      </script>`,
     'crew',
     'orders'
   )
 }
+function lineKey(it: OrderItem | null): string | null {
+  return it ? `${it.name}|${it.modelNumber ?? ''}` : null
+}
 async function apiReceive(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (!allow(req, 'crew')) return sendJson(res, 403, { ok: false, error: 'not allowed' })
-  let payload: { orderId?: number; index?: number; received?: number; notes?: string }
+  let payload: { orderId?: number; index?: number; key?: string; received?: number; notes?: string }
   try {
     payload = JSON.parse(await readBody(req))
   } catch {
     return sendJson(res, 400, { ok: false, error: 'bad request' })
   }
-  const { orderId, index } = payload
-  if (typeof orderId !== 'number' || typeof index !== 'number') {
+  const { orderId, index: at } = payload
+  if (typeof orderId !== 'number' || typeof at !== 'number') {
     return sendJson(res, 400, { ok: false, error: 'bad request' })
   }
   const result = await serialize(() => {
     const o = getShopOrderById(orderId)
-    if (!o || index < 0 || index >= o.items.length) return { ok: false, error: 'item not found' }
+    if (!o) return { ok: false, error: 'item not found' }
+    // This page may be older than the order: find the line by what it is, so a line
+    // removed on the desktop can't send this count to the wrong item.
     const items = o.items.map((it) => ({ ...it }))
+    const index = lineKey(items[at] ?? null) === payload.key ? at : items.findIndex((it) => lineKey(it) === payload.key)
+    if (index < 0) return { ok: false, error: 'This order changed. Reload the page.' }
     const qty = items[index].quantity || 0
     const recv = Math.max(0, Math.min(qty, Math.trunc(Number(payload.received) || 0)))
     items[index].received = recv
@@ -639,6 +829,12 @@ async function apiReceive(req: http.IncomingMessage, res: http.ServerResponse): 
 // ---------------------------------------------------------------------------
 // Devices
 // ---------------------------------------------------------------------------
+/** The address crew look a device up by. */
+function mainIp(d: Device): string {
+  if (d.isSwitch && d.managementIp) return d.managementIp
+  const used = d.ports.filter((p) => !p.isUnused && p.ipAddress)
+  return (used.find((p) => p.isPrimary) ?? used[0])?.ipAddress ?? ''
+}
 function devicesListPage(): string {
   const devices = listDevices()
   const items = devices
@@ -648,13 +844,13 @@ function devicesListPage(): string {
           d.deviceType || d.location
             ? `<br><span class="sub">${esc([d.deviceType, d.location].filter(Boolean).join(' · '))}</span>`
             : ''
-        }</span>${d.isSwitch ? '<span class="pill">switch</span>' : ''}</a></li>`
+        }</span><span class="mono ip">${esc(mainIp(d))}</span></a></li>`
     )
     .join('')
   return layout(
     'Devices',
     `<h1>Devices</h1>
-     <input type="text" id="q" placeholder="Filter…" oninput="var v=this.value.toLowerCase();document.querySelectorAll('#dl li').forEach(function(li){li.style.display=li.textContent.toLowerCase().includes(v)?'':'none';});" style="margin-bottom:12px">
+     <input type="text" id="q" placeholder="Search name or IP" aria-label="Search devices" oninput="var v=this.value.toLowerCase();document.querySelectorAll('#dl li').forEach(function(li){li.style.display=li.textContent.toLowerCase().includes(v)?'':'none';});" style="margin-bottom:12px">
      ${devices.length ? `<ul class="list" id="dl">${items}</ul>` : '<p class="muted">No devices yet.</p>'}`,
     'crew',
     'devices'
@@ -666,42 +862,49 @@ function subnetLabel(subnets: Map<number, Subnet>, id: number | null): string {
   if (!s) return `#${id}`
   return s.vlan ? `${s.name} (VLAN ${s.vlan})` : s.name
 }
-async function devicePage(id: number): Promise<string> {
+/** The switch admin password and SNMP community are for logged-in managers only;
+ *  the crew's copy of a config leaves them out. */
+function switchConfigFor(req: http.IncomingMessage): SwitchConfigOptions {
+  const cfg = getSwitchConfig()
+  return roleOf(req) === 'manager' ? cfg : { ...cfg, adminPassword: '', crewCopy: true }
+}
+async function devicePage(id: number, req: http.IncomingMessage): Promise<string> {
   const d = getDeviceById(id)
-  if (!d) return layout('Device', '<h1>Device not found</h1><p><a href="/devices">Back</a></p>', 'crew', 'devices')
+  if (!d) return layout('Device', '<h1>Device not found</h1><p>It may have been deleted on the host.</p><a class="back" href="/devices">‹ Devices</a>', 'crew', 'devices')
   const subnetList = listSubnets()
   const subnets = new Map(subnetList.map((s) => [s.id, s]))
-  const meta: string[] = []
-  if (d.deviceType) meta.push(`<tr><th>Type</th><td>${esc(d.deviceType)}</td></tr>`)
-  if (d.location) meta.push(`<tr><th>Location</th><td>${esc(d.location)}</td></tr>`)
-  if (d.macAddress) meta.push(`<tr><th>MAC</th><td>${esc(d.macAddress)}</td></tr>`)
-  if (d.isSwitch) {
-    if (d.managementIp) meta.push(`<tr><th>Management IP</th><td>${esc(d.managementIp)}</td></tr>`)
-    if (d.oobIp) meta.push(`<tr><th>OOB IP</th><td>${esc(d.oobIp)}</td></tr>`)
-  }
+  const field = (k: string, v: string, mono = false): string =>
+    `<div><span>${esc(k)}</span><span${mono ? ' class="mono"' : ''}>${esc(v)}</span></div>`
+  const meta = [
+    d.deviceType ? field('Type', d.deviceType) : '',
+    d.location ? field('Location', d.location) : '',
+    d.macAddress ? field('MAC', d.macAddress, true) : '',
+    d.isSwitch && d.managementIp ? field('Management IP', d.managementIp, true) : '',
+    d.isSwitch && d.oobIp ? field('OOB IP', d.oobIp, true) : ''
+  ].join('')
   const portRows = d.ports
     .filter((p) => !p.isUnused)
     .map((p) => {
       const tagged = p.taggedSubnetIds.map((sid) => subnetLabel(subnets, sid)).join(', ')
-      return `<tr><td>${esc(p.label)}</td><td>${d.isSwitch ? '—' : esc(p.ipAddress ?? '—')}</td>
-        <td>${esc(subnetLabel(subnets, p.untaggedSubnetId))}</td><td>${esc(tagged || '—')}</td></tr>`
+      return `<div class="pcard"><b>${esc(p.label)}</b>
+        ${d.isSwitch ? '' : field('IP', p.ipAddress ?? '—', true)}
+        ${field('Untagged', subnetLabel(subnets, p.untaggedSubnetId))}
+        ${tagged ? field('Tagged', tagged) : ''}</div>`
     })
     .join('')
   const qr = await qrSvg(deviceUrl(d.id))
   const circuits = listCircuits().filter((c) => c.srcName === d.name || c.dstName === d.name)
   return layout(
-    esc(d.name),
-    `<h1>${esc(d.name)}${d.isSwitch ? ' <span class="pill">switch</span>' : ''}</h1>
-     ${meta.length ? `<table>${meta.join('')}</table>` : ''}
-     <h2>Ports / networks</h2>
-     <table><tr><th>Port</th><th>IP</th><th>Untagged VLAN</th><th>Tagged VLANs</th></tr>${
-       portRows || '<tr><td colspan="4" class="muted">No ports.</td></tr>'
-     }</table>
+    d.name,
+    `<a class="back" href="/devices">‹ Devices</a>
+     <h1>${esc(d.name)}${d.isSwitch ? ' <span class="pill">switch</span>' : ''}</h1>
+     ${meta ? `<div class="pcard">${meta}</div>` : ''}
+     <h2>Ports</h2>
+     <div class="stack">${portRows || '<p class="muted">No ports.</p>'}</div>
      ${connectionsSection(d.name, circuits)}
-     ${d.isSwitch ? switchConfigSection(generateSwitchConfig(d, subnetList, getSwitchConfig()), d.id) : ''}
+     ${d.isSwitch ? switchConfigSection(generateSwitchConfig(d, subnetList, switchConfigFor(req)), d.id) : ''}
      ${d.notes ? `<h2>Notes</h2><p>${esc(d.notes).replace(/\n/g, '<br>')}</p>` : ''}
      <h2>This device’s QR</h2><div class="qr">${qr}</div>
-     <p><a href="/devices">← all devices</a></p>
      ${patchScript()}`,
     'crew',
     'devices'
@@ -773,6 +976,81 @@ function patchScript(): string {
   </script>`
 }
 
+function patchingPage(): string {
+  const circuits = listCircuits()
+  const racks = [...new Set(circuits.flatMap((c) => [c.srcRack, c.dstRack]).filter(Boolean))].sort()
+  const end = (id: string, label: string, on: boolean): string =>
+    `<button type="button" class="${id}${on ? ' on' : ''}" aria-pressed="${on}">${on ? '✓ ' : ''}${esc(label)}</button>`
+  const cards = circuits
+    .map((c) => {
+      const a = [c.srcName, c.srcSocket].filter(Boolean).join(' · ') || '—'
+      const b = [c.dstName, c.dstSocket].filter(Boolean).join(' · ') || '—'
+      return `<div class="line circuit" data-id="${c.id}" data-a="${esc(a)}" data-b="${esc(b)}" data-racks="${esc(`${c.srcRack}|${c.dstRack}`)}">
+        <span class="grow" style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+          <span class="name mono">${esc(c.cableNumber || c.signal || 'Cable')}</span><span class="pill st"></span>
+        </span>
+        <div class="ends">${end('src', a, c.srcPatched)}${end('dst', b, c.dstPatched)}</div>
+        <button type="button" class="tested${c.tested ? ' on' : ''}" aria-pressed="${c.tested}">${c.tested ? '✓ Tested' : 'Mark tested'}</button>
+      </div>`
+    })
+    .join('')
+  return layout(
+    'Patch',
+    `<h1>Patch</h1>
+     ${circuits.length ? `<p class="muted"><span id="tally"></span> fully patched</p>
+     <div class="filters">
+       <select id="rack" aria-label="Rack"><option value="">All racks</option>${racks.map((r) => `<option>${esc(r)}</option>`).join('')}</select>
+       <select id="show" aria-label="Show"><option value="">All</option><option value="todo">Not done</option></select>
+     </div>
+     <div class="stack" id="circuits">${cards}</div>` : '<p class="muted">Nothing imported yet. Import a circuit report in Device Manager on the host.</p>'}
+     <script>
+       var cards = [].slice.call(document.querySelectorAll('.circuit'));
+       function on(c, k){ return c.querySelector('.' + k).classList.contains('on'); }
+       function draw(){
+         var rack = document.getElementById('rack'), show = document.getElementById('show'), full = 0;
+         if (!rack) return;
+         cards.forEach(function(c){
+           var both = on(c, 'src') && on(c, 'dst'), one = on(c, 'src') || on(c, 'dst'), st = c.querySelector('.st');
+           if (both) full++;
+           st.textContent = both ? 'patched' : one ? 'one end' : 'not patched';
+           st.className = 'pill st ' + (both ? 'ok' : one ? 'warn' : '');
+           var inRack = !rack.value || c.getAttribute('data-racks').split('|').indexOf(rack.value) >= 0;
+           c.hidden = !inRack || (show.value === 'todo' && both && on(c, 'tested'));
+           c.style.display = c.hidden ? 'none' : '';
+         });
+         document.getElementById('tally').textContent = full + '/' + cards.length;
+       }
+       function paint(c, d){
+         [['src', d.srcPatched, c.getAttribute('data-a')], ['dst', d.dstPatched, c.getAttribute('data-b')]].forEach(function(e){
+           var b = c.querySelector('.' + e[0]);
+           b.classList.toggle('on', e[1]); b.setAttribute('aria-pressed', e[1]);
+           b.textContent = (e[1] ? '✓ ' : '') + e[2];
+         });
+         var t = c.querySelector('.tested');
+         t.classList.toggle('on', d.tested); t.setAttribute('aria-pressed', d.tested);
+         t.textContent = d.tested ? '✓ Tested' : 'Mark tested';
+         draw();
+       }
+       function send(c, body){
+         body.id = +c.getAttribute('data-id');
+         fetch('/api/patch', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+           .then(function(r){ return r.json(); })
+           .then(function(d){ if (d && d.ok) paint(c, d); else alert((d && d.error) || 'Save failed.'); })
+           .catch(function(){ alert('Couldn’t reach the show. Check the WiFi and try again.'); });
+       }
+       cards.forEach(function(c){
+         c.querySelector('.src').addEventListener('click', function(){ send(c, { end:'src', patched:!on(c, 'src') }); });
+         c.querySelector('.dst').addEventListener('click', function(){ send(c, { end:'dst', patched:!on(c, 'dst') }); });
+         c.querySelector('.tested').addEventListener('click', function(){ send(c, { tested:!on(c, 'tested') }); });
+       });
+       ['rack', 'show'].forEach(function(id){ var el = document.getElementById(id); if (el) el.addEventListener('change', draw); });
+       draw();
+     </script>`,
+    'crew',
+    'patch'
+  )
+}
+
 async function apiPatch(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (!allow(req, 'crew')) return sendJson(res, 403, { ok: false, error: 'not allowed' })
   let p: { id?: number; end?: 'src' | 'dst'; patched?: boolean; tested?: boolean }
@@ -799,7 +1077,7 @@ async function apiPatch(req: http.IncomingMessage, res: http.ServerResponse): Pr
     }
     const saved = setCircuitStatus(c.id, next)
     const myPatched = p.end === 'dst' ? saved.dstPatched : saved.srcPatched
-    return { ok: true, myPatched, tested: saved.tested }
+    return { ok: true, myPatched, tested: saved.tested, srcPatched: saved.srcPatched, dstPatched: saved.dstPatched }
   })
   if (result.ok) notifyDataChanged()
   sendJson(res, result.ok ? 200 : 400, result)
@@ -811,13 +1089,14 @@ async function apiPatch(req: http.IncomingMessage, res: http.ServerResponse): Pr
 function paperworkHubPage(): string {
   return layout(
     'Paperwork',
-    `<h1>Paperwork</h1>
+    `<a class="back" href="/">‹ Home</a>
+     <h1>Paperwork</h1>
      <div class="cards">
        <a class="card" href="/paperwork/ip-schedule"><b>IP schedule</b><span>Switch ports + device IPs</span></a>
        <a class="card" href="/paperwork/devices"><b>Device list</b><span>By category, with main IP/VLAN</span></a>
      </div>`,
     'crew',
-    'paper'
+    'home'
   )
 }
 
@@ -835,24 +1114,25 @@ function labelsHubPage(): string {
     .join('')
   return layout(
     'Labels',
-    `<h1>Case labels</h1>
+    `<a class="back" href="/">‹ Home</a>
+     <h1>Case labels</h1>
      <h2>Templates</h2>${templates.length ? `<ul class="list">${tpl}</ul>` : '<p class="muted">No templates.</p>'}
      ${cases.length ? `<h2>Cases</h2><ul class="list">${cs}</ul>` : ''}
      <p class="muted">Open one, then use your browser’s Print to put it on Uline S-19323 sheets.</p>`,
     'crew',
-    'labels'
+    'home'
   )
 }
 function templateSheetPage(id: number): string {
   const t = getLabelTemplateById(id)
-  if (!t) return layout('Label', '<h1>Template not found</h1>', 'crew', 'labels')
+  if (!t) return layout('Label', '<h1>Template not found</h1>', 'crew', 'home')
   return renderTemplateSheetHtml(t, 1)
 }
 function caseSheetPage(id: number): string {
   const c = getCaseById(id)
-  if (!c) return layout('Label', '<h1>Case not found</h1>', 'crew', 'labels')
+  if (!c) return layout('Label', '<h1>Case not found</h1>', 'crew', 'home')
   const templates = listLabelTemplates()
-  if (templates.length === 0) return layout('Label', '<h1>No templates</h1><p class="muted">Create a label template first.</p>', 'crew', 'labels')
+  if (templates.length === 0) return layout('Label', '<h1>No templates</h1><p class="muted">Create a label template first.</p>', 'crew', 'home')
   return renderCasesSheetHtml(templates[0], [c])
 }
 

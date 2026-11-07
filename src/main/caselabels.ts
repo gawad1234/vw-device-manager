@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, shell } from 'electron'
+import { dialog, shell } from 'electron'
+import { withPrintWindow } from './print-html'
 import { writeFileSync } from 'fs'
 import { getProjectMeta } from './repository'
 import type { LabelElement, LabelTemplate, PackCase } from '../shared/types'
@@ -40,7 +41,7 @@ export function elementsHtml(
 ): string {
   return elements
     .map((el) => {
-      const pos = `position:absolute;left:${el.x}in;top:${el.y}in;width:${el.w}in;height:${el.h}in;`
+      const pos = `position:absolute;left:${Number(el.x)}in;top:${Number(el.y)}in;width:${Number(el.w)}in;height:${Number(el.h)}in;`
       if (el.type === 'text' || el.type === 'showname') {
         const fs = el.fontSize || 18
         const raw = el.type === 'showname' ? showNameText : el.text || ''
@@ -49,13 +50,13 @@ export function elementsHtml(
         const justify =
           el.valign === 'middle' ? 'center' : el.valign === 'bottom' ? 'flex-end' : 'flex-start'
         const box = `${pos}display:flex;flex-direction:column;justify-content:${justify};overflow:hidden;`
-        const inner = `font-size:${fs}pt;font-weight:${el.bold ? 800 : 400};text-align:${el.align || 'left'};color:${esc(color(el.color) || '#111111')};line-height:1.1;width:100%;word-break:break-word;white-space:${wrap ? 'pre-wrap' : 'pre'};`
+        const inner = `font-size:${fs}pt;font-weight:${el.bold ? 800 : 400};text-align:${esc(el.align || 'left')};color:${esc(color(el.color) || '#111111')};line-height:1.1;width:100%;word-break:break-word;white-space:${wrap ? 'pre-wrap' : 'pre'};`
         const autofit = el.autoSize ? ` data-autofit="${fs}"` : ''
         return `<div style="${box}"><div style="${inner}"${autofit}>${esc(txt)}</div></div>`
       }
       if (el.type === 'logo') {
         if (!logo) return ''
-        return `<div style="${pos}overflow:hidden;"><img src="${logo}" style="width:100%;height:100%;object-fit:contain;object-position:left center;"></div>`
+        return `<div style="${pos}overflow:hidden;"><img src="${esc(logo)}" style="width:100%;height:100%;object-fit:contain;object-position:left center;"></div>`
       }
       if (el.type === 'line') {
         return `<div style="${pos}background:${esc(color(el.color) || '#111111')};"></div>`
@@ -84,7 +85,7 @@ function labelHtml(
   const band = t.color ? `<div class="band" style="background:${esc(t.color)}"></div>` : ''
   const showTop =
     t.showName && showNameText ? `<span class="lshow">${esc(showNameText)}</span>` : '<span></span>'
-  const logoTop = logo ? `<img class="llogo" src="${logo}" alt="">` : ''
+  const logoTop = logo ? `<img class="llogo" src="${esc(logo)}" alt="">` : ''
   const top =
     t.showName && showNameText
       ? `<div class="ltop">${showTop}${logoTop}</div>`
@@ -143,18 +144,14 @@ async function savePdf(html: string, defaultName: string): Promise<string | null
   })
   if (res.canceled || !res.filePath) return null
 
-  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: false } })
-  try {
-    await win.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+  await withPrintWindow(html, async (win) => {
     const pdf = await win.webContents.printToPDF({
       printBackground: true,
       pageSize: 'Letter',
       margins: { top: 0, bottom: 0, left: 0, right: 0 }
     })
     writeFileSync(res.filePath, pdf)
-  } finally {
-    win.destroy()
-  }
+  })
   shell.openPath(res.filePath)
   return res.filePath
 }

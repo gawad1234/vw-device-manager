@@ -52,12 +52,14 @@ interface PortRowProps {
   isSwitch: boolean
   /** derived VLAN of the device patched to this switch port (switches only) */
   reflection?: Reflection
+  /** its number on the switch, 1/0/N (switch ports that are in use) */
+  switchPort?: number
   onChanged: () => void
   /** register this row's save so the modal's "Save changes" flushes it too */
   registerSaver?: (fn: RowSaver) => () => void
 }
 
-function PortRow({ port, subnets, isSwitch, reflection, onChanged, registerSaver }: PortRowProps): React.JSX.Element {
+function PortRow({ port, subnets, isSwitch, reflection, switchPort, onChanged, registerSaver }: PortRowProps): React.JSX.Element {
   const [label, setLabel] = useState(port.label)
   const [ip, setIp] = useState(port.ipAddress ?? '')
   const [untagged, setUntagged] = useState<number | null>(port.untaggedSubnetId)
@@ -72,12 +74,19 @@ function PortRow({ port, subnets, isSwitch, reflection, onChanged, registerSaver
   // Persist this row's fields; returns whether it saved (for the bulk flush).
   async function persist(): Promise<{ ok: boolean; error?: string }> {
     setSaving(true)
-    const result = await window.api.ports.update(port.id, {
-      label: label.trim() || port.label,
-      ipAddress: isSwitch ? null : ip.trim() || null,
-      untaggedSubnetId: untagged
-    })
-    setSaving(false)
+    let result: Awaited<ReturnType<typeof window.api.ports.update>>
+    try {
+      result = await window.api.ports.update(port.id, {
+        label: label.trim() || port.label,
+        ipAddress: isSwitch ? null : ip.trim() || null,
+        untaggedSubnetId: untagged
+      })
+    } catch (e) {
+      setError((e as Error).message)
+      return { ok: false, error: (e as Error).message }
+    } finally {
+      setSaving(false)
+    }
     if (result.error) {
       setError(result.error)
       setWarnings([])
@@ -113,6 +122,7 @@ function PortRow({ port, subnets, isSwitch, reflection, onChanged, registerSaver
   }
 
   async function toggleUnused(): Promise<void> {
+    if (!(await persist()).ok) return // this row is about to move and lose its edits
     await window.api.ports.setUnused(port.id, !port.isUnused)
     onChanged()
   }
@@ -128,6 +138,7 @@ function PortRow({ port, subnets, isSwitch, reflection, onChanged, registerSaver
   async function saveLag(): Promise<void> {
     const next = lag.trim()
     if (next === (port.lagGroup ?? '')) return
+    if (!(await persist()).ok) return
     await window.api.ports.setLag(port.id, next || null)
     onChanged()
   }
@@ -149,7 +160,7 @@ function PortRow({ port, subnets, isSwitch, reflection, onChanged, registerSaver
       ))}
       <div className="port-fields">
         <label>
-          Jack
+          {switchPort ? `Jack (switch port 1/0/${switchPort})` : 'Jack'}
           <input
             value={label}
             readOnly={fromVw}
@@ -309,16 +320,28 @@ function LagRow({ name, ports, subnets, reflections, onChanged, registerSaver }:
   const [saving, setSaving] = useState(false)
 
   // Apply the shared config to every member (each keeps its own jack label).
-  async function persist(): Promise<{ ok: boolean }> {
-    setSaving(true)
+  async function persist(): Promise<{ ok: boolean; error?: string }> {
     const nm = lagName.trim() || null
-    for (const p of ports) {
-      await window.api.ports.update(p.id, { label: p.label, ipAddress: null, untaggedSubnetId: untagged })
-      await window.api.ports.setTaggedVlans(p.id, tagged)
-      if ((p.lagGroup ?? '') !== (nm ?? '')) await window.api.ports.setLag(p.id, nm)
+    // Members can differ until someone edits the LAG: an untouched row writes
+    // nothing, or the first port's VLANs would silently copy onto the others.
+    const edited =
+      (nm ?? '') !== name ||
+      untagged !== first.untaggedSubnetId ||
+      JSON.stringify(tagged) !== JSON.stringify(first.taggedSubnetIds)
+    if (!edited) return { ok: true }
+    setSaving(true)
+    try {
+      for (const p of ports) {
+        await window.api.ports.update(p.id, { label: p.label, ipAddress: null, untaggedSubnetId: untagged })
+        await window.api.ports.setTaggedVlans(p.id, tagged)
+        if ((p.lagGroup ?? '') !== (nm ?? '')) await window.api.ports.setLag(p.id, nm)
+      }
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
-    return { ok: true }
   }
   const persistRef = useRef<RowSaver>(persist)
   persistRef.current = persist
@@ -501,6 +524,7 @@ function PortsSection({ device, subnets, onChanged, registerSaver }: Props): Rea
             subnets={subnets}
             isSwitch={device.isSwitch}
             reflection={reflections[e.port.label]}
+            switchPort={device.isSwitch ? active.indexOf(e.port) + 1 : undefined}
             onChanged={onChanged}
             registerSaver={registerSaver}
           />

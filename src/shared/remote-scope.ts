@@ -52,13 +52,14 @@ const HOST_ONLY = new Set([
   'software:pickInstaller',
   'software:buildKit',
   'circuits:import',
-  'paperwork:export'
+  'paperwork:export',
+  'wallpapers:save'
 ])
 
-/** Always this machine: app updates, this machine's Show Server, project switching,
+/** Always this machine: where its library lives, app updates, this machine's Show Server, project switching,
  *  the Vectorworks lighting sync (it runs on the computer that has the show open), saving the
  *  bundled VLAN Manager scripts. */
-const LOCAL_GROUPS = ['updates:', 'server:', 'project:', 'lightingSync:', 'vlanManager:']
+const LOCAL_GROUPS = ['updates:', 'server:', 'project:', 'lightingSync:', 'vlanManager:', 'library:']
 
 /** Anything not listed is a write — refused while joined, so a new channel is safe by default. */
 export function channelScope(channel: string): ChannelScope {

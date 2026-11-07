@@ -89,7 +89,7 @@ function TruckingPage(): React.JSX.Element {
             </thead>
             <tbody>
               {sorted.map((t) => (
-                <tr key={t.id} className="clickable" onClick={() => setEditTrip(t)}>
+                <tr key={t.id} className="clickable" tabIndex={0} onClick={() => setEditTrip(t)}>
                   <td>{t.date}</td>
                   <td>{kindLabel(t.kind)}</td>
                   <td>{truckName(t.truckId)}</td>
@@ -129,7 +129,7 @@ function TruckingPage(): React.JSX.Element {
         </thead>
         <tbody>
           {trucks.map((t) => (
-            <tr key={t.id} className="clickable" onClick={() => setTruckDraft({ ...t })}>
+            <tr key={t.id} className="clickable" tabIndex={0} onClick={() => setTruckDraft({ ...t })}>
               <td>{t.name}</td>
               <td>{t.vendor}</td>
               <td>{t.size}</td>

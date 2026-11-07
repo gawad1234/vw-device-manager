@@ -59,6 +59,9 @@ function OrdersPage(): React.JSX.Element {
     refresh().finally(() => setLoading(false))
   }, [refresh])
 
+  // A phone receiving items must show up here, or the next save here would undo it.
+  useEffect(() => window.api.onDataChanged(() => void refresh()), [refresh])
+
   useEffect(() => {
     if (typeof openId === 'number' && !orders.some((o) => o.id === openId)) setOpenId(null)
   }, [orders, openId])
@@ -102,7 +105,7 @@ function OrdersPage(): React.JSX.Element {
 
   // Receive `amount` more of one waiting line (received += amount, capped at quantity).
   async function receiveLine(w: (typeof waiting)[number], amount: number): Promise<void> {
-    const o = orders.find((x) => x.id === w.orderId)
+    const o = (await window.api.orders.list()).find((x) => x.id === w.orderId)
     if (!o) return
     const add = Math.max(0, Math.trunc(amount))
     const bump = (q: number, r: number): number => Math.min(q, (Number(r) || 0) + add)
@@ -221,7 +224,7 @@ function OrdersPage(): React.JSX.Element {
           {visible.map((o) => {
             const s = orderStats(o)
             return (
-              <tr key={o.id} className="clickable" onClick={() => setOpenId(o.id)}>
+              <tr key={o.id} className="clickable" tabIndex={0} onClick={() => setOpenId(o.id)}>
                 <td>{o.name}</td>
                 <td className="muted">{o.vendor ?? '—'}</td>
                 <td className="muted">{o.orderDate ?? '—'}</td>
@@ -242,7 +245,10 @@ function OrdersPage(): React.JSX.Element {
           order={openOrder}
           onClose={() => setOpenId(null)}
           onChanged={refresh}
-          onCreated={(id) => setOpenId(id)}
+          onCreated={async (id) => {
+            await refresh() // or the open row looks deleted
+            setOpenId(id)
+          }}
         />
       )}
     </div>

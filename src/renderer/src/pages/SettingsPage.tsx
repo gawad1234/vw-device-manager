@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import type { CableType, SwitchConfigSettings } from '../../../shared/types'
+import type { CableType, SwitchConfigSettings, SwitchMonitoring } from '../../../shared/types'
 import UpdatesPanel from '../components/UpdatesPanel'
 import ServerPanel from '../components/ServerPanel'
 import KitModal from '../components/KitModal'
 import TableStylePanel from '../components/TableStylePanel'
+import LibraryPanel from '../components/LibraryPanel'
 
 interface Props {
   cableTypes: CableType[]
@@ -66,6 +67,16 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
   }
   async function flushSw(): Promise<void> {
     if (swCfg) await window.api.switchConfig.set(swCfg)
+  }
+  function patchMon(patch: Partial<SwitchMonitoring>): void {
+    setSwCfg((prev) => (prev ? { ...prev, monitoring: { ...prev.monitoring, ...patch } } : prev))
+  }
+  /** For checkboxes, which have no blur to save on. */
+  function saveMon(patch: Partial<SwitchMonitoring>): void {
+    if (!swCfg) return
+    const next = { ...swCfg, monitoring: { ...swCfg.monitoring, ...patch } }
+    setSwCfg(next)
+    void window.api.switchConfig.set(next)
   }
 
   async function saveShowName(): Promise<void> {
@@ -159,6 +170,8 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
       <UpdatesPanel />
 
       <ServerPanel />
+
+      <LibraryPanel />
 
       <div className="panel">
         <h3>Show branding</h3>
@@ -345,8 +358,9 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           <p className="muted">
             The base NETGEAR M4350 config + admin login used to generate each switch&rsquo;s full,
             uploadable config (shown on the Show Server device page with Download/Copy). Shared across
-            all projects. <strong>The admin password is stored here and written into the generated
-            config in plaintext</strong> so the upload is turn-key.
+            all projects. <strong>The admin password is written into the generated config in
+            plaintext</strong> so the upload is turn-key. It stays on this computer, so enter it on
+            each one.
           </p>
           <div className="form-grid">
             <label>
@@ -368,6 +382,57 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
               />
             </label>
           </div>
+          <h4>Monitoring</h4>
+          <p className="muted">
+            Points each switch at the Status Monitor PC: SNMP for health and ports, syslog for logs.
+            Logging servers are saved with this show. The community stays on this computer and must
+            match the monitoring PC&rsquo;s. Crew copies of a config leave it out.
+          </p>
+          <div className="form-grid">
+            <label>
+              Logging server IPs
+              <input
+                value={swCfg.monitoring.logServers}
+                placeholder="10.0.10.50"
+                onChange={(e) => patchMon({ logServers: e.target.value })}
+                onBlur={flushSw}
+              />
+            </label>
+            <label>
+              Syslog port
+              <input
+                type="number"
+                value={swCfg.monitoring.syslogPort}
+                onChange={(e) => patchMon({ syslogPort: Number(e.target.value) })}
+                onBlur={flushSw}
+              />
+            </label>
+            <label>
+              SNMP community
+              <input
+                value={swCfg.monitoring.snmpCommunity}
+                placeholder="(read-only community)"
+                onChange={(e) => patchMon({ snmpCommunity: e.target.value })}
+                onBlur={flushSw}
+              />
+            </label>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={swCfg.monitoring.m4300Snmp}
+                onChange={(e) => saveMon({ m4300Snmp: e.target.checked })}
+              />
+              M4300 SNMP commands (firmware 12)
+            </label>
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={swCfg.monitoring.poeAlerts}
+                onChange={(e) => saveMon({ poeAlerts: e.target.checked })}
+              />
+              PoE alerts (PoE switches only)
+            </label>
+          </div>
           <label className="switch-tpl">
             Base config template
             <textarea
@@ -381,7 +446,7 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           <p className="muted">
             Tokens the generator fills: <code>{'{{VLANS}}'}</code> <code>{'{{USERS}}'}</code>{' '}
             <code>{'{{LAGS}}'}</code> <code>{'{{SYSNAME}}'}</code> <code>{'{{INTERFACES}}'}</code>{' '}
-            <code>{'{{MGMT}}'}</code>. Everything else is kept as-is. Per-VLAN multicast and L3/SVI
+            <code>{'{{MGMT}}'}</code> <code>{'{{MONITORING}}'}</code>. Everything else is kept as-is. Per-VLAN multicast and L3/SVI
             routing aren&rsquo;t generated yet — keep those in the template if you need them.
           </p>
         </div>

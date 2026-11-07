@@ -11,8 +11,6 @@ own scripting API against the live document, and opens the app's SQLite
 file directly with Python's `sqlite3` module (confirmed available in
 VW2026's embedded Python, v3.34.0).
 
-The `diagnose_*.py` scripts are read-only helpers used to confirm ConnectCAD
-field/socket names on a real device (not part of the normal workflow).
 
 ## One-time setup
 
@@ -39,9 +37,8 @@ field/socket names on a real device (not part of the normal workflow).
    `Foo.vwdm`) via the app's **project menu → Save a Copy As**. The scripts
    derive the database from the active drawing's own path (`resolve_project_db()`
    → `<same dir>/<same base>.vwdm`), so there are no hardcoded paths and it works
-   the same on Mac and Windows. If no matching `.vwdm` is found they fall back to
-   the legacy single database (`LEGACY_DB_CANDIDATES`) during the transition,
-   then show a clear message telling you where to save it.
+   the same on Mac and Windows. If no matching `.vwdm` is found they stop and
+   tell you where to save it, and every run names the database it used.
 
 ## Running a script
 
@@ -55,8 +52,7 @@ once each:
 Each loader reads and runs the current `link_selected.py` /
 `sync_app_to_drawing.py` straight from this Dropbox folder, so future edits take
 effect with **no re-pasting**. Only update a loader if the project folder moves
-(edit its `TARGET_CANDIDATES` paths). The diagnostics (`diagnose_*.py`) rarely
-change — paste them directly if/when you need them.
+(edit its `TARGET_CANDIDATES` paths).
 
 **Direct (no loader):** Window > Palettes > Script > new Python script > paste
 a file's contents > run. Simple, but you must re-paste after every edit.
@@ -99,8 +95,9 @@ folder* — more setup; not done yet.
   one orphaned (delete it in the app). Jacks removed in VW leave an orphan
   port too — link never auto-deletes ports.
 - A jack whose signal isn't in the network-signal list is ignored. That list
-  is managed in the **app → Settings tab** (the scripts read it from the DB at
-  run time); no need to edit the scripts. `DEFAULT_NETWORK_SIGNALS` in each
+  is managed in the **app → Settings tab**, and the app copies it into each
+  project when you open it, so the scripts read it from the `.vwdm`; no need to
+  edit the scripts. `DEFAULT_NETWORK_SIGNALS` in each
   script is only the fallback if that list is empty/unreadable.
 - Deleting a device in the app (or wiping/re-adding, which renumbers ids) leaves
   the drawing object pointing at a now-missing id. `sync_app_to_drawing.py`

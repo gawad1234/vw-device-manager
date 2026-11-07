@@ -23,3 +23,16 @@ test('host addresses are normalised, defaulting to the Show Server port', () => 
   assert.equal(normalizeAddress('evil.com/../x'), null)
   assert.equal(normalizeAddress(''), null)
 })
+
+test('every list and get handler is readable remotely, and local tools stay local', async () => {
+  const { readFileSync } = await import('node:fs')
+  const ipc = readFileSync(new URL('../src/main/ipc.ts', import.meta.url), 'utf-8')
+  const channels = [...ipc.matchAll(/handle\(\s*'([\w]+:[\w]+)'/g)].map((m) => m[1])
+  assert.ok(channels.length > 100)
+  const local = /^(updates|server|project|lightingSync|vlanManager|library):/
+  for (const c of channels) {
+    if (/:(list|get)$/.test(c) && !local.test(c)) assert.equal(channelScope(c), 'read', c)
+  }
+  assert.equal(channelScope('library:chooseFolder'), 'local')
+  assert.equal(channelScope('wallpapers:save'), 'host-only')
+})

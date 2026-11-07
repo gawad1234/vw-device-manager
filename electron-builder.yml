@@ -14,6 +14,11 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!data'
   - '!dist'
+  - '!docs'
+  - '!test'
+  - '!host-tools'
+  - '!**/*.vwdm'
+  - '!**/*.sqlite3'
   - '!vectorworks-scripts'
   - '!*.command'
   - '!*.bat'
@@ -42,23 +47,12 @@ mac:
     - zip
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    NSCameraUsageDescription: Application requests access to the device's camera.
-    NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
     # macOS 15+: needed to reach other computers on the LAN (joining a shared show).
     NSLocalNetworkUsageDescription: Device Manager connects to other computers on your local network to share a show.
   notarize: false
 dmg:
-  artifactName: ${name}-${version}.${ext}
-linux:
-  target:
-    - AppImage
-    - snap
-    - deb
-  maintainer: electronjs.org
-  category: Utility
-appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 publish:

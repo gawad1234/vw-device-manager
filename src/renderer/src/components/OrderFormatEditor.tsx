@@ -3,12 +3,10 @@ import type {
   OrderColumn,
   OrderColumnKey,
   OrderExportFormat,
-  OrderExportFormatInput,
   OrderItem
 } from '../../../shared/types'
 import { ORDER_COLUMN_META, defaultOrderColumns } from '../../../shared/types'
 import { DEFAULT_TABLE_STYLE, tableStyleCss } from '../../../shared/table-style'
-import Modal from './Modal'
 
 /** Shown in the preview when the order has no items yet. */
 const SAMPLE_ITEMS: OrderItem[] = [
@@ -59,35 +57,13 @@ const cellText = (k: OrderColumnKey, it: OrderItem): string => {
   return v || ''
 }
 
-/** A ready-made format in the equipment-list look (shop paperwork style). */
-const EQUIPMENT_LIST: OrderExportFormatInput = {
-  name: 'Equipment list',
-  columns: (
-    [
-      ['requested', 'New Qty', 8],
-      ['previous', 'Old Qty', 8],
-      ['item', 'Item', 40],
-      ['model', 'Mfr. P/N', 15],
-      ['manufacturer', 'Manufacturer', 14],
-      ['received', 'Filled', 7],
-      ['outstanding', 'Balance', 8],
-      ['category', '', 16],
-      ['notes', '', 24]
-    ] as const
-  ).map(([key, label, width]) => ({ key, label, width, show: label !== '' })),
-  groupByCategory: true,
-  sort: 'category',
-  orientation: 'portrait',
-  fontSize: 11,
-  layout: 'equipmentList'
-}
-
 interface Props {
-  /** the open order's items, for the preview */
+  format: OrderExportFormat
+  /** an order's items for the preview; none shows sample items */
   items: OrderItem[]
-  onClose: () => void
-  /** called after any create/update/delete so the order editor can refresh */
+  /** after a save or delete, so the Paperwork list can refresh */
   onChanged: () => void
+  onDeleted: () => void
 }
 
 type Draft = {
@@ -100,17 +76,7 @@ type Draft = {
   layout: OrderExportFormat['layout']
 }
 
-function draftFrom(f: OrderExportFormat | null): Draft {
-  if (!f)
-    return {
-      name: '',
-      columns: defaultOrderColumns(),
-      groupByCategory: true,
-      sort: 'category',
-      orientation: 'portrait',
-      fontSize: 12,
-      layout: 'standard'
-    }
+function draftFrom(f: OrderExportFormat): Draft {
   // Merge any missing keys (a stored format may predate a column).
   const have = new Map(f.columns.map((c) => [c.key, c]))
   const columns = [
@@ -130,38 +96,34 @@ function draftFrom(f: OrderExportFormat | null): Draft {
   }
 }
 
-function OrderFormatModal({ items, onClose, onChanged }: Props): React.JSX.Element {
-  const [formats, setFormats] = useState<OrderExportFormat[]>([])
-  const [activeId, setActiveId] = useState<number | 'new'>('new')
-  const [draft, setDraft] = useState<Draft>(() => draftFrom(null))
-  const [error, setError] = useState('')
+/** One order export format: columns, sort, layout and a live preview. It lives on the
+ *  Paperwork page beside the other templates and saves a moment after each edit. */
+function OrderFormatEditor({ format, items, onChanged, onDeleted }: Props): React.JSX.Element {
+  const [draft, setDraft] = useState<Draft>(() => draftFrom(format))
   const [tableStyle, setTableStyle] = useState(DEFAULT_TABLE_STYLE)
   const [edge, setEdge] = useState<number | null>(null)
   const dragging = useRef(false)
+  const saved = useRef(JSON.stringify(draft))
+  const latest = useRef(draft)
 
   useEffect(() => {
     window.api.tableStyle.get().then(setTableStyle)
   }, [])
 
-  async function refresh(select?: number | 'new'): Promise<void> {
-    const list = await window.api.orderFormats.list()
-    setFormats(list)
-    if (select !== undefined) setActiveId(select)
+  async function persist(d: Draft): Promise<void> {
+    if (!d.name.trim() || JSON.stringify(d) === saved.current) return
+    saved.current = JSON.stringify(d)
+    await window.api.orderFormats.update(format.id, { ...d, name: d.name.trim() })
+    onChanged()
   }
-
+  // Every edit saves a moment later (a column drag is many edits)...
   useEffect(() => {
-    refresh()
-  }, [])
-
-  // Load the active format into the draft whenever the selection changes.
-  useEffect(() => {
-    if (activeId === 'new') setDraft(draftFrom(null))
-    else {
-      const f = formats.find((x) => x.id === activeId)
-      if (f) setDraft(draftFrom(f))
-    }
-    setError('')
-  }, [activeId, formats])
+    latest.current = draft
+    const timer = setTimeout(() => void persist(draft), 600)
+    return () => clearTimeout(timer)
+  })
+  // ...and picking another template saves whatever is still waiting.
+  useEffect(() => () => void persist(latest.current), [])
 
   function setCol(i: number, patch: Partial<OrderColumn>): void {
     setDraft((d) => ({
@@ -232,100 +194,25 @@ function OrderFormatModal({ items, onClose, onChanged }: Props): React.JSX.Eleme
     window.addEventListener('mouseup', up)
   }
 
-  async function save(e: React.FormEvent): Promise<void> {
-    e.preventDefault()
-    if (!draft.name.trim()) {
-      setError('Give the format a name.')
-      return
-    }
-    const input: OrderExportFormatInput = {
-      name: draft.name.trim(),
-      columns: draft.columns,
-      groupByCategory: draft.groupByCategory,
-      sort: draft.sort,
-      orientation: draft.orientation,
-      fontSize: draft.fontSize,
-      layout: draft.layout
-    }
-    const saved =
-      activeId === 'new'
-        ? await window.api.orderFormats.create(input)
-        : await window.api.orderFormats.update(activeId, input)
-    await refresh(saved.id)
-    onChanged()
-  }
-
-  async function addEquipmentList(): Promise<void> {
-    const saved = await window.api.orderFormats.create(EQUIPMENT_LIST)
-    await refresh(saved.id)
-    onChanged()
-  }
-
   async function handleDelete(): Promise<void> {
-    if (activeId === 'new') return
-    const f = formats.find((x) => x.id === activeId)
-    if (!f || !window.confirm(`Delete format "${f.name}"?`)) return
-    await window.api.orderFormats.remove(activeId)
-    await refresh('new')
-    onChanged()
+    if (!window.confirm(`Delete format "${format.name}"?`)) return
+    saved.current = JSON.stringify(latest.current) // nothing left to save
+    await window.api.orderFormats.remove(format.id)
+    onDeleted()
   }
-
-  const footer = (
-    <>
-      {activeId !== 'new' && (
-        <button className="btn btn-danger" onClick={handleDelete}>
-          Delete
-        </button>
-      )}
-      <span className="footer-spacer" />
-      <button className="btn" type="button" onClick={onClose}>
-        Close
-      </button>
-      <button
-        className="btn btn-primary"
-        type="submit"
-        form="fmt-form"
-        disabled={!draft.name.trim()}
-      >
-        {activeId === 'new' ? 'Create format' : 'Save changes'}
-      </button>
-    </>
-  )
 
   return (
-    <Modal title="Export formats" onClose={onClose} footer={footer} wide>
-      <div className="fmt-tabs">
-        {formats.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            className={`fmt-tab${activeId === f.id ? ' active' : ''}`}
-            onClick={() => setActiveId(f.id)}
-          >
-            {f.name}
-          </button>
-        ))}
-        <button
-          type="button"
-          className={`fmt-tab fmt-new${activeId === 'new' ? ' active' : ''}`}
-          onClick={() => setActiveId('new')}
-        >
-          + New
-        </button>
-        <button type="button" className="fmt-tab fmt-new" onClick={addEquipmentList}>
-          + Equipment list
-        </button>
-      </div>
-
-      <form id="fmt-form" className="form-grid" onSubmit={save}>
-        {error && <div className="banner banner-error span-2">{error}</div>}
+    <div className="lxr-main">
+      <p className="muted lxr-bound">
+        Pick this format in an order&rsquo;s <b>Export</b> menu. Changes save as you make them.
+      </p>
+      <div className="form-grid">
         <label className="span-2">
           Format name
           <input
             value={draft.name}
             onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
             placeholder="e.g. Pull order — compact"
-            autoFocus
           />
         </label>
 
@@ -471,7 +358,7 @@ function OrderFormatModal({ items, onClose, onChanged }: Props): React.JSX.Eleme
           <div className="field-row-head">
             <span>Preview</span>
             <span className="muted" style={{ textTransform: 'none', letterSpacing: 0 }}>
-              {items.length ? 'This order' : 'Sample items'} · drag a column edge to resize · font,
+              {items.length ? 'An order from this show' : 'Sample items'} · drag a column edge to resize · font,
               colors and padding come from Settings → Table style
             </span>
           </div>
@@ -550,9 +437,12 @@ function OrderFormatModal({ items, onClose, onChanged }: Props): React.JSX.Eleme
             ))}
           </div>
         </div>
-      </form>
-    </Modal>
+      </div>
+      <button className="btn btn-danger lxr-fmt-delete" onClick={handleDelete}>
+        Delete format
+      </button>
+    </div>
   )
 }
 
-export default OrderFormatModal
+export default OrderFormatEditor

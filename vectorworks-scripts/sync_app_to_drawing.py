@@ -42,17 +42,9 @@ import vs
 # Each project is a SQLite database that lives BESIDE its drawing with a
 # matching name (Foo.vwx -> Foo.vwdm). resolve_project_db() derives that path
 # from the active document, so the same script finds the right database on any
-# machine with NO hardcoded paths. LEGACY_DB_CANDIDATES is only a last-resort
-# fallback to the old single shared database during the transition.
+# machine with NO hardcoded paths.
 PROJECT_EXT = ".vwdm"
-# `~` expands to the current user's home on any machine — edit the folder part to
-# wherever your Dropbox/workspace actually lives (Windows first, then macOS).
-LEGACY_DB_CANDIDATES = [
-    os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\vw-device-manager.sqlite3"),
-    os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/vw-device-manager.sqlite3"),
-]
-# The network-signal list is a SHARED library (universal across all projects),
-# so it's one fixed file, not per-project — a small candidates list is fine here.
+# Fallback for projects last saved by an older app (see load_network_signals).
 LIBRARY_CANDIDATES = [
     os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\library.json"),
     os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/library.json"),
@@ -109,21 +101,27 @@ def active_doc_path():
         p = vs.GetFPathName()
     except Exception:
         p = None
-    return (p or "").strip()
+    return posix_path((p or "").strip())
+
+
+def posix_path(p):
+    """Vectorworks on Mac can report an old colon path ("Macintosh HD:Users:me:Foo.vwx")."""
+    if os.name == "nt" or not p or p.startswith("/") or ":" not in p:
+        return p
+    parts = p.split(":")
+    home_style = "/" + "/".join(parts[1:])
+    return home_style if os.path.exists(os.path.dirname(home_style)) else "/Volumes/" + "/".join(parts)
 
 
 def resolve_project_db():
     """The project database for the current drawing: same folder + same base
-    name + .vwdm. Falls back to the legacy single-DB paths if there's no match
-    (e.g. an unsaved drawing during the transition). None if nothing is found."""
+    name + .vwdm. None if there isn't one: never guess, or another show's data
+    lands on this drawing."""
     doc = active_doc_path()
     if doc:
         candidate = os.path.splitext(doc)[0] + PROJECT_EXT
         if os.path.exists(candidate):
             return candidate
-    for path in LEGACY_DB_CANDIDATES:
-        if os.path.exists(path):
-            return path
     return None
 
 
@@ -170,10 +168,19 @@ def read_type_and_location(h):
 
 
 def load_network_signals(conn):
-    """Signal names (uppercased) the app flags as network ports, read from the
-    SHARED library (data/library.json) — signals are universal across projects
-    now (see library.ts), not stored in the project database. `conn` is unused.
-    Falls back to DEFAULT_NETWORK_SIGNALS if the library can't be read."""
+    """Signal names (uppercased) the app flags as network ports. The app copies its
+    list into the project, so this works wherever its library lives; older projects
+    fall back to the library file, then DEFAULT_NETWORK_SIGNALS."""
+    try:
+        row = conn.execute(
+            "SELECT value FROM project_meta WHERE key = 'networkSignals'"
+        ).fetchone()
+        if row and row[0]:
+            sigs = {s.strip().upper() for s in json.loads(row[0]) if s and s.strip()}
+            if sigs:
+                return sigs
+    except Exception:
+        pass
     for path in LIBRARY_CANDIDATES:
         try:
             if os.path.exists(path):
@@ -225,7 +232,7 @@ def build_ports_summary(cur, device_id):
     needed" in the app are skipped."""
     cur.execute(
         """
-        SELECT p.label, p.ip_address, s.name
+        SELECT p.id, p.label, p.ip_address, s.name
         FROM ports p
         LEFT JOIN subnets s ON s.id = p.untagged_subnet_id
         WHERE p.device_id = ?{0}
@@ -234,15 +241,15 @@ def build_ports_summary(cur, device_id):
         (device_id,),
     )
     lines = []
-    for label, ip_address, untagged_name in cur.fetchall():
+    for port_id, label, ip_address, untagged_name in cur.fetchall():
         cur.execute(
             """
             SELECT s.name FROM port_tagged_vlans t
             JOIN subnets s ON s.id = t.subnet_id
-            WHERE t.port_id = (SELECT id FROM ports WHERE device_id = ? AND label = ?)
+            WHERE t.port_id = ?
             ORDER BY s.name COLLATE NOCASE
             """,
-            (device_id, label),
+            (port_id,),
         )
         tagged = ", ".join(r[0] for r in cur.fetchall())
         parts = []
@@ -257,6 +264,13 @@ def build_ports_summary(cur, device_id):
         else:
             lines.append("{0}:".format(label))
     return "\n".join(lines)
+
+
+def clear_port_record(sock):
+    if vs.GetRField(sock, PORT_RECORD, PORT_FIELD_IP) is None:
+        return  # never had the record
+    for field in (PORT_FIELD_IP, PORT_FIELD_UNTAGGED, PORT_FIELD_TAGGED):
+        vs.SetRField(sock, PORT_RECORD, field, "")
 
 
 def write_port_records(cur, device_id, h, net_signals):
@@ -276,7 +290,10 @@ def write_port_records(cur, device_id, h, net_signals):
         )
         prow = cur.fetchone()
         if prow is None:
-            continue  # jack not linked yet, or marked "not needed" in the app
+            # Not linked, marked "not needed", or deleted in the app: its old values
+            # mustn't stay on the drawing.
+            clear_port_record(sock)
+            continue
         port_id, ip_address, untagged_name = prow
 
         cur.execute(
@@ -360,6 +377,9 @@ def main():
                 "UPDATE devices SET device_type = ?, location = ? WHERE id = ?",
                 (device_type_in, location_in, device_id),
             )
+            # One device at a time: holding the write lock across a big drawing
+            # would make the app time out.
+            conn.commit()
 
             cur.execute(
                 "SELECT device_type, mac_address, location, notes, management_ip, oob_ip "
@@ -376,6 +396,12 @@ def main():
                 set_field_safe(
                     h, RECORD_NAME, FIELD_PORTS, "NOT LINKED IN APP — run Link Selected"
                 )
+                for field in (FIELD_TYPE, FIELD_MAC, FIELD_LOCATION, FIELD_NOTES):
+                    vs.SetRField(h, RECORD_NAME, field, "")
+                set_field_safe(h, RECORD_NAME, FIELD_MGMT_IP, "")
+                set_field_safe(h, RECORD_NAME, FIELD_OOB_IP, "")
+                for _jack, sock in network_jacks(h, net_signals):
+                    clear_port_record(sock)
                 continue
             device_type, mac_address, location, notes, mgmt_ip, oob_ip = row
 
@@ -403,6 +429,7 @@ def main():
         conn.close()
 
     msg = "Synced {0} device(s), {1} port(s).".format(synced, ports_written)
+    msg += "\nDatabase: " + os.path.basename(db_path)
     if orphaned:
         msg += "\n{0} linked object(s) point to a device no longer in the app.".format(
             orphaned

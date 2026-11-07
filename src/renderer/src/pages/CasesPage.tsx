@@ -207,7 +207,10 @@ function CasesPage(): React.JSX.Element {
           suggestedFields={templateTokens}
           onClose={() => setOpenId(null)}
           onChanged={refresh}
-          onCreated={(id) => setOpenId(id)}
+          onCreated={async (id) => {
+            await refresh() // or the open row looks deleted
+            setOpenId(id)
+          }}
         />
       )}
     </div>

@@ -1,10 +1,10 @@
 {
   "name": "vw-device-manager",
   "version": "2.12.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "Tracks AV and network devices, cables, orders, crew and lighting for live shows",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Gabriel Awad",
+  "homepage": "https://github.com/gawad1234/vw-device-manager",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -12,19 +12,17 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "start": "electron-vite preview",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/**/*.test.mts\"",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning --import ./test/setup.mjs --test \"test/**/*.test.mts\"",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
-    "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:mac": "electron-vite build && electron-builder --mac"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "electron-updater": "^6.8.9",
     "exceljs": "^4.4.0",
     "qrcode": "^1.5.4"
   },
@@ -37,8 +35,9 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
-    "electron": "^39.2.6",
-    "electron-builder": "^26.0.12",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "electron-updater": "^6.8.11",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react": "^7.37.5",

@@ -94,7 +94,7 @@ function LabelsPage(): React.JSX.Element {
             </tr>
           )}
           {templates.map((t) => (
-            <tr key={t.id} className="clickable" onClick={() => setOpenId(t.id)}>
+            <tr key={t.id} className="clickable" tabIndex={0} onClick={() => setOpenId(t.id)}>
               <td>{t.name}</td>
               <td className="muted">{t.elements.length || t.fields.length}</td>
             </tr>
@@ -112,7 +112,10 @@ function LabelsPage(): React.JSX.Element {
             setPending(null)
           }}
           onChanged={refresh}
-          onCreated={(id) => setOpenId(id)}
+          onCreated={async (id) => {
+            await refresh() // or the open row looks deleted
+            setOpenId(id)
+          }}
         />
       )}
     </div>

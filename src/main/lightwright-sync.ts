@@ -21,6 +21,7 @@ import {
   setProjectMeta
 } from './repository'
 import { bumpChange } from './rpc-registry'
+import { withTx } from './db'
 
 // Live sync with Vectorworks Spotlight through its Lightwright exchange file: we
 // read what Vectorworks writes and answer as Lightwright. The file is one shared
@@ -34,6 +35,9 @@ let win: BrowserWindow | null = null
 let project = ''
 let lastMtime = 0
 let dirty = false
+/** Fixtures edited here and not yet in the exchange file. Saved with the project so
+ *  they survive a restart, and a file from Vectorworks can't overwrite them. */
+let unsent = new Set<number>()
 let writeTimer: ReturnType<typeof setTimeout> | null = null
 const status: LightingSyncStatus = {
   path: '',
@@ -55,10 +59,27 @@ function emit(): void {
 
 /** The chosen exchange file, else the .xml named after the open show (Foo.vwdm → Foo.xml). */
 function exchangePath(): string {
+  // The choice travels with the project but only means something if it's a local
+  // .xml here: not on another computer, and never a network path from a project
+  // file (just looking one up on Windows sends that server your login).
   const chosen = getLightingSettings().exchangePath
-  if (chosen) return chosen
+  if (chosen && /\.xml$/i.test(chosen) && !/^[\\/]{2}/.test(chosen) && existsSync(chosen)) {
+    return chosen
+  }
   const p = getCurrentProject()?.path
   return p ? join(dirname(p), parsePath(p).name + '.xml') : ''
+}
+
+function loadUnsent(): Set<number> {
+  try {
+    return new Set(JSON.parse(getProjectMeta('lightingUnsent') ?? '[]'))
+  } catch {
+    return new Set()
+  }
+}
+
+function saveUnsent(): void {
+  setProjectMeta('lightingUnsent', JSON.stringify([...unsent]))
 }
 
 function loadBase(): VwBase | null {
@@ -86,24 +107,34 @@ function ingest(x: Exchange): void {
   const uidsInFile = new Set(x.fixtures.map((f) => f.UID))
   const kept = new Set<number>()
   let needIds = false
-  for (const f of x.fixtures) {
-    // UID first; trust a Lightwright_ID only if it isn't another fixture's row (old
-    // ids from a real Lightwright can collide with ours)
-    const idRow = byId.get(f.Lightwright_ID ?? '')
-    const prev =
-      byUid.get(f.UID ?? '') ?? (idRow && !uidsInFile.has(idRow.vwUid) ? idRow : undefined)
-    if (f.Action === 'Delete') {
-      if (prev) deleteFixture(prev.id)
-      continue
+  const entirePlot = x.action === 'Entire Plot'
+  withTx(() => {
+    for (const f of x.fixtures) {
+      // UID first; trust a Lightwright_ID only if it isn't another fixture's row (old
+      // ids from a real Lightwright can collide with ours). A partial file lists only
+      // what changed, so there a row owned by any other UID is off limits too: a
+      // copied fixture carries the original's id.
+      const idRow = byId.get(f.Lightwright_ID ?? '')
+      const idFree = idRow && (entirePlot ? !uidsInFile.has(idRow.vwUid) : !idRow.vwUid)
+      const prev = byUid.get(f.UID ?? '') ?? (idFree ? idRow : undefined)
+      if (f.Action === 'Delete') {
+        if (prev) deleteFixture(prev.id)
+        continue
+      }
+      // Edited here and not sent yet: the app's copy wins, and goes out next.
+      if (prev && unsent.has(prev.id)) {
+        kept.add(prev.id)
+        continue
+      }
+      const saved = saveFixture(prev?.id ?? null, fixtureFromExchange(f, base.universes, prev))
+      kept.add(saved.id)
+      if (String(saved.id) !== f.Lightwright_ID) needIds = true
     }
-    const saved = saveFixture(prev?.id ?? null, fixtureFromExchange(f, base.universes, prev))
-    kept.add(saved.id)
-    if (String(saved.id) !== f.Lightwright_ID) needIds = true
-  }
-  if (x.action === 'Entire Plot') {
-    // the drawing owns which fixtures exist
-    for (const r of rows) if (r.vwUid && !kept.has(r.id)) deleteFixture(r.id)
-  }
+    if (entirePlot) {
+      // the drawing owns which fixtures exist
+      for (const r of rows) if (r.vwUid && !kept.has(r.id)) deleteFixture(r.id)
+    }
+  })
   status.lastIn = new Date().toISOString()
   bumpChange()
   if (win && !win.isDestroyed()) win.webContents.send('data-changed')
@@ -114,14 +145,17 @@ function ingest(x: Exchange): void {
 function readIfChanged(path: string): void {
   const m = statSync(path).mtimeMs
   if (m === lastMtime) return
-  lastMtime = m
-  const x = parseExchange(readFileSync(path, 'utf8'))
+  const text = readFileSync(path, 'utf8')
+  if (!text.includes('</SLData>')) return // still being written; look again next tick
+  const x = parseExchange(text)
   status.waitingForVw = x.appStamp === 'Lightwright'
   if (!status.waitingForVw && x.fixtures.length) ingest(x)
+  lastMtime = m // last, so a failed read or a locked database is tried again
 }
 
 function writeNow(path: string): void {
   readIfChanged(path) // never write over a Vectorworks change we haven't read
+  if (statSync(path).mtimeMs !== lastMtime) return // not fully read yet
   if (status.waitingForVw) return // our last write isn't picked up yet; try again next tick
   const base = loadBase()
   if (!base) {
@@ -137,6 +171,8 @@ function writeNow(path: string): void {
   renameSync(tmp, path) // whole file at once, so Vectorworks never reads half of it
   lastMtime = statSync(path).mtimeMs
   dirty = false
+  unsent.clear()
+  saveUnsent()
   status.waitingForVw = true
   status.lastOut = new Date().toISOString()
 }
@@ -147,7 +183,8 @@ function tick(): void {
   if (p !== project) {
     project = p
     lastMtime = 0
-    dirty = false
+    unsent = p ? loadUnsent() : new Set()
+    dirty = unsent.size > 0
   }
   const path = exchangePath()
   status.syncOn = settings.syncOn
@@ -165,8 +202,12 @@ function tick(): void {
 }
 
 /** Fixtures changed in the app: send them to Vectorworks after a moment of quiet. */
-export function markLightingDirty(): void {
+export function markLightingDirty(fixtureId?: number): void {
   dirty = true
+  if (fixtureId != null) {
+    unsent.add(fixtureId)
+    saveUnsent()
+  }
   if (writeTimer) clearTimeout(writeTimer)
   writeTimer = setTimeout(tick, 1000)
 }

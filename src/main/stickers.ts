@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, shell } from 'electron'
+import { dialog, shell } from 'electron'
+import { withPrintWindow } from './print-html'
 import { writeFileSync } from 'fs'
 import { AUTOFIT_SCRIPT, elementsHtml } from './caselabels'
 import { bundleToRows } from './exports'
@@ -93,9 +94,7 @@ async function savePdf(
     filters: [{ name: 'PDF', extensions: ['pdf'] }]
   })
   if (res.canceled || !res.filePath) return null
-  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: false } })
-  try {
-    await win.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+  await withPrintWindow(html, async (win) => {
     // Exact page size, no margins, no headers: label positions must land where the sheet says.
     const pdf = await win.webContents.printToPDF({
       printBackground: true,
@@ -104,9 +103,7 @@ async function savePdf(
       margins: { top: 0, bottom: 0, left: 0, right: 0 }
     })
     writeFileSync(res.filePath, pdf)
-  } finally {
-    win.destroy()
-  }
+  })
   shell.openPath(res.filePath)
   return res.filePath
 }

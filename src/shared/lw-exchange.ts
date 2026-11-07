@@ -212,8 +212,14 @@ export function fixtureToExchange(
   universes: Record<string, UniverseRange[]>
 ): Record<string, string> {
   const out: Record<string, string> = { ...fx.vw, UID: fx.vwUid, Lightwright_ID: String(fx.id) }
-  for (const [key, t] of TEXT_FIELDS) out[t] = fx[key] as string
-  USER_FIELDS.forEach((t, i) => (out[t] = fx.userFields[i] ?? ''))
-  out.Absolute_Address = String(toAbsolute(fx.universe, fx.address, fx.system, universes))
+  // A field Spotlight doesn't export for this drawing is left out, not sent blank:
+  // it would read that as "clear it", and for addresses as unpatching the rig.
+  for (const [key, t] of TEXT_FIELDS) if (t in fx.vw || fx[key]) out[t] = fx[key] as string
+  USER_FIELDS.forEach((t, i) => {
+    if (t in fx.vw || fx.userFields[i]) out[t] = fx.userFields[i] ?? ''
+  })
+  if ('Absolute_Address' in fx.vw || fx.address != null) {
+    out.Absolute_Address = String(toAbsolute(fx.universe, fx.address, fx.system, universes))
+  }
   return out
 }

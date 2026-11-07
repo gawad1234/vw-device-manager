@@ -27,6 +27,8 @@ function PatchingPage(): React.JSX.Element {
     refresh().finally(() => setLoading(false))
   }, [refresh])
 
+  useEffect(() => window.api.onDataChanged(() => void refresh()), [refresh])
+
   const signals = useMemo(
     () => Array.from(new Set(circuits.map((c) => c.signal).filter(Boolean))).sort(),
     [circuits]
@@ -64,12 +66,11 @@ function PatchingPage(): React.JSX.Element {
   ): Promise<void> {
     // Turning tested ON implies both ends are patched.
     const forceBoth = changes.tested === true
-    const updated = await window.api.circuits.setStatus(c.id, {
-      srcPatched: forceBoth ? true : (changes.srcPatched ?? c.srcPatched),
-      dstPatched: forceBoth ? true : (changes.dstPatched ?? c.dstPatched),
-      tested: changes.tested ?? c.tested,
-      notes: changes.notes !== undefined ? changes.notes : c.notes
-    })
+    // Send only what changed: a phone may have just set another field.
+    const updated = await window.api.circuits.setStatus(
+      c.id,
+      forceBoth ? { ...changes, srcPatched: true, dstPatched: true } : changes
+    )
     setCircuits((prev) => prev.map((x) => (x.id === c.id ? updated : x)))
   }
 

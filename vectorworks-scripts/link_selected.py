@@ -44,17 +44,9 @@ import vs
 # Each project is a SQLite database that lives BESIDE its drawing with a
 # matching name (Foo.vwx -> Foo.vwdm). resolve_project_db() derives that path
 # from the active document, so the same script finds the right database on any
-# machine with NO hardcoded paths. LEGACY_DB_CANDIDATES is only a last-resort
-# fallback to the old single shared database during the transition.
+# machine with NO hardcoded paths.
 PROJECT_EXT = ".vwdm"
-# `~` expands to the current user's home on any machine — edit the folder part to
-# wherever your Dropbox/workspace actually lives (Windows first, then macOS).
-LEGACY_DB_CANDIDATES = [
-    os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\vw-device-manager.sqlite3"),
-    os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/vw-device-manager.sqlite3"),
-]
-# The network-signal list is a SHARED library (universal across all projects),
-# so it's one fixed file, not per-project — a small candidates list is fine here.
+# Fallback for projects last saved by an older app (see load_network_signals).
 LIBRARY_CANDIDATES = [
     os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\data\library.json"),
     os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/data/library.json"),
@@ -91,21 +83,27 @@ def active_doc_path():
         p = vs.GetFPathName()
     except Exception:
         p = None
-    return (p or "").strip()
+    return posix_path((p or "").strip())
+
+
+def posix_path(p):
+    """Vectorworks on Mac can report an old colon path ("Macintosh HD:Users:me:Foo.vwx")."""
+    if os.name == "nt" or not p or p.startswith("/") or ":" not in p:
+        return p
+    parts = p.split(":")
+    home_style = "/" + "/".join(parts[1:])
+    return home_style if os.path.exists(os.path.dirname(home_style)) else "/Volumes/" + "/".join(parts)
 
 
 def resolve_project_db():
     """The project database for the current drawing: same folder + same base
-    name + .vwdm. Falls back to the legacy single-DB paths if there's no match
-    (e.g. an unsaved drawing during the transition). None if nothing is found."""
+    name + .vwdm. None if there isn't one: never guess, or another show's data
+    lands on this drawing."""
     doc = active_doc_path()
     if doc:
         candidate = os.path.splitext(doc)[0] + PROJECT_EXT
         if os.path.exists(candidate):
             return candidate
-    for path in LEGACY_DB_CANDIDATES:
-        if os.path.exists(path):
-            return path
     return None
 
 
@@ -163,10 +161,19 @@ def get_device_name(h):
 
 
 def load_network_signals(conn):
-    """Signal names (uppercased) the app flags as network ports, read from the
-    SHARED library (data/library.json) — signals are universal across projects
-    now (see library.ts), not stored in the project database. `conn` is unused.
-    Falls back to DEFAULT_NETWORK_SIGNALS if the library can't be read."""
+    """Signal names (uppercased) the app flags as network ports. The app copies its
+    list into the project, so this works wherever its library lives; older projects
+    fall back to the library file, then DEFAULT_NETWORK_SIGNALS."""
+    try:
+        row = conn.execute(
+            "SELECT value FROM project_meta WHERE key = 'networkSignals'"
+        ).fetchone()
+        if row and row[0]:
+            sigs = {s.strip().upper() for s in json.loads(row[0]) if s and s.strip()}
+            if sigs:
+                return sigs
+    except Exception:
+        pass
     for path in LIBRARY_CANDIDATES:
         try:
             if os.path.exists(path):
@@ -207,10 +214,18 @@ def upsert_ports(cur, device_id, h, net_signals):
             (device_id, jack_name),
         )
         row = cur.fetchone()
+        if not row:
+            # A port added by hand in the app with this name: take it over rather
+            # than leave its IP on a duplicate.
+            cur.execute(
+                "SELECT id FROM ports WHERE device_id = ? AND label = ? AND vw_socket_key IS NULL",
+                (device_id, jack_name),
+            )
+            row = cur.fetchone()
         if row:
             cur.execute(
-                "UPDATE ports SET label = ?, updated_at = datetime('now') WHERE id = ?",
-                (jack_name, row[0]),
+                "UPDATE ports SET label = ?, vw_socket_key = ?, updated_at = datetime('now') WHERE id = ?",
+                (jack_name, jack_name, row[0]),
             )
             refreshed += 1
         else:
@@ -257,12 +272,28 @@ def main():
     reused_by_name = 0
     ports_created = 0
     ports_refreshed = 0
+    copies = 0
+    skipped = 0
     errors = []
+    stamps = []  # written after commit: a rollback would otherwise leave ids in the drawing
+
+    # A copied device keeps its id, so count who else holds each one.
+    id_counts = {}
+
+    def count_id(h):
+        v = (vs.GetRField(h, RECORD_NAME, FIELD_ID) or "").strip()
+        if v:
+            id_counts[v] = id_counts.get(v, 0) + 1
+
+    vs.ForEachObject(count_id, "(R IN ['{0}'])".format(RECORD_NAME))
 
     try:
         cur = conn.cursor()
         net_signals = load_network_signals(conn)
         for h in handles:
+            if not vs.GetParametricRecord(h):
+                skipped += 1  # text, a line, a cable: not a device
+                continue
             existing_id = vs.GetRField(h, RECORD_NAME, FIELD_ID)
 
             status = "unlinked"
@@ -273,8 +304,16 @@ def main():
                 except ValueError:
                     status = "invalid"
                 else:
-                    cur.execute("SELECT 1 FROM devices WHERE id = ?", (numeric_id,))
-                    status = "already_linked" if cur.fetchone() else "orphaned"
+                    cur.execute("SELECT name FROM devices WHERE id = ?", (numeric_id,))
+                    row = cur.fetchone()
+                    status = "already_linked" if row else "orphaned"
+                    if (
+                        row
+                        and id_counts.get(existing_id.strip(), 0) > 1
+                        and row[0] != get_device_name(h)
+                    ):
+                        status = "unlinked"  # a copy: it needs its own row
+                        copies += 1
 
             device_type, location = read_type_and_location(h)
 
@@ -315,11 +354,7 @@ def main():
                     elif status == "orphaned":
                         relinked_orphaned += 1
 
-                if existing_id is None:
-                    # record not attached to the object yet
-                    vs.SetRecord(h, RECORD_NAME)
-                # (Re)stamp the object with the resolved id — repairs blank/stale ids.
-                vs.SetRField(h, RECORD_NAME, FIELD_ID, str(device_id))
+                stamps.append((h, existing_id is None, device_id))
 
             # Discover network jacks -> ports for every linked device.
             created, refreshed = upsert_ports(cur, device_id, h, net_signals)
@@ -327,6 +362,12 @@ def main():
             ports_refreshed += refreshed
 
         conn.commit()
+        for h, needs_record, device_id in stamps:
+            if needs_record:
+                # record not attached to the object yet
+                vs.SetRecord(h, RECORD_NAME)
+            # (Re)stamp the object with the resolved id — repairs blank/stale ids.
+            vs.SetRField(h, RECORD_NAME, FIELD_ID, str(device_id))
     except Exception as e:
         conn.rollback()
         errors.append(str(e))
@@ -334,6 +375,11 @@ def main():
         conn.close()
 
     msg = "Linked {0} new device(s).\n{1} already linked.".format(linked, already_linked)
+    msg += "\nDatabase: " + os.path.basename(db_path)
+    if copies:
+        msg += "\n{0} copied object(s) got their own device.".format(copies)
+    if skipped:
+        msg += "\n{0} selected object(s) weren't devices (skipped).".format(skipped)
     if reused_by_name:
         msg += "\n{0} object(s) matched an existing device by name (no duplicate created).".format(
             reused_by_name

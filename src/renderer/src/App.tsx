@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Bundle, CableType, Device, ProjectInfo, Subnet } from '../../shared/types'
 import { HOST_UNREACHABLE } from '../../shared/remote-scope'
 import SubnetsPage from './pages/SubnetsPage'
@@ -86,7 +86,11 @@ function App(): React.JSX.Element {
   // (e.g. a change refused while viewing a shared show).
   const [notice, setNotice] = useState<string | null>(null)
 
+  // Only the newest load may land: a slow read of a host you just left mustn't
+  // put its rows on screen for the local project.
+  const loadSeq = useRef(0)
   const refresh = useCallback(async () => {
+    const seq = ++loadSeq.current
     const [subnetList, deviceList, bundleList, cableTypeList, categoryList] = await Promise.all([
       window.api.subnets.list(),
       window.api.devices.list(),
@@ -94,6 +98,7 @@ function App(): React.JSX.Element {
       window.api.cableTypes.list(),
       window.api.deviceCategories.list()
     ])
+    if (seq !== loadSeq.current) return
     setSubnets(subnetList)
     setDevices(deviceList)
     setBundles(bundleList)
@@ -105,6 +110,16 @@ function App(): React.JSX.Element {
     window.api.projects.current().then(setProject)
     refresh().finally(() => setLoading(false))
   }, [refresh])
+
+  // Clickable table rows open with Enter, like the click.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const row = e.target as HTMLElement
+      if (e.key === 'Enter' && row.matches?.('tr.clickable')) row.click()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     const onRejection = (e: PromiseRejectionEvent): void => {
@@ -154,7 +169,7 @@ function App(): React.JSX.Element {
         </div>
       </header>
       {notice && (
-        <div className="banner banner-error remote-banner">
+        <div className="banner banner-error remote-banner app-notice">
           {notice}
           <button className="btn btn-small" onClick={() => setNotice(null)}>
             Dismiss

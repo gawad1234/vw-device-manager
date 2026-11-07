@@ -207,6 +207,11 @@ const api: VwDeviceManagerApi = {
     get: () => invoke('companyLogo:get'),
     set: (dataUrl: string | null) => invoke('companyLogo:set', dataUrl)
   },
+  library: {
+    location: () => invoke('library:location'),
+    chooseFolder: () => invoke('library:chooseFolder'),
+    useLocal: () => invoke('library:useLocal')
+  },
   companyName: {
     get: () => invoke('companyName:get'),
     set: (name: string | null) => invoke('companyName:set', name)
@@ -279,7 +284,7 @@ const api: VwDeviceManagerApi = {
   },
   circuits: {
     list: () => invoke('circuits:list'),
-    setStatus: (id: number, input: CircuitStatusInput) => invoke('circuits:setStatus', id, input),
+    setStatus: (id: number, input: Partial<CircuitStatusInput>) => invoke('circuits:setStatus', id, input),
     import: () => invoke('circuits:import'),
     clear: () => invoke('circuits:clear')
   },

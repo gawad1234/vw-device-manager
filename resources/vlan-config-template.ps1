@@ -97,7 +97,7 @@ function Wait-HostVNic($name, [int]$timeoutSec = 30) {
 function Get-VlanConfig {
     if ($ConfigPath) {
         if (-not (Test-Path $ConfigPath)) { throw "Config file not found: $ConfigPath" }
-        $json = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+        $json = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
         return $json | ForEach-Object {
             $h = @{}
             $_.PSObject.Properties | ForEach-Object { $h[$_.Name] = $_.Value }
@@ -108,10 +108,36 @@ function Get-VlanConfig {
     return $DefaultVlans
 }
 
+function ConvertTo-IpNumber([string]$ip) {
+    $bytes = ([ipaddress]$ip).GetAddressBytes()
+    return ([uint32]$bytes[0] -shl 24) + ([uint32]$bytes[1] -shl 16) + ([uint32]$bytes[2] -shl 8) + [uint32]$bytes[3]
+}
+
+function Test-Ipv4([string]$ip) {
+    $parsed = $null
+    return ([ipaddress]::TryParse($ip, [ref]$parsed) -and $parsed.AddressFamily -eq 'InterNetwork')
+}
+
+# Everything here runs before any change: a typo must stop the run, not strand the host.
 function Test-VlanConfig($vlans) {
-    $names = @{}; $ids = @{}
+    if (@($vlans).Count -eq 0) { throw "The network list is empty." }
+    $names = @{}; $ids = @{}; $ips = @{}
     foreach ($v in $vlans) {
         if (-not $v.Name) { throw "A network entry is missing 'Name'." }
+        if ($v.Name -match '[\[\]*?]') { throw "Adapter name '$($v.Name)' can't contain [ ] * or ?." }
+        if (-not $v.Dhcp -and $v.IPAddress) {
+            if (-not (Test-Ipv4 $v.IPAddress)) { throw "$($v.Name): '$($v.IPAddress)' isn't a valid IPv4 address." }
+            if ([int]$v.PrefixLength -lt 1 -or [int]$v.PrefixLength -gt 32) { throw "$($v.Name): prefix length must be 1-32." }
+            if ($ips[$v.IPAddress]) { throw "$($v.IPAddress) is on both '$($ips[$v.IPAddress])' and '$($v.Name)'." }
+            $ips[$v.IPAddress] = $v.Name
+            if ($v.Gateway) {
+                if (-not (Test-Ipv4 $v.Gateway)) { throw "$($v.Name): gateway '$($v.Gateway)' isn't a valid IPv4 address." }
+                $mask = [uint32]([math]::Pow(2, 32) - [math]::Pow(2, 32 - [int]$v.PrefixLength))
+                if (((ConvertTo-IpNumber $v.Gateway) -band $mask) -ne ((ConvertTo-IpNumber $v.IPAddress) -band $mask)) {
+                    throw "$($v.Name): gateway $($v.Gateway) isn't in $($v.IPAddress)/$($v.PrefixLength)."
+                }
+            }
+        }
         if ($names[$v.Name]) { throw "Duplicate adapter name: $($v.Name)" }
         if ($v.Name -eq $SwitchName) { throw "Adapter name '$($v.Name)' can't match the switch name." }
         if ($v.Tagged) {
@@ -187,6 +213,12 @@ function Set-HostAdapterIp($vlan) {
     $idx = $adapter.ifIndex
 
     if ($vlan.Dhcp) {
+        $ipIf = Get-NetIPInterface -InterfaceIndex $idx -AddressFamily IPv4 -ErrorAction SilentlyContinue
+        if ($ipIf -and $ipIf.Dhcp -eq 'Enabled') {
+            # Clearing routes here would drop the learned gateway until the next renew.
+            Write-Ok "DHCP already on"
+            return
+        }
         if ($PSCmdlet.ShouldProcess($adapter.Name, "Enable DHCP")) {
             Get-NetIPAddress -InterfaceIndex $idx -AddressFamily IPv4 -ErrorAction SilentlyContinue |
                 Where-Object PrefixOrigin -ne 'Dhcp' | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
@@ -199,10 +231,12 @@ function Set-HostAdapterIp($vlan) {
         return
     }
 
-    $current = @(Get-NetIPAddress -InterfaceIndex $idx -AddressFamily IPv4 -ErrorAction SilentlyContinue)
+    $current = @(Get-NetIPAddress -InterfaceIndex $idx -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object PrefixOrigin -ne 'WellKnown')
     $currentGw = (Get-NetRoute -InterfaceIndex $idx -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue).NextHop
-    $ipMatches = $current.Count -eq 1 -and $current[0].IPAddress -eq $vlan.IPAddress -and
-                 $current[0].PrefixLength -eq $vlan.PrefixLength
+    $wasDhcp = (Get-NetIPInterface -InterfaceIndex $idx -AddressFamily IPv4 -ErrorAction SilentlyContinue).Dhcp -eq 'Enabled'
+    $ipMatches = -not $wasDhcp -and @($current | Where-Object {
+        $_.IPAddress -eq $vlan.IPAddress -and $_.PrefixLength -eq $vlan.PrefixLength }).Count -gt 0
     $gwMatches = ("$currentGw" -eq "$($vlan.Gateway)")
 
     if ($ipMatches -and $gwMatches) {
@@ -231,6 +265,23 @@ function Set-HostAdapterIp($vlan) {
                 Write-Warning "$($vlan.IPAddress) is already assigned to '$($e.InterfaceAlias)'. Remove it there, then re-run. Skipping '$($adapter.Name)'."
                 return
             }
+        }
+
+        # Put back what was here if the new address won't take. Other addresses on
+        # this adapter aren't in the list, so they go back on after a success too.
+        $others = @($current | Where-Object IPAddress -ne $vlan.IPAddress)
+        $restore = {
+            if ($wasDhcp) {
+                Set-NetIPInterface -InterfaceIndex $idx -AddressFamily IPv4 -Dhcp Enabled
+            } else {
+                foreach ($o in $current) {
+                    New-NetIPAddress -InterfaceIndex $idx -AddressFamily IPv4 -IPAddress $o.IPAddress -PrefixLength $o.PrefixLength -ErrorAction SilentlyContinue | Out-Null
+                }
+                if ($currentGw) {
+                    New-NetRoute -InterfaceIndex $idx -DestinationPrefix '0.0.0.0/0' -NextHop @($currentGw)[0] -ErrorAction SilentlyContinue | Out-Null
+                }
+            }
+            Write-Note "Put the previous address back on '$($adapter.Name)'."
         }
 
         # Clear this adapter's IPv4 addresses and default routes from BOTH stores
@@ -273,14 +324,19 @@ function Set-HostAdapterIp($vlan) {
                 $owner = Get-NetIPAddress -IPAddress $vlan.IPAddress -ErrorAction SilentlyContinue
                 if ($owner) {
                     Write-Warning "$($vlan.IPAddress) is held by '$($owner.InterfaceAlias -join "', '")'. Skipping '$($adapter.Name)'."
+                    & $restore
                     return
                 }
                 if ($try -eq 3) {
                     Write-Warning "Could not set $($vlan.IPAddress)/$($vlan.PrefixLength) on '$($adapter.Name)': $($_.Exception.Message)"
+                    & $restore
                     return
                 }
                 Start-Sleep -Seconds 2
             }
+        }
+        foreach ($o in $others) {
+            New-NetIPAddress -InterfaceIndex $idx -AddressFamily IPv4 -IPAddress $o.IPAddress -PrefixLength $o.PrefixLength -ErrorAction SilentlyContinue | Out-Null
         }
         Write-Ok "IP $($vlan.IPAddress)/$($vlan.PrefixLength)$(if ($vlan.Gateway) { " gw $($vlan.Gateway)" })"
     }
@@ -414,9 +470,16 @@ foreach ($v in $ordered) {
 $default = Get-VMNetworkAdapter -ManagementOS -Name $SwitchName -ErrorAction SilentlyContinue
 if ($default) {
     Write-Step "Default adapter 'vEthernet ($SwitchName)'"
-    if ($PSCmdlet.ShouldProcess($SwitchName, "Remove default host adapter")) {
+    # This adapter may hold the host's only address, so it goes only once the
+    # untagged network is really up to replace it.
+    $replacementUp = $untagged -and ($WhatIfPreference -or $untagged.Dhcp -or
+        (Get-NetIPAddress -InterfaceAlias "vEthernet ($($untagged.Name))" -IPAddress $untagged.IPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue))
+    if (-not $replacementUp) {
+        Write-Warning "Keeping the default adapter: no untagged network is up to replace it."
+    }
+    elseif ($PSCmdlet.ShouldProcess($SwitchName, "Remove default host adapter")) {
         Remove-VMNetworkAdapter -ManagementOS -Name $SwitchName
-        Write-Ok "Removed (replaced by '$(if ($untagged) { $untagged.Name } else { 'nothing - no untagged network defined' })')"
+        Write-Ok "Removed (replaced by '$($untagged.Name)')"
     }
 }
 

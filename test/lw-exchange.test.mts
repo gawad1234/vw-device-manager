@@ -147,3 +147,18 @@ test('patch checks: overlap, past 512, half patched, unknown footprint, no node'
     [2]
   )
 })
+
+test('a field Spotlight does not export is left out, not sent blank', () => {
+  const fx = {
+    id: 1,
+    vwUid: 'U1',
+    vw: { Inst_Type: 'Par' },
+    userFields: [],
+    universe: null,
+    address: null,
+    system: ''
+  } as unknown as Fixture
+  const out = fixtureToExchange(fx, {})
+  assert.equal('Absolute_Address' in out, false)
+  assert.equal('User_Field_1' in out, false)
+})

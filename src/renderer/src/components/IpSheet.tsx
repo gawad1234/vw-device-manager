@@ -144,6 +144,15 @@ function IpSheet({ groups, subnets, onChanged, onOpenDevice }: Props): React.JSX
       else delete next[r.key]
       return next
     })
+    // Saved cells now live in the row. A draft left behind would come back as soon
+    // as the row returned to this value, and blur would save it again.
+    if (!error) {
+      setDraft((d) => {
+        const next = { ...d }
+        for (const c of COLS) delete next[`${r.key}:${c}`]
+        return next
+      })
+    }
   }
 
   function edit(r: Row, c: Col, text: string): void {
@@ -199,7 +208,10 @@ function IpSheet({ groups, subnets, onChanged, onOpenDevice }: Props): React.JSX
     const jobs: Promise<void>[] = []
     for (const line of lines) {
       while (i < rows.length && !editable(rows[i], COLS[ci])) i++
-      if (i >= rows.length) break
+      if (i >= rows.length) {
+        skipped.push(`${lines.length - lines.indexOf(line)} line(s) past the last row`)
+        break
+      }
       const r = rows[i]
       const patch: Partial<Record<Col, string>> = {}
       line.split('\t').forEach((cellText, k) => {

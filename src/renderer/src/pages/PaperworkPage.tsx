@@ -11,6 +11,14 @@ import {
   type ReportColumn
 } from '../../../shared/paperwork'
 import { DEFAULT_TABLE_STYLE, tableStyleCss } from '../../../shared/table-style'
+import type { OrderExportFormat, OrderItem } from '../../../shared/types'
+import OrderFormatEditor from '../components/OrderFormatEditor'
+import {
+  EQUIPMENT_LIST,
+  NEW_FORMAT,
+  orderFormatSelection,
+  parseOrderFormat
+} from '../lib/paperwork'
 
 const AREAS = ['Cables', 'Devices & network', 'Trucking', 'Lighting']
 
@@ -46,6 +54,29 @@ function PaperworkPage({ focusId }: { focusId?: string | null }): React.JSX.Elem
 
   const r = templates.find((x) => x.id === selId)
   const source = r?.source
+
+  // Order export formats sit in the same list, with their own editor.
+  const [formats, setFormats] = useState<OrderExportFormat[]>([])
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([])
+  const picked = parseOrderFormat(selId)
+  // an order set to Default names no format, so show the first
+  const format = picked ? (formats.find((f) => f.id === picked.formatId) ?? formats[0]) : undefined
+  const refreshFormats = (): Promise<void> => window.api.orderFormats.list().then(setFormats)
+  const addFormat = async (input: typeof NEW_FORMAT): Promise<void> => {
+    const created = await window.api.orderFormats.create(input)
+    await refreshFormats()
+    setSelId(orderFormatSelection(created.id))
+  }
+
+  // The preview shows real lines: the order you came from, else the first with any.
+  useEffect(() => {
+    const from = parseOrderFormat(focusId ?? '')?.orderId
+    void refreshFormats()
+    window.api.orders.list().then((orders) => {
+      const order = orders.find((o) => o.id === from) ?? orders.find((o) => o.items.length)
+      setOrderItems(order?.items ?? [])
+    })
+  }, [focusId])
 
   useEffect(() => {
     window.api.tableStyle.get().then(setTableStyle)
@@ -205,6 +236,24 @@ function PaperworkPage({ focusId }: { focusId?: string | null }): React.JSX.Elem
               </div>
             )
           })}
+          <div className="lxr-area">
+            <div className="lxr-area-head">Orders</div>
+            {formats.map((f) => (
+              <button
+                key={f.id}
+                className={`side-item ${f.id === format?.id ? 'active' : ''}`}
+                onClick={() => setSelId(orderFormatSelection(f.id))}
+              >
+                {f.name || 'Untitled'}
+              </button>
+            ))}
+            <button className="side-item" onClick={() => addFormat(NEW_FORMAT)}>
+              + New order format
+            </button>
+            <button className="side-item" onClick={() => addFormat(EQUIPMENT_LIST)}>
+              + Equipment list
+            </button>
+          </div>
           <label className="lxr-new">
             <select
               value=""
@@ -243,7 +292,18 @@ function PaperworkPage({ focusId }: { focusId?: string | null }): React.JSX.Elem
           <p className="muted lxr-hint">Templates are shared by every show.</p>
         </aside>
 
-        {r && built ? (
+        {format ? (
+          <OrderFormatEditor
+            key={format.id}
+            format={format}
+            items={orderItems}
+            onChanged={refreshFormats}
+            onDeleted={() => {
+              void refreshFormats()
+              setSelId(templates[0]?.id ?? '')
+            }}
+          />
+        ) : r && built ? (
           <div className="lxr-main">
             {bound && (
               <p className="muted lxr-bound">

@@ -1,5 +1,5 @@
-import { dbAll, dbGet, dbRun, lastInsertRowId } from './db'
-import { isValidIpv4, ipInCidr } from './ip-utils'
+import { dbAll, dbGet, dbRun, lastInsertRowId, withTx } from './db'
+import { isValidIpv4, ipInCidr, parseCidr } from './ip-utils'
 import type {
   Bundle,
   BundleInput,
@@ -154,7 +154,19 @@ function getSubnetById(id: number): Subnet | null {
   return row ? mapSubnet(row) : null
 }
 
+/** Refuse what can't work on a switch: a malformed range or an impossible VLAN. */
+function checkSubnet(input: SubnetInput): void {
+  if (input.cidr && !parseCidr(input.cidr)) {
+    throw new Error(`"${input.cidr}" isn't a valid range. Use a form like 10.0.10.0/24.`)
+  }
+  const vlan = (input.vlan ?? '').trim()
+  if (vlan && !(/^\d+$/.test(vlan) && Number(vlan) >= 1 && Number(vlan) <= 4093)) {
+    throw new Error(`VLAN "${vlan}" must be a number from 1 to 4093.`)
+  }
+}
+
 export function createSubnet(input: SubnetInput): Subnet {
+  checkSubnet(input)
   dbRun(
     `INSERT INTO subnets (name, cidr, vlan, gateway, notes) VALUES (?, ?, ?, ?, ?)`,
     [input.name, input.cidr, input.vlan, input.gateway, input.notes]
@@ -164,6 +176,7 @@ export function createSubnet(input: SubnetInput): Subnet {
 }
 
 export function updateSubnet(id: number, input: SubnetInput): Subnet {
+  checkSubnet(input)
   dbRun(
     `UPDATE subnets SET name = ?, cidr = ?, vlan = ?, gateway = ?, notes = ? WHERE id = ?`,
     [input.name, input.cidr, input.vlan, input.gateway, input.notes, id]
@@ -172,11 +185,14 @@ export function updateSubnet(id: number, input: SubnetInput): Subnet {
 }
 
 export function deleteSubnet(id: number): void {
-  // A deleted subnet is dereferenced everywhere it was used (untagged +
-  // tagged), so ports don't point at a phantom network.
-  dbRun('UPDATE ports SET untagged_subnet_id = NULL WHERE untagged_subnet_id = ?', [id])
-  dbRun('DELETE FROM port_tagged_vlans WHERE subnet_id = ?', [id])
-  dbRun('DELETE FROM subnets WHERE id = ?', [id])}
+  withTx(() => {
+    // A deleted subnet is dereferenced everywhere it was used (untagged +
+    // tagged), so ports don't point at a phantom network.
+    dbRun('UPDATE ports SET untagged_subnet_id = NULL WHERE untagged_subnet_id = ?', [id])
+    dbRun('DELETE FROM port_tagged_vlans WHERE subnet_id = ?', [id])
+    dbRun('DELETE FROM subnets WHERE id = ?', [id])
+  })
+}
 
 // ---- Ports --------------------------------------------------------------
 
@@ -211,17 +227,19 @@ function findIpUse(
   exclude?: { portId?: number; deviceId?: number }
 ): { label: string; deviceName: string } | null {
   const rows = queryAll(
-    `SELECT 'port' AS kind, p.id AS ref_id, p.label AS label, d.name AS device_name
+    `SELECT 'port' AS kind, p.id AS ref_id, p.label AS label, d.name AS device_name, d.id AS owner_id
        FROM ports p JOIN devices d ON d.id = p.device_id
       WHERE p.ip_address = ?
      UNION ALL
-     SELECT 'device', id, 'Management IP', name FROM devices WHERE management_ip = ?
+     SELECT 'device', id, 'Management IP', name, id FROM devices WHERE management_ip = ?
      UNION ALL
-     SELECT 'device', id, 'Out-of-band IP', name FROM devices WHERE oob_ip = ?`,
+     SELECT 'device', id, 'Out-of-band IP', name, id FROM devices WHERE oob_ip = ?`,
     [ip, ip, ip]
   )
   const hit = rows.find((r) =>
-    r.kind === 'port' ? (r.ref_id as number) !== exclude?.portId : (r.ref_id as number) !== exclude?.deviceId
+    r.kind === 'port' && (r.ref_id as number) === exclude?.portId
+      ? false
+      : (r.owner_id as number) !== exclude?.deviceId
   )
   return hit ? { label: hit.label as string, deviceName: hit.device_name as string } : null
 }
@@ -289,21 +307,33 @@ export function updatePort(id: number, input: PortInput): SavePortResult {
      WHERE id = ?`,
     [input.label, input.ipAddress, input.untaggedSubnetId, id]
   )
+  // The native VLAN can't also be tagged on the same port.
+  if (input.untaggedSubnetId != null) {
+    dbRun('DELETE FROM port_tagged_vlans WHERE port_id = ? AND subnet_id = ?', [
+      id,
+      input.untaggedSubnetId
+    ])
+  }
   return { port: getPortById(id), warnings }
 }
 
 export function deletePort(id: number): void {
-  dbRun('DELETE FROM port_tagged_vlans WHERE port_id = ?', [id])
-  dbRun('DELETE FROM ports WHERE id = ?', [id])}
+  withTx(() => {
+    dbRun('DELETE FROM port_tagged_vlans WHERE port_id = ?', [id])
+    dbRun('DELETE FROM ports WHERE id = ?', [id])
+  })
+}
 
 /** Mark this port as its device's "main" access route (or clear it). At most one
  *  port per device is primary, so the others are cleared first. Used by the
  *  Device list export to pick the device's main IP + VLAN. */
 export function setPrimaryPort(portId: number, isPrimary: boolean): void {
-  const row = queryOne('SELECT device_id FROM ports WHERE id = ?', [portId])
-  if (!row) return
-  dbRun('UPDATE ports SET is_primary = 0 WHERE device_id = ?', [row.device_id as number])
-  if (isPrimary) dbRun('UPDATE ports SET is_primary = 1, is_unused = 0 WHERE id = ?', [portId])
+  withTx(() => {
+    const row = queryOne('SELECT device_id FROM ports WHERE id = ?', [portId])
+    if (!row) return
+    dbRun('UPDATE ports SET is_primary = 0 WHERE device_id = ?', [row.device_id as number])
+    if (isPrimary) dbRun('UPDATE ports SET is_primary = 1, is_unused = 0 WHERE id = ?', [portId])
+  })
 }
 
 /** Flag a jack as not used for the network (hidden from schedules/labels/sync),
@@ -320,13 +350,15 @@ export function setPortLag(portId: number, lagGroup: string | null): void {
 
 /** Replace the port's tagged-VLAN set with exactly the given subnet ids. */
 export function setPortTaggedVlans(portId: number, subnetIds: number[]): void {
-  dbRun('DELETE FROM port_tagged_vlans WHERE port_id = ?', [portId])
-  for (const subnetId of subnetIds) {
-    dbRun('INSERT OR IGNORE INTO port_tagged_vlans (port_id, subnet_id) VALUES (?, ?)', [
-      portId,
-      subnetId
-    ])
-  }
+  withTx(() => {
+    dbRun('DELETE FROM port_tagged_vlans WHERE port_id = ?', [portId])
+    for (const subnetId of subnetIds) {
+      dbRun('INSERT OR IGNORE INTO port_tagged_vlans (port_id, subnet_id) VALUES (?, ?)', [
+        portId,
+        subnetId
+      ])
+    }
+  })
 }
 
 // ---- Devices ------------------------------------------------------------
@@ -435,13 +467,31 @@ export function updateDevice(id: number, input: DeviceInput): SaveDeviceResult {
   return { device: getDeviceById(id), warnings: check.warnings }
 }
 
+/** Deleting a device clears its cable links, so first copy its name onto those
+ *  cable ends as plain text: paperwork keeps saying what the cable went to. */
+function keepCableEndNames(deviceId: number): void {
+  for (const end of ['source', 'dest']) {
+    dbRun(
+      `UPDATE cables SET ${end}_text = COALESCE(NULLIF(${end}_text, ''),
+         (SELECT d.name || COALESCE(' · ' || p.label, '')
+            FROM devices d LEFT JOIN ports p ON p.id = cables.${end}_port_id
+           WHERE d.id = cables.${end}_device_id))
+       WHERE ${end}_device_id = ?`,
+      [deviceId]
+    )
+  }
+}
+
 export function deleteDevice(id: number): void {
-  dbRun(
-    'DELETE FROM port_tagged_vlans WHERE port_id IN (SELECT id FROM ports WHERE device_id = ?)',
-    [id]
-  )
-  dbRun('DELETE FROM ports WHERE device_id = ?', [id])
-  dbRun('DELETE FROM devices WHERE id = ?', [id])
+  withTx(() => {
+    keepCableEndNames(id)
+    dbRun(
+      'DELETE FROM port_tagged_vlans WHERE port_id IN (SELECT id FROM ports WHERE device_id = ?)',
+      [id]
+    )
+    dbRun('DELETE FROM ports WHERE device_id = ?', [id])
+    dbRun('DELETE FROM devices WHERE id = ?', [id])
+  })
 }
 
 // Network signals + cable types are no longer per-project — they live in the
@@ -577,34 +627,38 @@ export function updateBundle(id: number, input: BundleInput): Bundle {
 }
 
 export function deleteBundle(id: number): void {
-  dbRun('DELETE FROM cables WHERE bundle_id = ?', [id])
-  dbRun('DELETE FROM bundles WHERE id = ?', [id])
+  withTx(() => {
+    dbRun('DELETE FROM cables WHERE bundle_id = ?', [id])
+    dbRun('DELETE FROM bundles WHERE id = ?', [id])
+  })
 }
 
 /** Copy a bundle and all its cables into a new "(copy)" bundle. The copy's
  *  cables start with a fresh checklist (pulled/labeled reset). Returns the new
  *  bundle, or null if the source is gone. */
 export function duplicateBundle(id: number): Bundle | null {
-  const src = getBundleById(id)
-  if (!src) return null
-  dbRun(
-    `INSERT INTO bundles (name, color, from_location, to_location, length, notes)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [`${src.name} (copy)`, src.color, src.fromLocation, src.toLocation, src.length, src.notes]
-  )
-  const newId = lastInsertRowId()
-  for (const c of src.cables) {
-    createCable(newId, {
-      name: c.name,
-      cableType: c.cableType,
-      source: c.source,
-      destination: c.destination,
-      pulled: false,
-      labeled: false,
-      notes: c.notes
-    })
-  }
-  return getBundleById(newId)
+  return withTx(() => {
+    const src = getBundleById(id)
+    if (!src) return null
+    dbRun(
+      `INSERT INTO bundles (name, color, from_location, to_location, length, notes)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [`${src.name} (copy)`, src.color, src.fromLocation, src.toLocation, src.length, src.notes]
+    )
+    const newId = lastInsertRowId()
+    for (const c of src.cables) {
+      createCable(newId, {
+        name: c.name,
+        cableType: c.cableType,
+        source: c.source,
+        destination: c.destination,
+        pulled: false,
+        labeled: false,
+        notes: c.notes
+      })
+    }
+    return getBundleById(newId)
+  })
 }
 
 // ---- Project meta (per-show settings, e.g. logo) ------------------------
@@ -734,21 +788,46 @@ export function deleteShopOrder(id: number): void {
   dbRun('DELETE FROM shop_orders WHERE id = ?', [id])
 }
 
-/** The item list as it was at the last export (the change-highlight baseline). */
-export function getOrderExportSnapshot(id: number): OrderItem[] | null {
-  const row = queryOne('SELECT last_export_json FROM shop_orders WHERE id = ?', [id])
-  if (!row || row.last_export_json == null) return null
+function parseItems(json: unknown): OrderItem[] | null {
+  if (json == null) return null
   try {
-    return JSON.parse(row.last_export_json as string) as OrderItem[]
+    return JSON.parse(json as string) as OrderItem[]
   } catch {
     return null
   }
 }
 
-/** Record that the order was just exported: snapshot its items + stamp the time. */
+const revision = (items: OrderItem[]): string =>
+  JSON.stringify(items.map((i) => [i.name, i.modelNumber, i.quantity, i.received]))
+
+/** What `items` should be compared to: the last export, or if these are the very
+ *  lines already exported (the same order sent as PDF, then Excel) the one before. */
+export function getOrderBaseline(
+  id: number,
+  items: OrderItem[]
+): { items: OrderItem[]; at: string | null } | null {
+  const row = queryOne(
+    'SELECT last_export_json, last_export_at, prev_export_json, prev_export_at FROM shop_orders WHERE id = ?',
+    [id]
+  )
+  const last = parseItems(row?.last_export_json)
+  if (!row || !last) return null
+  if (revision(last) !== revision(items)) {
+    return { items: last, at: (row.last_export_at as string | null) ?? null }
+  }
+  const prev = parseItems(row.prev_export_json)
+  return prev ? { items: prev, at: (row.prev_export_at as string | null) ?? null } : null
+}
+
+/** Record an export. A changed order moves the baseline along one; re-exporting the
+ *  same lines leaves it, so every format of one revision shows the same changes. */
 export function markOrderExported(id: number, items: OrderItem[]): void {
+  const row = queryOne('SELECT last_export_json FROM shop_orders WHERE id = ?', [id])
+  const last = parseItems(row?.last_export_json)
+  if (last && revision(last) === revision(items)) return
   dbRun(
-    "UPDATE shop_orders SET last_export_json = ?, last_export_at = datetime('now') WHERE id = ?",
+    `UPDATE shop_orders SET prev_export_json = last_export_json, prev_export_at = last_export_at,
+       last_export_json = ?, last_export_at = datetime('now') WHERE id = ?`,
     [JSON.stringify(items), id]
   )
 }
@@ -988,10 +1067,12 @@ function mapOrderKit(row: Row): OrderKit {
 /** Kits are now stored in the shared library. Pull any that were saved in this
  *  project's DB (older versions) and delete them, so switchTo() can move them
  *  into the library once. */
-export function drainOrderKits(): OrderKit[] {
-  const rows = queryAll('SELECT * FROM order_kits ORDER BY id').map(mapOrderKit)
-  if (rows.length) dbRun('DELETE FROM order_kits')
-  return rows
+export function listProjectOrderKits(): OrderKit[] {
+  return queryAll('SELECT * FROM order_kits ORDER BY id').map(mapOrderKit)
+}
+
+export function clearProjectOrderKits(): void {
+  dbRun('DELETE FROM order_kits')
 }
 
 export function getProjectMeta(key: string): string | null {
@@ -1064,11 +1145,14 @@ export function getCircuitById(id: number): Circuit | null {
   return row ? mapCircuit(row) : null
 }
 
-export function setCircuitStatus(id: number, input: CircuitStatusInput): Circuit {
+export function setCircuitStatus(id: number, changes: Partial<CircuitStatusInput>): Circuit {
   // Backstop invariant: a circuit can't be "tested" unless BOTH ends are
   // patched. (So un-patching either end always clears tested.) The inverse —
   // turning tested ON marking both ends patched — is applied by the caller that
   // flips tested, so an un-patch here is never silently re-patched.
+  const current = getCircuitById(id)
+  if (!current) throw new Error(`Circuit ${id} not found.`)
+  const input = { ...current, ...changes }
   const { srcPatched, dstPatched } = input
   const tested = input.tested && srcPatched && dstPatched
   dbRun(
@@ -1087,52 +1171,54 @@ export function clearCircuits(): void {
  *  tested/notes on ones that persist, and removing circuits no longer present
  *  in the report (the drawing is authoritative for which circuits exist). */
 export function mergeCircuits(rows: CircuitImport[]): CircuitImportResult {
-  let added = 0
-  let updated = 0
-  const keys: string[] = []
-  for (const r of rows) {
-    const key = circuitKey(r)
-    keys.push(key)
-    const existing = queryOne('SELECT id FROM circuits WHERE conn_key = ?', [key])
-    const vals = [
-      r.cableNumber, r.signal, r.estLength,
-      r.srcName, r.srcSocket, r.srcConnector, r.srcRack, r.srcRackU, r.srcSlot,
-      r.dstName, r.dstSocket, r.dstConnector, r.dstRack, r.dstRackU, r.dstSlot
-    ]
-    if (existing) {
-      dbRun(
-        `UPDATE circuits SET cable_number=?, signal=?, est_length=?,
-           src_name=?, src_socket=?, src_connector=?, src_rack=?, src_rack_u=?, src_slot=?,
-           dst_name=?, dst_socket=?, dst_connector=?, dst_rack=?, dst_rack_u=?, dst_slot=?,
-           updated_at=datetime('now')
-         WHERE conn_key=?`,
-        [...vals, key]
-      )
-      updated++
-    } else {
-      dbRun(
-        `INSERT INTO circuits (conn_key, cable_number, signal, est_length,
-           src_name, src_socket, src_connector, src_rack, src_rack_u, src_slot,
-           dst_name, dst_socket, dst_connector, dst_rack, dst_rack_u, dst_slot)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [key, ...vals]
-      )
-      added++
+  return withTx(() => {
+    let added = 0
+    let updated = 0
+    const keys: string[] = []
+    for (const r of rows) {
+      const key = circuitKey(r)
+      keys.push(key)
+      const existing = queryOne('SELECT id FROM circuits WHERE conn_key = ?', [key])
+      const vals = [
+        r.cableNumber, r.signal, r.estLength,
+        r.srcName, r.srcSocket, r.srcConnector, r.srcRack, r.srcRackU, r.srcSlot,
+        r.dstName, r.dstSocket, r.dstConnector, r.dstRack, r.dstRackU, r.dstSlot
+      ]
+      if (existing) {
+        dbRun(
+          `UPDATE circuits SET cable_number=?, signal=?, est_length=?,
+             src_name=?, src_socket=?, src_connector=?, src_rack=?, src_rack_u=?, src_slot=?,
+             dst_name=?, dst_socket=?, dst_connector=?, dst_rack=?, dst_rack_u=?, dst_slot=?,
+             updated_at=datetime('now')
+           WHERE conn_key=?`,
+          [...vals, key]
+        )
+        updated++
+      } else {
+        dbRun(
+          `INSERT INTO circuits (conn_key, cable_number, signal, est_length,
+             src_name, src_socket, src_connector, src_rack, src_rack_u, src_slot,
+             dst_name, dst_socket, dst_connector, dst_rack, dst_rack_u, dst_slot)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [key, ...vals]
+        )
+        added++
+      }
     }
-  }
-  // Remove circuits no longer in the report. An empty parse almost always means
-  // the wrong file was picked, not an emptied drawing — so DON'T wipe on zero
-  // rows (that would destroy the crew's patch status). Deliberate wiping is the
-  // Clear button (clearCircuits).
-  let removed = 0
-  if (keys.length) {
-    const ph = keys.map(() => '?').join(',')
-    const stale = queryOne(`SELECT count(*) AS n FROM circuits WHERE conn_key NOT IN (${ph})`, keys)
-    removed = (stale?.n as number) ?? 0
-    dbRun(`DELETE FROM circuits WHERE conn_key NOT IN (${ph})`, keys)
-  }
-  const totalRow = queryOne('SELECT count(*) AS n FROM circuits')
-  return { added, updated, removed, total: (totalRow?.n as number) ?? 0 }
+    // Remove circuits no longer in the report. An empty parse almost always means
+    // the wrong file was picked, not an emptied drawing — so DON'T wipe on zero
+    // rows (that would destroy the crew's patch status). Deliberate wiping is the
+    // Clear button (clearCircuits).
+    let removed = 0
+    if (keys.length) {
+      const ph = keys.map(() => '?').join(',')
+      const stale = queryOne(`SELECT count(*) AS n FROM circuits WHERE conn_key NOT IN (${ph})`, keys)
+      removed = (stale?.n as number) ?? 0
+      dbRun(`DELETE FROM circuits WHERE conn_key NOT IN (${ph})`, keys)
+    }
+    const totalRow = queryOne('SELECT count(*) AS n FROM circuits')
+    return { added, updated, removed, total: (totalRow?.n as number) ?? 0 }
+  })
 }
 
 // ---- Crew + trucking schedule (per show) ---------------------------------

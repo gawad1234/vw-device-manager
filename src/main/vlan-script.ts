@@ -10,7 +10,8 @@ import type { HostConfig, VlanEntry } from '../shared/types'
 /** A PowerShell single-quoted string literal (safe for any text: single quotes
  *  doubled, and `$` / backtick are literal inside single quotes). */
 function psStr(s: string): string {
-  return "'" + String(s ?? '').replace(/'/g, "''") + "'"
+  // PowerShell treats curly single quotes as quotes too.
+  return "'" + String(s ?? '').replace(/['\u2018\u2019\u201a\u201b]/g, "$&$&") + "'"
 }
 
 /** One `$DefaultVlans` entry, formatted like the base script's hand-written ones. */

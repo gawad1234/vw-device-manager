@@ -66,10 +66,14 @@ function DeviceModal({
     }
   }, [])
 
+  // The device as this window loaded it.
+  const opened = useRef(device)
+
   // Re-seed the form only when a different device is opened — NOT on every
   // ports refresh (which re-renders with the same id and would wipe edits).
   useEffect(() => {
     setForm(device ? toForm(device) : EMPTY_FORM)
+    opened.current = device
     setError(null)
     setWarnings([])
   }, [device?.id])
@@ -81,33 +85,46 @@ function DeviceModal({
       return
     }
     setSaving(true)
-    const result = device
-      ? await window.api.devices.update(device.id, form)
-      : await window.api.devices.create(form)
-    if (result.error) {
+    try {
+      // Type and location belong to the drawing and a sync may have moved them
+      // while this was open: keep the current values unless edited here.
+      const input = device
+        ? {
+            ...form,
+            deviceType: form.deviceType === opened.current?.deviceType ? device.deviceType : form.deviceType,
+            location: form.location === opened.current?.location ? device.location : form.location
+          }
+        : form
+      const result = device
+        ? await window.api.devices.update(device.id, input)
+        : await window.api.devices.create(input)
+      if (result.error) {
+        setError(result.error)
+        setWarnings([])
+        return
+      }
+      // Flush the ports sub-section so "Save changes" saves everything, not just
+      // the device fields. Keep the first port error (if any) to surface it.
+      let childError: string | undefined
+      for (const saver of saversRef.current) {
+        const r = await saver()
+        if (!r.ok && !childError) childError = r.error
+      }
+      setError(childError ?? null)
+      setWarnings(result.warnings)
+      onChanged()
+      if (!device && result.device) {
+        // New device: reopen in edit mode so ports can be added.
+        onCreated(result.device.id)
+      } else if (device && !childError && result.warnings.length === 0) {
+        // Editing an existing device saved cleanly — close the window. (If a port
+        // failed or there are advisory warnings, stay open so they're seen.)
+        onClose()
+      }
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
       setSaving(false)
-      setError(result.error)
-      setWarnings([])
-      return
-    }
-    // Flush the ports sub-section so "Save changes" saves everything, not just
-    // the device fields. Keep the first port error (if any) to surface it.
-    let childError: string | undefined
-    for (const saver of saversRef.current) {
-      const r = await saver()
-      if (!r.ok && !childError) childError = r.error
-    }
-    setSaving(false)
-    setError(childError ?? null)
-    setWarnings(result.warnings)
-    onChanged()
-    if (!device && result.device) {
-      // New device: reopen in edit mode so ports can be added.
-      onCreated(result.device.id)
-    } else if (device && !childError && result.warnings.length === 0) {
-      // Editing an existing device saved cleanly — close the window. (If a port
-      // failed or there are advisory warnings, stay open so they're seen.)
-      onClose()
     }
   }
 

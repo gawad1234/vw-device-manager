@@ -145,7 +145,7 @@ export function registerIpcHandlers(): void {
   handle('fixtures:list', () => repo.listFixtures())
   handle('fixtures:save', (_e, id: number, input: FixtureInput) => {
     const saved = repo.saveFixture(id, input)
-    lighting.markLightingDirty()
+    lighting.markLightingDirty(saved.id)
     return saved
   })
   handle('lighting:get', () => repo.getLightingSettings())
@@ -269,8 +269,16 @@ export function registerIpcHandlers(): void {
 
   // Network signals + cable types are the shared, cross-project library.
   handle('signals:list', () => library.listNetworkSignals())
-  handle('signals:add', (_e, signal: string) => library.addNetworkSignal(signal))
-  handle('signals:remove', (_e, signal: string) => library.removeNetworkSignal(signal))
+  handle('signals:add', (_e, signal: string) => {
+    const list = library.addNetworkSignal(signal)
+    projects.publishNetworkSignals()
+    return list
+  })
+  handle('signals:remove', (_e, signal: string) => {
+    const list = library.removeNetworkSignal(signal)
+    projects.publishNetworkSignals()
+    return list
+  })
 
   handle('bundles:list', () => repo.listBundles())
   handle('bundles:create', (_e, input: BundleInput) => repo.createBundle(input))
@@ -295,7 +303,13 @@ export function registerIpcHandlers(): void {
   handle('project:current', () => remote.info() ?? projects.getCurrentProject())
   handle('project:recent', () => projects.listRecent())
   // Opening a local project (not a cancelled dialog) leaves a shared show.
-  const leaveIfOpened = (p: ProjectInfo | null): ProjectInfo | null => (p && remote.leave(), p)
+  const leaveIfOpened = (p: ProjectInfo | null): ProjectInfo | null => {
+    if (p) {
+      remote.leave()
+      server.resetSessions() // joined computers logged in to the old project
+    }
+    return p
+  }
   handle('project:new', async () => leaveIfOpened(await projects.newProject()))
   handle('project:open', async () => leaveIfOpened(await projects.openProject()))
   handle('project:openRecent', async (_e, path: string) =>
@@ -303,7 +317,7 @@ export function registerIpcHandlers(): void {
   )
   handle('project:join', (_e, address: string, pin: string) => remote.join(address, pin))
   handle('project:leave', () => (remote.leave(), projects.getCurrentProject()))
-  handle('project:saveCopyAs', () => projects.saveCopyAs())
+  handle('project:saveCopyAs', async () => leaveIfOpened(await projects.saveCopyAs()))
   handle('project:reveal', () => projects.revealCurrent())
 
   handle('export:run', (_e, opts: ExportOptions) => exportDocument(opts))
@@ -439,7 +453,7 @@ export function registerIpcHandlers(): void {
 
   // Patching (circuits imported from a ConnectCAD circuit report).
   handle('circuits:list', () => repo.listCircuits())
-  handle('circuits:setStatus', (_e, id: number, input: CircuitStatusInput) =>
+  handle('circuits:setStatus', (_e, id: number, input: Partial<CircuitStatusInput>) =>
     repo.setCircuitStatus(id, input)
   )
   handle('circuits:import', () => importCircuitReport())
@@ -452,6 +466,11 @@ export function registerIpcHandlers(): void {
   handle('updates:install', () => updater.quitAndInstall())
   handle('updates:getAutoCheck', () => updater.getAutoCheck())
   handle('updates:setAutoCheck', (_e, value: boolean) => updater.setAutoCheck(value))
+
+  // Where this computer keeps the shared library (Settings).
+  handle('library:location', () => library.getLibraryLocation())
+  handle('library:chooseFolder', () => library.chooseLibraryFolder())
+  handle('library:useLocal', () => library.useLocalLibrary())
 
   // LAN Show Server (Settings → Show Server).
   handle('server:getState', () => server.getServerStatus())

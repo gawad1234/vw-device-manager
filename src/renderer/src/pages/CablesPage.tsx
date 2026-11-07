@@ -69,7 +69,7 @@ function CablesPage({ bundles, devices, cableTypes, onChanged }: Props): React.J
             </tr>
           )}
           {filtered.map((b) => (
-            <tr key={b.id} className="clickable" onClick={() => setOpenId(b.id)}>
+            <tr key={b.id} className="clickable" tabIndex={0} onClick={() => setOpenId(b.id)}>
               <td>
                 {b.color && (
                   <span className="bundle-dot" style={{ background: b.color }} aria-hidden />
@@ -92,7 +92,10 @@ function CablesPage({ bundles, devices, cableTypes, onChanged }: Props): React.J
           cableTypes={cableTypes}
           onClose={() => setOpenId(null)}
           onChanged={onChanged}
-          onCreated={(id) => setOpenId(id)}
+          onCreated={async (id) => {
+            await onChanged() // or the open row looks deleted
+            setOpenId(id)
+          }}
         />
       )}
     </div>

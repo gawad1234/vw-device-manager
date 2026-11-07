@@ -90,17 +90,25 @@ function CableRow({
   // carrying along any edits in progress in this row.
   async function persist(patch?: { pulled?: boolean; labeled?: boolean }): Promise<{ ok: boolean }> {
     setSaving(true)
-    await window.api.cables.update(cable.id, {
-      name: name.trim() || cable.name,
-      cableType: cableType || null,
-      source,
-      destination,
-      pulled: patch?.pulled ?? pulled,
-      labeled: patch?.labeled ?? labeled,
-      notes: cable.notes
-    })
-    setSaving(false)
-    return { ok: true }
+    try {
+      await window.api.cables.update(cable.id, {
+        name: name.trim() || cable.name,
+        cableType: cableType || null,
+        source,
+        destination,
+        pulled: patch?.pulled ?? pulled,
+        labeled: patch?.labeled ?? labeled,
+        notes: cable.notes
+      })
+      return { ok: true }
+    } catch (e) {
+      // Put the box back: the saved value didn't change.
+      if (patch?.pulled !== undefined) setPulled(cable.pulled)
+      if (patch?.labeled !== undefined) setLabeled(cable.labeled)
+      throw e
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function save(patch?: { pulled?: boolean; labeled?: boolean }): Promise<void> {

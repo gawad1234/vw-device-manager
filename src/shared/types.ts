@@ -304,7 +304,23 @@ export type OrderKitInput = Omit<OrderKit, 'id' | 'createdAt' | 'updatedAt'>
 export interface SwitchConfigSettings {
   baseTemplate: string
   adminUser: string
+  /** kept on this computer, never in the shared library */
   adminPassword: string
+  monitoring: SwitchMonitoring
+}
+
+/** What a switch needs to report to the Status Monitor stack. */
+export interface SwitchMonitoring {
+  /** syslog server IPs, comma or space separated; saved with the show, since the
+   *  monitoring PC's address changes per show network */
+  logServers: string
+  syslogPort: number
+  /** read-only SNMP community the monitoring PC polls with; kept on this computer */
+  snmpCommunity: string
+  /** M4300 firmware 12 refuses the one-line community command */
+  m4300Snmp: boolean
+  /** PoE traps and an 85% usage threshold: leave off on non-PoE switches */
+  poeAlerts: boolean
 }
 
 /** Each order column's name, its short PDF header, whether it's a centered number,
@@ -1012,6 +1028,11 @@ export interface VwDeviceManagerApi {
     get: () => Promise<string | null>
     set: (dataUrl: string | null) => Promise<void>
   }
+  library: {
+    location(): Promise<LibraryLocation>
+    chooseFolder(): Promise<LibraryLocation | null>
+    useLocal(): Promise<LibraryLocation>
+  }
   companyName: {
     get: () => Promise<string | null>
     set: (name: string | null) => Promise<void>
@@ -1116,10 +1137,18 @@ export interface VwDeviceManagerApi {
    *  per-circuit patched/tested/notes tracking. */
   circuits: {
     list: () => Promise<Circuit[]>
-    setStatus: (id: number, input: CircuitStatusInput) => Promise<Circuit>
+    setStatus: (id: number, input: Partial<CircuitStatusInput>) => Promise<Circuit>
     /** open a file dialog, import a circuit-report CSV, merge, return a summary */
     import: () => Promise<CircuitImportResult | null>
     /** remove all circuits (start over) */
     clear: () => Promise<void>
   }
+}
+
+/** Where this computer keeps the shared library. */
+export interface LibraryLocation {
+  path: string
+  shared: boolean
+  /** the chosen folder couldn't be reached at launch, so the local copy is in use */
+  missing: boolean
 }

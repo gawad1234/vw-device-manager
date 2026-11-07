@@ -80,6 +80,8 @@ Unsaved edits on one tab are kept when you switch tabs, and **Save changes** sav
 - **Tagged VLANs** — trunked networks on that jack.
 
 **Switches:** flag a device as a switch and it gains device-level **Management IP** and **Out-of-band (OOB) IP** fields, and its ports become VLAN-only (no per-port IP — switch ports just carry VLANs).
+- Each switch port shows its number on the switch, like *1/0/2*. Jacks marked **Not needed** take no number, since they may not be LAN ports at all, so the ports after one move up. Check this against the switch if a jack marked Not needed is a real port.
+- A generated config starts with `! CHECK:` lines if anything needs a look, such as a bad VLAN or a management IP outside every subnet. Those settings are left out rather than guessed.
 - Each switch port shows (read-only) the device that's patched into it and that device's VLAN, from the Patching data.
 - **LAG** — give several switch ports the same LAG name and they collapse into one combined interface: set the untagged + tagged VLANs once and they apply to every member.
 - **Switch configs (beta)** — the app can generate a full, uploadable **NETGEAR M4350** startup config per switch (show VLANs, LAGs, per-port VLANs, management IP, name) from your house template in **Settings → Switch config generator**. It's on that switch's page in the [Show Server](#show-server), with **Copy** and **Download .cfg**. Verify it on a non-production switch first.
@@ -225,8 +227,8 @@ Builds a **Hyper-V VLAN trunk** for a Windows host — one untagged (native) ada
 For a GUI instead of a script, Device Manager carries a small Windows **VLAN Manager**. Click **Save VLAN Manager…** at the top of the Configs page and pick a folder: it writes a **VLAN Manager** folder with two files (`VlanManager.ps1` and `Apply-VlanConfig.ps1`). Copy that folder to the Hyper-V host (keep the two files together) and right-click **`VlanManager.ps1` → Run with PowerShell**. It asks for administrator rights itself. Use it to:
 
 - **see the VLAN adapters that are there right now,**
-- add / edit / remove them,
-- **Preview** the exact changes, then **Apply** them live (idempotent, with retries),
+- add / edit / remove them (an adapter you remove is deleted from the host at the next Apply),
+- **Preview** the planned changes, including IPs and gateways, then **Apply** them live (idempotent, with retries),
 - **Teardown** the switch + adapters.
 
 Tie it to Device Manager with **Export JSON…** here → **Load config…** in the tool. Setup and full instructions are in [`host-tools/README.md`](../host-tools/README.md).
@@ -313,7 +315,7 @@ Track equipment and cable purchasing, and receiving.
 - **Pull order** — for the shop, showing what to send.
 - **Receiving checklist** — for the receiving team, with ☐ checkboxes and an Outstanding column.
 - Both in **PDF / Excel / CSV**, grouped by category, stamped with the export date.
-- **Highlight changes since last export** — tick this to color new/changed rows and add a Change column, compared against the last time you exported that order. The baseline re-snapshots on every export.
+- **Highlight changes since last export** — tick this to color new/changed rows and add a Change column, compared against the last pull order you exported. Lines taken off are listed as removed. Exporting the same lines again, say as Excel after the PDF, shows the same changes, and a receiving checklist doesn't count as an export for this.
 
 ### Auto-add kits
 
@@ -324,8 +326,8 @@ Track equipment and cable purchasing, and receiving.
 Save reusable **export-format templates** ("order types") and pick one per export. In an order's **Export ▾** menu:
 
 - **Format** dropdown — **Default (built-in)** or any format you've saved.
-- **Edit formats…** — opens the format manager, with a **live preview** of the open order (or sample items) as the PDF lays it out.
-- **+ Equipment list** (in the format manager) — adds a ready-made format in the equipment-list look: New Qty / Old Qty / Item / Mfr. P/N / Manufacturer / Filled / Balance.
+- **Edit formats in Paperwork…** — opens the format on the **Paperwork** page, under **Orders**, with a **live preview** of that order as the PDF lays it out. Add or edit formats there at any time; changes save as you make them.
+- **+ Equipment list** (in **Paperwork → Orders**) — adds a ready-made format in the equipment-list look: New Qty / Old Qty / Item / Mfr. P/N / Manufacturer / Filled / Balance.
 
 Each format controls:
 
@@ -422,9 +424,11 @@ Serve the open show over your **local production WiFi** so anyone helping with t
 
 **Turn it on:** **Settings → Show Server** — switch it on, pick a **port** (default 8787), set a **crew PIN** and/or a **manager PIN**, and hand out the address (shown with a QR code). The on/off switch and port are per computer; the PINs are saved with the show. The first time, your OS asks to allow incoming connections — say yes (*Private network* on Windows).
 
-**What crew can do:** receive order items (quantities + notes), see the IP schedule and device list, open a page per device (ports → VLANs, switch IPs, notes, its own QR code — and, for switches, the generated [switch config](#devices)), tick off [patching](#patching), and view/print case labels. **Managers** also get a printable **QR sheet** for sticking a code on each piece of gear.
+**The crew app:** the site is built for phones, with **Home, Receive, Devices** and **Patch** tabs along the bottom. Add it to the phone's home screen for its own icon and full-screen view, with no App Store: **Home → Add to Home Screen** shows the steps. It needs the show WiFi, and QR codes are scanned with the phone's Camera app.
 
-**Access:** a blank crew PIN leaves the site open to anyone on the WiFi; a crew PIN locks it; the manager PIN gates the admin tools. Crew schedules, rates and contact details are **not** served to phones and browsers.
+**What crew can do:** receive order items (tap + as they arrive, then save once, with notes), see the IP schedule and device list, open a page per device (ports → VLANs, switch IPs, notes, its own QR code — and, for switches, the generated [switch config](#devices)), tick off each end of a cable and mark it tested on **Patch** or from a device, and view/print case labels. Screens don't update by themselves: reopen one to see what others changed. **Managers** also get a printable **QR sheet** for sticking a code on each piece of gear.
+
+**Access:** a blank crew PIN leaves the site open to anyone on the WiFi; a crew PIN locks it; the manager PIN gates the admin tools. Crew schedules, rates and contact details are **not** served to phones and browsers. The switch admin password appears only for someone signed in with the manager PIN. Five wrong PINs lock that device out for 30 seconds. Changing a PIN or opening another show signs everyone out.
 
 ### Sharing a show with other computers
 
@@ -443,6 +447,7 @@ A joined computer can see the whole show **and the shared library on the host, i
 
 ## Settings
 
+- **Shared library** — where crew, kits, cable types, templates and the other shared lists live. To use them on more than one computer, choose the same folder that syncs, such as one in Dropbox, on each computer. The first computer moves its library in. The next one uses what's there and keeps its old library as a backup (`library.before-sharing.json`); the two aren't merged, so start with the computer that has the fuller list.
 - **Company branding** — your company name and logo, stamped as a letterhead on every project's paperwork. Shared across all projects.
 - **Table style** — how the tables in every Excel and PDF export look: header color and text color, alternating row colors (on/off and the color), lines (grid, between rows, or none), the **font** (fonts that exist on Mac, Windows and in Excel), **header size** (% of the text), **bold header**, **CAPITALS** and **padding** (tight / normal / roomy). Start from a color preset (Classic, Dark header, Blue bands, Plain — they leave the font and header choices alone) and adjust; the sample table shows the result. Text size is set per template (Paperwork, order formats). Shared across all projects.
 - **Show branding** — the show **name** and **logo**. These stamp onto exports (pull orders, schedules, labels) and feed the `{Show}` token and the Show-name/logo label elements. Per project.
@@ -450,7 +455,8 @@ A joined computer can see the whole show **and the shared library on the host, i
 - **Cable types** — the shared catalog used by cables. Shared across all projects.
 - **Device categories** — the category list used by devices and order line items (type to filter; a new name creates a category).
 - **Manage kits** — [auto-add kits](#auto-add-kits) for orders.
-- **Switch config generator** — the house base template and admin login used for [switch configs](#devices). *The admin password is stored in plain text in the generated config.*
+- **Switch config generator** — the house base template and admin login used for [switch configs](#devices). *The admin password is written in plain text in the generated config.* It stays on each computer rather than syncing with the shared library, so enter it on each one.
+- **Monitoring** (in the same panel) — points every generated switch config at your monitoring PC. **Logging server IPs** are saved with the show, since the address changes per show network; separate several with commas. **SNMP community** stays on each computer and must match the monitoring PC. Tick **M4300 SNMP commands** for M4300 switches on firmware 12, and **PoE alerts** for PoE switches. Each switch still needs a management IP, because that's the address the monitoring PC polls, and a `! CHECK:` line appears if a logging server is outside its management subnet. The switch's own config adds no route, so keep the monitoring PC on that subnet or add a route to the template. Crew copies of a config leave the community out.
 - **Show Server** — see [above](#show-server).
 - **Updates** — see below.
 
@@ -499,7 +505,7 @@ The library remembers where each installer lives on the computer you added it fr
 Its silent switches are wrong for that installer. Check `install-log.txt` in the kit folder, look up the vendor's silent-install switches, and fix them in the Software library.
 
 **An export looks off (wrong columns, cramped, etc.).**
-Check which **export format** is selected in the Export menu — switch to **Default**, or open **Edit formats…** and adjust columns, widths and text size.
+Check which **export format** is selected in the Export menu — switch to **Default**, or open **Paperwork → Orders** and adjust columns, widths and text size.
 
 **Lighting sync isn't picking anything up.**
 Check the sync bar on **Lighting → Fixtures**: it shows which exchange file it's watching and whether it was found. The file appears only after Lightwright data exchange is turned on in Vectorworks' Spotlight preferences and the drawing has been opened. If it says **waiting for Vectorworks**, open the drawing — Vectorworks picks up the app's changes only while the drawing is open.

@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync, statSync } from 'fs'
 import { dirname } from 'path'
 
 const SCHEMA = `
@@ -85,8 +85,8 @@ CREATE TABLE IF NOT EXISTS bundles (
 
 -- A cable belongs to one bundle. Each endpoint (source/dest) links to a device
 -- and optionally a specific port, OR falls back to free text (*_text) when the
--- device isn't in the app. FK cascade/set-null is declarative — like the rest
--- of the app, deletes are cascaded manually in the repository (pragma off).
+-- device isn't in the app. Foreign keys are ON (the node:sqlite default), so the
+-- cascade and set-null rules below really run.
 CREATE TABLE IF NOT EXISTS cables (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   bundle_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
@@ -249,9 +249,18 @@ CREATE TABLE IF NOT EXISTS fixtures (
 // busy_timeout), unlike the old sql.js whole-file rewrite.
 let db: DatabaseSync | null = null
 let dbPath: string | null = null
+let dbFileId: number | null = null
 
 /** Bind values node:sqlite accepts for a positional `?` parameter. */
 type SqlParam = string | number | bigint | null | Uint8Array
+
+/** Add a column unless it's there. Per column, so a file left half-migrated by an
+ *  older version still gets the rest. */
+function addColumn(database: DatabaseSync, table: string, column: string, type: string): void {
+  if (!tableHasColumn(database, table, column)) {
+    database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`)
+  }
+}
 
 function tableHasColumn(database: DatabaseSync, table: string, column: string): boolean {
   const rows = database.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
@@ -274,37 +283,30 @@ function tableExists(database: DatabaseSync, name: string): boolean {
 function migrateDevicesToPorts(database: DatabaseSync): void {
   if (!tableHasColumn(database, 'devices', 'ip_address')) return
 
-  database.exec('BEGIN')
-  try {
-    // Backfill: one "Port 1" per device that actually had an IP or subnet.
-    database.exec(
-      `INSERT INTO ports (device_id, label, ip_address, untagged_subnet_id)
-       SELECT id, 'Port 1', ip_address, subnet_id FROM devices
-       WHERE ip_address IS NOT NULL OR subnet_id IS NOT NULL`
-    )
-    // Rebuild devices without ip_address / subnet_id (portable across SQLite
-    // versions — avoids relying on ALTER TABLE DROP COLUMN).
-    database.exec(`
-      CREATE TABLE devices_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        device_type TEXT,
-        mac_address TEXT,
-        location TEXT,
-        notes TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-      INSERT INTO devices_new (id, name, device_type, mac_address, location, notes, created_at, updated_at)
-        SELECT id, name, device_type, mac_address, location, notes, created_at, updated_at FROM devices;
-      DROP TABLE devices;
-      ALTER TABLE devices_new RENAME TO devices;
-    `)
-    database.exec('COMMIT')
-  } catch (e) {
-    database.exec('ROLLBACK')
-    throw e
-  }
+  // Backfill: one "Port 1" per device that actually had an IP or subnet.
+  database.exec(
+    `INSERT INTO ports (device_id, label, ip_address, untagged_subnet_id)
+     SELECT id, 'Port 1', ip_address, subnet_id FROM devices
+     WHERE ip_address IS NOT NULL OR subnet_id IS NOT NULL`
+  )
+  // Rebuild devices without ip_address / subnet_id (portable across SQLite
+  // versions — avoids relying on ALTER TABLE DROP COLUMN).
+  database.exec(`
+    CREATE TABLE devices_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      device_type TEXT,
+      mac_address TEXT,
+      location TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO devices_new (id, name, device_type, mac_address, location, notes, created_at, updated_at)
+      SELECT id, name, device_type, mac_address, location, notes, created_at, updated_at FROM devices;
+    DROP TABLE devices;
+    ALTER TABLE devices_new RENAME TO devices;
+  `)
 }
 
 /**
@@ -315,12 +317,9 @@ function migrateDevicesToPorts(database: DatabaseSync): void {
  */
 function migrateAddSwitchColumns(database: DatabaseSync): void {
   if (!tableExists(database, 'devices')) return
-  if (tableHasColumn(database, 'devices', 'is_switch')) return
-  database.exec(`
-    ALTER TABLE devices ADD COLUMN is_switch INTEGER NOT NULL DEFAULT 0;
-    ALTER TABLE devices ADD COLUMN management_ip TEXT;
-    ALTER TABLE devices ADD COLUMN oob_ip TEXT;
-  `)
+  addColumn(database, 'devices', 'is_switch', 'INTEGER NOT NULL DEFAULT 0')
+  addColumn(database, 'devices', 'management_ip', 'TEXT')
+  addColumn(database, 'devices', 'oob_ip', 'TEXT')
 }
 
 /**
@@ -335,37 +334,30 @@ function migrateCableLengthToBundle(database: DatabaseSync): void {
   }
   if (!tableExists(database, 'cables') || !tableHasColumn(database, 'cables', 'length')) return
 
-  database.exec('BEGIN')
-  try {
-    database.exec(`
-      CREATE TABLE cables_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        bundle_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        cable_type_id INTEGER REFERENCES cable_types(id) ON DELETE SET NULL,
-        source_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
-        source_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
-        source_text TEXT,
-        dest_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
-        dest_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
-        dest_text TEXT,
-        notes TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-      INSERT INTO cables_new
-        (id, bundle_id, name, cable_type_id, source_device_id, source_port_id, source_text,
-         dest_device_id, dest_port_id, dest_text, notes, created_at, updated_at)
-        SELECT id, bundle_id, name, cable_type_id, source_device_id, source_port_id, source_text,
-         dest_device_id, dest_port_id, dest_text, notes, created_at, updated_at FROM cables;
-      DROP TABLE cables;
-      ALTER TABLE cables_new RENAME TO cables;
-    `)
-    database.exec('COMMIT')
-  } catch (e) {
-    database.exec('ROLLBACK')
-    throw e
-  }
+  database.exec(`
+    CREATE TABLE cables_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bundle_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      cable_type_id INTEGER REFERENCES cable_types(id) ON DELETE SET NULL,
+      source_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+      source_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
+      source_text TEXT,
+      dest_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+      dest_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
+      dest_text TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO cables_new
+      (id, bundle_id, name, cable_type_id, source_device_id, source_port_id, source_text,
+       dest_device_id, dest_port_id, dest_text, notes, created_at, updated_at)
+      SELECT id, bundle_id, name, cable_type_id, source_device_id, source_port_id, source_text,
+       dest_device_id, dest_port_id, dest_text, notes, created_at, updated_at FROM cables;
+    DROP TABLE cables;
+    ALTER TABLE cables_new RENAME TO cables;
+  `)
 }
 
 /**
@@ -375,11 +367,8 @@ function migrateCableLengthToBundle(database: DatabaseSync): void {
  */
 function migrateCableChecklist(database: DatabaseSync): void {
   if (!tableExists(database, 'cables')) return
-  if (tableHasColumn(database, 'cables', 'pulled')) return
-  database.exec(`
-    ALTER TABLE cables ADD COLUMN pulled INTEGER NOT NULL DEFAULT 0;
-    ALTER TABLE cables ADD COLUMN labeled INTEGER NOT NULL DEFAULT 0;
-  `)
+  addColumn(database, 'cables', 'pulled', 'INTEGER NOT NULL DEFAULT 0')
+  addColumn(database, 'cables', 'labeled', 'INTEGER NOT NULL DEFAULT 0')
 }
 
 /** Adds `bundles.color` (hex color code for the bundle). Guarded, additive. */
@@ -399,41 +388,34 @@ function migrateCableTypeToName(database: DatabaseSync): void {
   if (!tableExists(database, 'cables')) return
   if (!tableHasColumn(database, 'cables', 'cable_type_id')) return
 
-  database.exec('BEGIN')
-  try {
-    database.exec(`
-      CREATE TABLE cables_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        bundle_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        cable_type TEXT,
-        source_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
-        source_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
-        source_text TEXT,
-        dest_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
-        dest_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
-        dest_text TEXT,
-        pulled INTEGER NOT NULL DEFAULT 0,
-        labeled INTEGER NOT NULL DEFAULT 0,
-        notes TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-      INSERT INTO cables_new
-        (id, bundle_id, name, cable_type, source_device_id, source_port_id, source_text,
-         dest_device_id, dest_port_id, dest_text, pulled, labeled, notes, created_at, updated_at)
-        SELECT c.id, c.bundle_id, c.name, ct.name, c.source_device_id, c.source_port_id,
-         c.source_text, c.dest_device_id, c.dest_port_id, c.dest_text, c.pulled, c.labeled,
-         c.notes, c.created_at, c.updated_at
-        FROM cables c LEFT JOIN cable_types ct ON ct.id = c.cable_type_id;
-      DROP TABLE cables;
-      ALTER TABLE cables_new RENAME TO cables;
-    `)
-    database.exec('COMMIT')
-  } catch (e) {
-    database.exec('ROLLBACK')
-    throw e
-  }
+  database.exec(`
+    CREATE TABLE cables_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bundle_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      cable_type TEXT,
+      source_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+      source_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
+      source_text TEXT,
+      dest_device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+      dest_port_id INTEGER REFERENCES ports(id) ON DELETE SET NULL,
+      dest_text TEXT,
+      pulled INTEGER NOT NULL DEFAULT 0,
+      labeled INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO cables_new
+      (id, bundle_id, name, cable_type, source_device_id, source_port_id, source_text,
+       dest_device_id, dest_port_id, dest_text, pulled, labeled, notes, created_at, updated_at)
+      SELECT c.id, c.bundle_id, c.name, ct.name, c.source_device_id, c.source_port_id,
+       c.source_text, c.dest_device_id, c.dest_port_id, c.dest_text, c.pulled, c.labeled,
+       c.notes, c.created_at, c.updated_at
+      FROM cables c LEFT JOIN cable_types ct ON ct.id = c.cable_type_id;
+    DROP TABLE cables;
+    ALTER TABLE cables_new RENAME TO cables;
+  `)
 }
 
 /** Adds `ports.is_primary` (marks a device's main access-route port). Guarded, additive. */
@@ -488,11 +470,11 @@ function migrateAddPortLag(database: DatabaseSync): void {
 /** Adds the shop-order export snapshot columns (change highlighting). Guarded. */
 function migrateAddOrderExportSnapshot(database: DatabaseSync): void {
   if (!tableExists(database, 'shop_orders')) return
-  if (tableHasColumn(database, 'shop_orders', 'last_export_at')) return
-  database.exec(`
-    ALTER TABLE shop_orders ADD COLUMN last_export_json TEXT;
-    ALTER TABLE shop_orders ADD COLUMN last_export_at TEXT;
-  `)
+  addColumn(database, 'shop_orders', 'last_export_json', 'TEXT')
+  addColumn(database, 'shop_orders', 'last_export_at', 'TEXT')
+  // The export before that, so the same revision sent twice shows the same changes.
+  addColumn(database, 'shop_orders', 'prev_export_json', 'TEXT')
+  addColumn(database, 'shop_orders', 'prev_export_at', 'TEXT')
 }
 
 /** Adds `order_export_formats.font_size` (exact text size, replacing the 3-step
@@ -528,12 +510,10 @@ function migrateAddLabelElements(database: DatabaseSync): void {
  *  Guarded — only the brief first-cut `circuits` table had `patched`. */
 function migrateCircuitEnds(database: DatabaseSync): void {
   if (!tableExists(database, 'circuits')) return
-  if (tableHasColumn(database, 'circuits', 'src_patched')) return
-  database.exec(`
-    ALTER TABLE circuits ADD COLUMN src_patched INTEGER NOT NULL DEFAULT 0;
-    ALTER TABLE circuits ADD COLUMN dst_patched INTEGER NOT NULL DEFAULT 0;
-  `)
-  if (tableHasColumn(database, 'circuits', 'patched')) {
+  const already = tableHasColumn(database, 'circuits', 'src_patched')
+  addColumn(database, 'circuits', 'src_patched', 'INTEGER NOT NULL DEFAULT 0')
+  addColumn(database, 'circuits', 'dst_patched', 'INTEGER NOT NULL DEFAULT 0')
+  if (!already && tableHasColumn(database, 'circuits', 'patched')) {
     database.exec('UPDATE circuits SET src_patched = patched, dst_patched = patched')
   }
 }
@@ -541,6 +521,24 @@ function migrateCircuitEnds(database: DatabaseSync): void {
 /** Bring a freshly opened DB up to date: schema + all migrations. Network
  *  signals / cable types are NOT here — they live in the shared library. */
 function applySchemaAndMigrations(database: DatabaseSync): void {
+  // Foreign keys must be off here: rebuilding a table with DROP TABLE would
+  // otherwise fire ON DELETE rules and wipe the rows that point at it. The one
+  // transaction means a crash or lock leaves the file exactly as it was. A plain
+  // BEGIN takes no write lock on an up-to-date file.
+  database.exec('PRAGMA foreign_keys = OFF')
+  database.exec('BEGIN')
+  try {
+    runMigrations(database)
+    database.exec('COMMIT')
+  } catch (e) {
+    database.exec('ROLLBACK')
+    throw e
+  } finally {
+    database.exec('PRAGMA foreign_keys = ON')
+  }
+}
+
+function runMigrations(database: DatabaseSync): void {
   database.exec(SCHEMA)
   migrateDevicesToPorts(database)
   migrateAddSwitchColumns(database)
@@ -571,13 +569,48 @@ function applySchemaAndMigrations(database: DatabaseSync): void {
  */
 export async function openDb(path: string): Promise<void> {
   mkdirSync(dirname(path), { recursive: true })
+  // Prove the new file works before letting go of the current project, so a bad
+  // file leaves the app on what it had open.
+  const next = new DatabaseSync(path)
+  try {
+    // Wait up to 5s for a lock instead of erroring, so a concurrent VW-script
+    // write doesn't fail the app (and vice versa).
+    next.exec('PRAGMA busy_timeout = 5000')
+    applySchemaAndMigrations(next)
+  } catch (e) {
+    next.close()
+    throw e
+  }
   db?.close()
-  db = new DatabaseSync(path)
+  db = next
   dbPath = path
-  // Wait up to 5s for a lock instead of erroring, so a concurrent VW-script
-  // write doesn't fail the app (and vice versa).
-  db.exec('PRAGMA busy_timeout = 5000')
-  applySchemaAndMigrations(db)
+  dbFileId = fileId(path)
+}
+
+function fileId(path: string): number | null {
+  try {
+    return statSync(path).ino
+  } catch {
+    return null // mid-replace; the next check sees the new file
+  }
+}
+
+/**
+ * True if the file on disk is no longer the one we opened, after reopening it.
+ * Sync tools replace files by rename; SQLite would keep reading the old copy and
+ * then refuse every write.
+ */
+export function reopenIfReplaced(): boolean {
+  if (!dbPath) return false
+  const id = fileId(dbPath)
+  if (id === null || id === dbFileId) return false
+  const next = new DatabaseSync(dbPath)
+  next.exec('PRAGMA busy_timeout = 5000')
+  applySchemaAndMigrations(next)
+  db?.close()
+  db = next
+  dbFileId = id
+  return true
 }
 
 export function getCurrentDbPath(): string | null {
@@ -590,6 +623,21 @@ export function getDb(): DatabaseSync {
 }
 
 // ---- Engine-agnostic query helpers (used by repository + migrations) -----
+
+/** Run several writes as one: all of them land, or none do. Nesting is safe. */
+export function withTx<T>(fn: () => T): T {
+  const d = getDb()
+  if (d.isTransaction) return fn()
+  d.exec('BEGIN IMMEDIATE')
+  try {
+    const result = fn()
+    d.exec('COMMIT')
+    return result
+  } catch (e) {
+    d.exec('ROLLBACK')
+    throw e
+  }
+}
 
 export function dbExec(sql: string): void {
   getDb().exec(sql)

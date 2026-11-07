@@ -12,7 +12,8 @@ export interface KitItem {
 
 /** PowerShell single-quoted literal (quotes doubled; $ and ` stay literal). */
 function psStr(s: string): string {
-  return "'" + String(s ?? '').replace(/'/g, "''") + "'"
+  // PowerShell treats curly single quotes as quotes too.
+  return "'" + String(s ?? '').replace(/['\u2018\u2019\u201a\u201b]/g, "$&$&") + "'"
 }
 
 /** Kit file names for the given installer paths; same-named files get a numeric prefix. */

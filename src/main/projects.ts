@@ -1,10 +1,17 @@
-import { app, dialog, shell } from 'electron'
-import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'fs'
-import { basename, dirname, extname, join } from 'path'
+import { dialog, shell } from 'electron'
+import { existsSync, copyFileSync } from 'fs'
+import { basename, extname } from 'path'
 import { openDb, getCurrentDbPath } from './db'
-import { drainOrderKits } from './repository'
-import { importOrderKits } from './library'
+import {
+  clearProjectOrderKits,
+  getProjectMeta,
+  listProjectOrderKits,
+  setProjectMeta
+} from './repository'
+import { importOrderKits, listNetworkSignals } from './library'
 import { getDbPath } from './paths'
+import { readSettings, writeSettings } from './settings'
+import { bumpChange } from './rpc-registry'
 import type { ProjectInfo } from '../shared/types'
 
 // A project is a plain SQLite database; this friendly extension keeps it
@@ -13,42 +20,8 @@ const PROJECT_EXT = '.vwdm'
 const FILTERS = [{ name: 'Device Manager Project', extensions: ['vwdm'] }]
 const MAX_RECENT = 12
 
-interface Settings {
-  lastProject?: string
-  recentProjects?: string[]
-  /** check GitHub for a newer version on launch (default true) */
-  autoCheckUpdates?: boolean
-  /** run the LAN "Show Server" (auto-start on launch); per-machine */
-  showServerEnabled?: boolean
-  /** TCP port for the Show Server (per-machine) */
-  showServerPort?: number
-}
-
 /** Default Show Server port — an uncommon high port to dodge collisions. */
 export const DEFAULT_SERVER_PORT = 8787
-
-// Settings live in this machine's userData (NOT the Dropbox folder), so Mac
-// absolute paths and Windows absolute paths never collide across machines.
-function settingsPath(): string {
-  return join(app.getPath('userData'), 'settings.json')
-}
-
-function readSettings(): Settings {
-  try {
-    return JSON.parse(readFileSync(settingsPath(), 'utf-8')) as Settings
-  } catch {
-    return {}
-  }
-}
-
-function writeSettings(s: Settings): void {
-  try {
-    mkdirSync(dirname(settingsPath()), { recursive: true })
-    writeFileSync(settingsPath(), JSON.stringify(s, null, 2))
-  } catch {
-    // Settings are a convenience (recent list / reopen) — never fatal.
-  }
-}
 
 function toInfo(path: string): ProjectInfo {
   return { path, name: basename(path, extname(path)) }
@@ -111,18 +84,40 @@ export function resolveStartupProject(): string {
   return getDbPath()
 }
 
+/** The Vectorworks scripts can't know where this computer's library lives, so the
+ *  project carries a copy of the one list they need. */
+export function publishNetworkSignals(): void {
+  const value = JSON.stringify(listNetworkSignals())
+  if (getProjectMeta('networkSignals') !== value) setProjectMeta('networkSignals', value)
+}
+
 async function switchTo(path: string): Promise<ProjectInfo> {
   await openDb(path)
   // One-time carry-over: kits used to live in the project DB; move any into the
   // shared library so they travel across projects from now on.
-  importOrderKits(drainOrderKits())
+  // Delete only after the library saved them, so a failed write loses nothing.
+  const kits = listProjectOrderKits()
+  if (kits.length) {
+    importOrderKits(kits)
+    clearProjectOrderKits()
+  }
+  publishNetworkSignals()
   rememberProject(path)
+  bumpChange() // joined computers must reload: every row just changed
   return toInfo(path)
 }
 
 /** Called once at launch to open the startup project. */
 export async function openStartupProject(): Promise<ProjectInfo> {
-  return switchTo(resolveStartupProject())
+  const path = resolveStartupProject()
+  try {
+    return await switchTo(path)
+  } catch (e) {
+    // A damaged last project must not stop the app from opening at all.
+    dialog.showErrorBox('Could not open the last project', `${path}\n\n${(e as Error).message}`)
+    if (path === getDbPath()) throw e
+    return switchTo(getDbPath())
+  }
 }
 
 function ensureExt(path: string): string {
