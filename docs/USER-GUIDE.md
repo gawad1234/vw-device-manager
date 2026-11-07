@@ -34,7 +34,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Syncing to Vectorworks](#syncing-to-vectorworks)
 - [Troubleshooting](#troubleshooting)
 
-The left sidebar groups these: **Devices** (with Projectors, Wallpapers and Software under it), **Networking** (Subnets, Configs), **Schedule** (Crew, Trucking), **Cables**, **Lighting** (Fixtures, Universes, Fixture types), **Patching**, **Orders**, **Paperwork**, **Packing** (Labels, Cases) and **Settings**.
+The left sidebar groups pages by job: **Network** (Devices, Subnets, Configs, Projectors, Wallpapers, Software), **Cables** (Cables, Patching, Loom labels), **Lighting** (Fixtures, Universes, Fixture types), **Paperwork** (Orders, Paperwork), **Schedule** (Crew, Trucking) and **Packing** (Labels, Cases), with **Settings** at the bottom. Click a group's heading to fold it; the app remembers which groups you keep open. Every button and row can be reached with Tab, and Enter opens a row.
 
 ---
 

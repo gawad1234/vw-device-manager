@@ -1,5 +1,5 @@
 import type { Device, Port, Subnet, SwitchMonitoring } from '../shared/types'
-import { ipInCidr, isValidIpv4, parseCidr } from './ip-utils'
+import { ipInCidr, isValidIpv4, parseCidr } from '../shared/ip-utils'
 
 // Generates a NETGEAR M4350 (FASTPATH-style) CLI startup-config for a switch.
 // The house base config (QoS, class-maps, classofservice, spanning-tree, …) lives

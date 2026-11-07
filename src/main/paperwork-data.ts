@@ -6,7 +6,7 @@ import {
   listSubnets,
   listTruckTrips
 } from './repository'
-import { ipInCidr } from './ip-utils'
+import { mainRoute } from '../shared/ip-utils'
 import type { Bundle, CableEndpoint, PackCase } from '../shared/types'
 import type {
   CableRec,
@@ -60,46 +60,17 @@ interface DeviceEntry {
  *  CIDR. Sorted by category (uncategorized last), then device name. */
 export function deviceListEntries(): DeviceEntry[] {
   const subnets = listSubnets()
-  const byId = new Map(subnets.map((s) => [s.id, s]))
-  const vlanFor = (subnetId: number | null, ip: string): string => {
-    if (subnetId != null) {
-      const s = byId.get(subnetId)
-      if (s) return s.vlan ?? '' // the port's assigned network is authoritative
-    }
-    if (ip) {
-      const hit = subnets.find((s) => s.cidr && ipInCidr(ip, s.cidr) === true)
-      if (hit) return hit.vlan ?? ''
-    }
-    return ''
-  }
-
   const catSortKey = (c: string): string => (c ? c.toLowerCase() : '￿') // uncategorized last
 
   return listDevices()
     .map((d) => {
-      let ip = ''
-      let subnetId: number | null = null
-      const chosen = d.ports.find((x) => x.isPrimary && !x.isUnused) // user-designated main port
-      if (chosen) {
-        ip = chosen.ipAddress ?? ''
-        subnetId = chosen.untaggedSubnetId
-      } else if (d.isSwitch && (d.managementIp || d.oobIp)) {
-        ip = d.managementIp || d.oobIp || '' // switch IPs aren't tied to a port subnet
-      } else {
-        // Auto-pick among jacks that are actually in use.
-        const usable = d.ports.filter((x) => !x.isUnused)
-        const p = usable.find((x) => x.ipAddress) ?? usable[0]
-        if (p) {
-          ip = p.ipAddress ?? ''
-          subnetId = p.untaggedSubnetId
-        }
-      }
+      const { ip, vlan } = mainRoute(d, subnets)
       return {
         name: d.name,
         category: d.category?.trim() || '',
         type: d.deviceType ?? '',
         location: d.location ?? '',
-        vlan: vlanFor(subnetId, ip),
+        vlan,
         ip
       }
     })

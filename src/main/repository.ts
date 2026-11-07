@@ -1,5 +1,5 @@
 import { dbAll, dbGet, dbRun, lastInsertRowId, withTx } from './db'
-import { isValidIpv4, ipInCidr, parseCidr } from './ip-utils'
+import { isValidIpv4, ipInCidr, parseCidr } from '../shared/ip-utils'
 import type {
   Bundle,
   BundleInput,

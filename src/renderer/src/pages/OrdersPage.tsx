@@ -20,13 +20,7 @@ export function orderStats(o: ShopOrder): Stats {
   const recvQty = lines.reduce((s, x) => s + Math.min(Number(x.r) || 0, Number(x.q) || 0), 0)
   const outstanding = Math.max(0, totalQty - recvQty)
   const status =
-    lines.length === 0
-      ? 'empty'
-      : outstanding === 0
-        ? 'complete'
-        : recvQty > 0
-          ? 'partial'
-          : 'open'
+    lines.length === 0 ? 'empty' : outstanding === 0 ? 'complete' : recvQty > 0 ? 'partial' : 'open'
   return { totalQty, recvQty, outstanding, status }
 }
 
@@ -43,6 +37,9 @@ const STATUS_CLASS: Record<Stats['status'], string> = {
   complete: 'badge badge-ok'
 }
 
+// waiting lines shown before "Show all"
+const WAITING_PREVIEW = 6
+
 function OrdersPage(): React.JSX.Element {
   const [orders, setOrders] = useState<ShopOrder[]>([])
   const [openId, setOpenId] = useState<number | 'new' | null>(null)
@@ -50,6 +47,7 @@ function OrdersPage(): React.JSX.Element {
   const [filter, setFilter] = useState<Filter>('all')
   // How many to receive per waiting line (keyed order:kind:index); defaults to the full outstanding.
   const [recvQty, setRecvQty] = useState<Record<string, number>>({})
+  const [showAllWaiting, setShowAllWaiting] = useState(false)
 
   const refresh = useCallback(async () => {
     setOrders(await window.api.orders.list())
@@ -159,16 +157,57 @@ function OrdersPage(): React.JSX.Element {
         </div>
       </div>
 
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Order</th>
+            <th>Vendor</th>
+            <th>Date</th>
+            <th>Received</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {!loading && visible.length === 0 && (
+            <tr>
+              <td colSpan={5} className="empty-cell">
+                {orders.length === 0 ? 'No orders yet.' : 'No orders match this filter.'}
+              </td>
+            </tr>
+          )}
+          {visible.map((o) => {
+            const s = orderStats(o)
+            return (
+              <tr
+                key={o.id}
+                className="clickable"
+                tabIndex={0}
+                onClick={() => setOpenId(o.id)}
+                onKeyDown={(e) => e.key === 'Enter' && setOpenId(o.id)}
+              >
+                <td>{o.name}</td>
+                <td className="muted">{o.vendor ?? '—'}</td>
+                <td className="muted">{o.orderDate ?? '—'}</td>
+                <td className="muted">
+                  {s.recvQty}/{s.totalQty}
+                </td>
+                <td>
+                  <span className={STATUS_CLASS[s.status]}>{STATUS_LABEL[s.status]}</span>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+
       {waiting.length > 0 && (
-        <div className="panel">
+        <div className="panel" style={{ marginTop: 20 }}>
           <h3>
             Still waiting on{' '}
-            <span className="cat-count">
-              {waiting.reduce((s, w) => s + w.waiting, 0)} item(s)
-            </span>
+            <span className="cat-count">{waiting.reduce((s, w) => s + w.waiting, 0)} item(s)</span>
           </h3>
           <ul className="signal-list waiting-list" style={{ maxWidth: 620 }}>
-            {waiting.map((w, i) => {
+            {(showAllWaiting ? waiting : waiting.slice(0, WAITING_PREVIEW)).map((w, i) => {
               const qty = recvQty[lineKey(w)] ?? w.waiting
               return (
                 <li key={i}>
@@ -200,45 +239,13 @@ function OrdersPage(): React.JSX.Element {
               )
             })}
           </ul>
+          {waiting.length > WAITING_PREVIEW && (
+            <button className="btn btn-small" onClick={() => setShowAllWaiting((v) => !v)}>
+              {showAllWaiting ? 'Show fewer' : `Show all ${waiting.length} lines`}
+            </button>
+          )}
         </div>
       )}
-
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Order</th>
-            <th>Vendor</th>
-            <th>Date</th>
-            <th>Received</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {!loading && visible.length === 0 && (
-            <tr>
-              <td colSpan={5} className="empty-cell">
-                {orders.length === 0 ? 'No orders yet.' : 'No orders match this filter.'}
-              </td>
-            </tr>
-          )}
-          {visible.map((o) => {
-            const s = orderStats(o)
-            return (
-              <tr key={o.id} className="clickable" tabIndex={0} onClick={() => setOpenId(o.id)}>
-                <td>{o.name}</td>
-                <td className="muted">{o.vendor ?? '—'}</td>
-                <td className="muted">{o.orderDate ?? '—'}</td>
-                <td className="muted">
-                  {s.recvQty}/{s.totalQty}
-                </td>
-                <td>
-                  <span className={STATUS_CLASS[s.status]}>{STATUS_LABEL[s.status]}</span>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
 
       {openId != null && (
         <OrderModal

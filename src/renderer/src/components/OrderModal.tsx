@@ -495,7 +495,7 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
   return (
     <>
     <Modal title={order ? order.name : 'New order'} onClose={onClose} footer={footer} tall>
-      <form id="order-form" className="form-grid" onSubmit={save}>
+      <form id="order-form" className="form-grid order-head" onSubmit={save}>
         {error && <div className="banner banner-error">{error}</div>}
         <label>
           Order name / number
@@ -514,10 +514,12 @@ function OrderModal({ order, onClose, onChanged, onCreated }: Props): React.JSX.
           Order date
           <input value={orderDate} onChange={(e) => setOrderDate(e.target.value)} placeholder="e.g. 2026-10-11" />
         </label>
-        <label className="span-2">
-          Notes
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
-        </label>
+        <details className="order-notes" open={!order}>
+          <summary>
+            Notes{!order || !notes.trim() ? '' : <span className="muted"> — {notes.trim().split('\n')[0]}</span>}
+          </summary>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} aria-label="Notes" />
+        </details>
       </form>
 
       <div className="modal-section">

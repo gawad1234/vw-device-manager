@@ -17,6 +17,8 @@
   --accent-soft: rgba(34, 199, 184, 0.14);
   --danger: #ef7067;
   /* Technical data (IPs, MACs, VLANs, cable #s) — reliable system mono, no webfont. */
+  /* dark scrollbars, date pickers and other built-in controls */
+  color-scheme: dark;
   --mono:
     ui-monospace, SFMono-Regular, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, Consolas,
     monospace;
@@ -25,6 +27,16 @@
 body {
   overflow-y: auto;
   user-select: none;
+}
+
+/* Keyboard focus: show where Tab is, never on mouse clicks. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+tr:focus-visible {
+  outline-offset: -2px;
 }
 
 ::selection {
@@ -138,7 +150,7 @@ code {
   text-align: left;
   background: transparent;
   border: none;
-  color: var(--ev-c-text-3);
+  color: var(--ev-c-text-2);
   padding: 8px 12px;
   border-radius: 7px;
   font-size: 11px;
@@ -153,7 +165,12 @@ code {
 }
 
 .side-group-head.has-active {
-  color: var(--ev-c-text-2);
+  color: var(--ev-c-text-1);
+  cursor: default;
+}
+
+.side-group + .side-group {
+  margin-top: 4px;
 }
 
 .side-caret {
@@ -793,6 +810,7 @@ code {
 
 .page-header-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
@@ -862,6 +880,8 @@ input[type='checkbox'] {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
+  /* never break a label across lines; toolbars wrap instead */
+  white-space: nowrap;
 }
 
 .btn:hover {
@@ -944,6 +964,38 @@ input[type='checkbox'] {
 
 .span-2 {
   grid-column: span 2;
+}
+
+/* Order window: name, vendor and date on one row; notes fold away so the
+   item lines get the room. */
+.form-grid.order-head {
+  grid-template-columns: 2fr 1.5fr 1fr;
+  gap: 10px 14px;
+}
+
+.order-head .banner,
+.order-notes {
+  grid-column: 1 / -1;
+}
+
+.order-notes summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ev-c-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-notes textarea {
+  width: 100%;
+  margin-top: 6px;
+}
+
+@media (max-width: 760px) {
+  .form-grid.order-head {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .form-actions {

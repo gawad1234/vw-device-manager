@@ -7,7 +7,6 @@ import QRCode from 'qrcode'
 import { readFileSync } from 'node:fs'
 import appIcon from '../../resources/icon.png?asset'
 import type {
-  Device,
   OrderItem,
   ServerPins,
   ServerStatus,
@@ -43,6 +42,7 @@ import { ipSchedulePageHtml, deviceListPageHtml } from './exports'
 import { renderTemplateSheetHtml, renderCasesSheetHtml } from './caselabels'
 import { generateSwitchConfig, type SwitchConfigOptions } from './switch-config'
 import { getSwitchConfig } from './library'
+import { mainRoute } from '../shared/ip-utils'
 import { handlers, bumpChange, getChangeSeq } from './rpc-registry'
 import { remoteReadable } from '../shared/remote-scope'
 
@@ -829,14 +829,9 @@ async function apiReceive(req: http.IncomingMessage, res: http.ServerResponse): 
 // ---------------------------------------------------------------------------
 // Devices
 // ---------------------------------------------------------------------------
-/** The address crew look a device up by. */
-function mainIp(d: Device): string {
-  if (d.isSwitch && d.managementIp) return d.managementIp
-  const used = d.ports.filter((p) => !p.isUnused && p.ipAddress)
-  return (used.find((p) => p.isPrimary) ?? used[0])?.ipAddress ?? ''
-}
 function devicesListPage(): string {
   const devices = listDevices()
+  const subnets = listSubnets()
   const items = devices
     .map(
       (d) =>
@@ -844,7 +839,7 @@ function devicesListPage(): string {
           d.deviceType || d.location
             ? `<br><span class="sub">${esc([d.deviceType, d.location].filter(Boolean).join(' · '))}</span>`
             : ''
-        }</span><span class="mono ip">${esc(mainIp(d))}</span></a></li>`
+        }</span><span class="mono ip">${esc(mainRoute(d, subnets).ip)}</span></a></li>`
     )
     .join('')
   return layout(

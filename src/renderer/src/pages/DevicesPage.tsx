@@ -3,6 +3,7 @@ import type { Device, Subnet } from '../../../shared/types'
 import DeviceModal from '../components/DeviceModal'
 import ExportMenu, { type ExportSection } from '../components/ExportMenu'
 import IpSheet from '../components/IpSheet'
+import { mainRoute } from '../../../shared/ip-utils'
 
 const EXPORT_SECTIONS: ExportSection[] = [
   {
@@ -53,6 +54,11 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
         .some((v) => (v as string).toLowerCase().includes(q))
     })
   }, [devices, search])
+
+  const routes = useMemo(
+    () => new Map(devices.map((d) => [d.id, mainRoute(d, subnets)])),
+    [devices, subnets]
+  )
 
   const visible = useMemo(
     () =>
@@ -161,15 +167,16 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
             <tr>
               <th>Name</th>
               <th>Type</th>
-              <th>MAC</th>
               <th>Location</th>
+              <th>VLAN</th>
+              <th>Main IP</th>
               <th>Ports</th>
             </tr>
           </thead>
           {groups.length === 0 && (
             <tbody>
               <tr>
-                <td colSpan={5} className="empty-cell">
+                <td colSpan={6} className="empty-cell">
                   {devices.length === 0 ? 'No devices yet.' : 'No devices match your search.'}
                 </td>
               </tr>
@@ -181,7 +188,7 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
               <tbody key={cat}>
                 {showHeaders && (
                   <tr className="cat-header" onClick={() => toggle(cat)}>
-                    <td colSpan={5}>
+                    <td colSpan={6}>
                       <span className="caret">{isCollapsed ? '▸' : '▾'}</span>
                       {cat}
                       <span className="cat-count">{list.length}</span>
@@ -190,14 +197,21 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
                 )}
                 {!isCollapsed &&
                   list.map((d) => (
-                    <tr key={d.id} className="clickable" tabIndex={0} onClick={() => setOpenId(d.id)}>
+                    <tr
+                      key={d.id}
+                      className="clickable"
+                      tabIndex={0}
+                      onClick={() => setOpenId(d.id)}
+                      onKeyDown={(e) => e.key === 'Enter' && setOpenId(d.id)}
+                    >
                       <td>
                         {d.name}
                         {d.isSwitch && <span className="badge">switch</span>}
                       </td>
                       <td className="muted">{d.deviceType ?? '—'}</td>
-                      <td className="muted mono">{d.macAddress ?? '—'}</td>
                       <td className="muted">{d.location ?? '—'}</td>
+                      <td className="muted mono">{routes.get(d.id)?.vlan || '—'}</td>
+                      <td className="mono">{routes.get(d.id)?.ip || '—'}</td>
                       <td className="muted">{d.ports.length}</td>
                     </tr>
                   ))}

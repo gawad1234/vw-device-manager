@@ -43,12 +43,72 @@ type Tab =
   | 'paperwork'
   | 'settings'
 
-// Collapsible sidebar groups and the tabs they contain.
-const NAV_GROUPS: Record<string, Tab[]> = {
-  networking: ['subnets', 'configs'],
-  schedule: ['crew', 'trucking'],
-  packing: ['labels', 'cases'],
-  lighting: ['fixtures', 'universes', 'fixtureTypes']
+// Sidebar, grouped by job. Groups fold; the one holding the open page stays open.
+const NAV: { key: string; label: string; items: [Tab, string][] }[] = [
+  {
+    key: 'network',
+    label: 'Network',
+    items: [
+      ['devices', 'Devices'],
+      ['subnets', 'Subnets'],
+      ['configs', 'Configs'],
+      ['projectors', 'Projectors'],
+      ['wallpapers', 'Wallpapers'],
+      ['software', 'Software']
+    ]
+  },
+  {
+    key: 'cables',
+    label: 'Cables',
+    items: [
+      ['cables', 'Cables'],
+      ['patching', 'Patching'],
+      ['loomlabels', 'Loom labels']
+    ]
+  },
+  {
+    key: 'lighting',
+    label: 'Lighting',
+    items: [
+      ['fixtures', 'Fixtures'],
+      ['universes', 'Universes'],
+      ['fixtureTypes', 'Fixture types']
+    ]
+  },
+  {
+    key: 'paperwork',
+    label: 'Paperwork',
+    items: [
+      ['orders', 'Orders'],
+      ['paperwork', 'Paperwork']
+    ]
+  },
+  {
+    key: 'schedule',
+    label: 'Schedule',
+    items: [
+      ['crew', 'Crew'],
+      ['trucking', 'Trucking']
+    ]
+  },
+  {
+    key: 'packing',
+    label: 'Packing',
+    items: [
+      ['labels', 'Labels'],
+      ['cases', 'Cases']
+    ]
+  }
+]
+
+const OPEN_GROUPS_KEY = 'sidebar.openGroups'
+
+function loadOpenGroups(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY) ?? '["network","cables"]'))
+  } catch {
+    return new Set(['network', 'cables'])
+  }
 }
 
 function App(): React.JSX.Element {
@@ -63,17 +123,20 @@ function App(): React.JSX.Element {
     window.addEventListener('open-paperwork', open)
     return () => window.removeEventListener('open-paperwork', open)
   }, [])
-  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+  const [openGroups, setOpenGroups] = useState<Set<string>>(loadOpenGroups)
 
   const toggleGroup = (key: string): void =>
     setOpenGroups((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
+      try {
+        localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify([...next]))
+      } catch {
+        /* remembered per session only */
+      }
       return next
     })
-  // A group shows expanded if the user opened it, or it holds the active tab.
-  const groupOpen = (key: string): boolean => openGroups.has(key) || NAV_GROUPS[key].includes(tab)
   const [project, setProject] = useState<ProjectInfo | null>(null)
   const [subnets, setSubnets] = useState<Subnet[]>([])
   const [devices, setDevices] = useState<Device[]>([])
@@ -193,172 +256,38 @@ function App(): React.JSX.Element {
       )}
 
       <div className="app-body">
-        <nav className="sidebar">
-          <button
-            className={`side-item ${tab === 'devices' ? 'active' : ''}`}
-            onClick={() => setTab('devices')}
-          >
-            Devices
-          </button>
-          <div className="side-sub">
-            <button
-              className={`side-item ${tab === 'projectors' ? 'active' : ''}`}
-              onClick={() => setTab('projectors')}
-            >
-              Projectors
-            </button>
-            <button
-              className={`side-item ${tab === 'wallpapers' ? 'active' : ''}`}
-              onClick={() => setTab('wallpapers')}
-            >
-              Wallpapers
-            </button>
-            <button
-              className={`side-item ${tab === 'software' ? 'active' : ''}`}
-              onClick={() => setTab('software')}
-            >
-              Software
-            </button>
-          </div>
-
-          <div className="side-group">
-            <button
-              className={`side-group-head ${NAV_GROUPS.networking.includes(tab) ? 'has-active' : ''}`}
-              onClick={() => toggleGroup('networking')}
-            >
-              <span className="side-caret">{groupOpen('networking') ? '▾' : '▸'}</span>
-              Networking
-            </button>
-            {groupOpen('networking') && (
-              <div className="side-sub">
+        <nav className="sidebar" aria-label="Sections">
+          {NAV.map((g) => {
+            const hasActive = g.items.some(([t]) => t === tab)
+            // the group holding the open page can't fold away
+            const open = hasActive || openGroups.has(g.key)
+            return (
+              <div className="side-group" key={g.key}>
                 <button
-                  className={`side-item ${tab === 'subnets' ? 'active' : ''}`}
-                  onClick={() => setTab('subnets')}
+                  className={`side-group-head ${hasActive ? 'has-active' : ''}`}
+                  aria-expanded={open}
+                  onClick={() => !hasActive && toggleGroup(g.key)}
                 >
-                  Subnets
+                  <span className="side-caret">{open ? '▾' : '▸'}</span>
+                  {g.label}
                 </button>
-                <button
-                  className={`side-item ${tab === 'configs' ? 'active' : ''}`}
-                  onClick={() => setTab('configs')}
-                >
-                  Configs
-                </button>
+                {open && (
+                  <div className="side-sub">
+                    {g.items.map(([t, label]) => (
+                      <button
+                        key={t}
+                        className={`side-item ${tab === t ? 'active' : ''}`}
+                        aria-current={tab === t ? 'page' : undefined}
+                        onClick={() => setTab(t)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-
-          <button
-            className={`side-item ${tab === 'cables' ? 'active' : ''}`}
-            onClick={() => setTab('cables')}
-          >
-            Cables
-          </button>
-          <div className="side-sub">
-            <button
-              className={`side-item ${tab === 'loomlabels' ? 'active' : ''}`}
-              onClick={() => setTab('loomlabels')}
-            >
-              Loom labels
-            </button>
-          </div>
-          <div className="side-group">
-            <button
-              className={`side-group-head ${NAV_GROUPS.lighting.includes(tab) ? 'has-active' : ''}`}
-              onClick={() => toggleGroup('lighting')}
-            >
-              <span className="side-caret">{groupOpen('lighting') ? '▾' : '▸'}</span>
-              Lighting
-            </button>
-            {groupOpen('lighting') && (
-              <div className="side-sub">
-                {(
-                  [
-                    ['fixtures', 'Fixtures'],
-                    ['universes', 'Universes'],
-                    ['fixtureTypes', 'Fixture types']
-                  ] as const
-                ).map(([t, label]) => (
-                  <button
-                    key={t}
-                    className={`side-item ${tab === t ? 'active' : ''}`}
-                    onClick={() => setTab(t)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <button
-            className={`side-item ${tab === 'patching' ? 'active' : ''}`}
-            onClick={() => setTab('patching')}
-          >
-            Patching
-          </button>
-          <button
-            className={`side-item ${tab === 'orders' ? 'active' : ''}`}
-            onClick={() => setTab('orders')}
-          >
-            Orders
-          </button>
-          <button
-            className={`side-item ${tab === 'paperwork' ? 'active' : ''}`}
-            onClick={() => setTab('paperwork')}
-          >
-            Paperwork
-          </button>
-
-          <div className="side-group">
-            <button
-              className={`side-group-head ${NAV_GROUPS.schedule.includes(tab) ? 'has-active' : ''}`}
-              onClick={() => toggleGroup('schedule')}
-            >
-              <span className="side-caret">{groupOpen('schedule') ? '▾' : '▸'}</span>
-              Schedule
-            </button>
-            {groupOpen('schedule') && (
-              <div className="side-sub">
-                <button
-                  className={`side-item ${tab === 'crew' ? 'active' : ''}`}
-                  onClick={() => setTab('crew')}
-                >
-                  Crew
-                </button>
-                <button
-                  className={`side-item ${tab === 'trucking' ? 'active' : ''}`}
-                  onClick={() => setTab('trucking')}
-                >
-                  Trucking
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="side-group">
-            <button
-              className={`side-group-head ${NAV_GROUPS.packing.includes(tab) ? 'has-active' : ''}`}
-              onClick={() => toggleGroup('packing')}
-            >
-              <span className="side-caret">{groupOpen('packing') ? '▾' : '▸'}</span>
-              Packing
-            </button>
-            {groupOpen('packing') && (
-              <div className="side-sub">
-                <button
-                  className={`side-item ${tab === 'labels' ? 'active' : ''}`}
-                  onClick={() => setTab('labels')}
-                >
-                  Labels
-                </button>
-                <button
-                  className={`side-item ${tab === 'cases' ? 'active' : ''}`}
-                  onClick={() => setTab('cases')}
-                >
-                  Cases
-                </button>
-              </div>
-            )}
-          </div>
+            )
+          })}
 
           <div className="side-spacer" />
           <button

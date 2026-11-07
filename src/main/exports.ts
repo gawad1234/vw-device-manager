@@ -28,7 +28,7 @@ import {
   listSubnets,
   markOrderExported
 } from './repository'
-import { ipInCidr } from './ip-utils'
+import { ipInCidr } from '../shared/ip-utils'
 import { withPrintWindow } from './print-html'
 import { maskFromCidr } from './switch-config'
 import {
