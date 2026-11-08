@@ -23,6 +23,7 @@ const READ = new Set([
   'companyLogo:get',
   'companyName:get',
   'tableStyle:get',
+  'paperworkHeader:get',
   'switchConfig:get',
   'configs:list',
   'orders:list',
@@ -59,7 +60,14 @@ const HOST_ONLY = new Set([
 /** Always this machine: where its library lives, app updates, this machine's Show Server, project switching,
  *  the Vectorworks lighting sync (it runs on the computer that has the show open), saving the
  *  bundled VLAN Manager scripts. */
-const LOCAL_GROUPS = ['updates:', 'server:', 'project:', 'lightingSync:', 'vlanManager:', 'library:']
+const LOCAL_GROUPS = [
+  'updates:',
+  'server:',
+  'project:',
+  'lightingSync:',
+  'vlanManager:',
+  'library:'
+]
 
 /** Anything not listed is a write — refused while joined, so a new channel is safe by default. */
 export function channelScope(channel: string): ChannelScope {

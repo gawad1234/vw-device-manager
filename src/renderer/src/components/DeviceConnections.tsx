@@ -19,7 +19,10 @@ function DeviceConnections({ deviceName }: { deviceName: string }): React.JSX.El
       .finally(() => setLoading(false))
   }, [deviceName])
 
-  async function patch(c: Circuit, changes: Partial<Pick<Circuit, 'srcPatched' | 'dstPatched' | 'tested' | 'notes'>>): Promise<void> {
+  async function patch(
+    c: Circuit,
+    changes: Partial<Pick<Circuit, 'srcPatched' | 'dstPatched' | 'tested' | 'notes'>>
+  ): Promise<void> {
     const forceBoth = changes.tested === true // testing implies both ends patched
     const updated = await window.api.circuits.setStatus(c.id, {
       srcPatched: forceBoth ? true : (changes.srcPatched ?? c.srcPatched),
@@ -34,15 +37,32 @@ function DeviceConnections({ deviceName }: { deviceName: string }): React.JSX.El
   if (circuits.length === 0)
     return (
       <p className="muted">
-        No circuits for this device. Import a ConnectCAD circuit report on the <strong>Patching</strong> tab.
+        No circuits for this device. Import a ConnectCAD circuit report on the{' '}
+        <strong>Patching</strong> tab.
       </p>
     )
 
-  const thisEndPatched = circuits.filter((c) => (c.srcName === deviceName ? c.srcPatched : c.dstPatched)).length
+  const thisEndPatched = circuits.filter((c) =>
+    c.srcName === deviceName ? c.srcPatched : c.dstPatched
+  ).length
   return (
     <>
-      <p className="muted" style={{ marginTop: -4, marginBottom: 8 }}>
+      <p className="muted conn-summary">
         {thisEndPatched}/{circuits.length} patched at this device
+        <button
+          type="button"
+          className="btn btn-small"
+          onClick={() =>
+            window.api.exports.run({
+              scope: 'all',
+              doc: 'patchsheet',
+              format: 'pdf',
+              devices: [deviceName]
+            })
+          }
+        >
+          Print patch sheet
+        </button>
       </p>
       <table className="table patch-table">
         <thead>
@@ -67,13 +87,26 @@ function DeviceConnections({ deviceName }: { deviceName: string }): React.JSX.El
             const setMine = (v: boolean): Promise<void> =>
               patch(c, isSrc ? { srcPatched: v } : { dstPatched: v })
             return (
-              <tr key={c.id} className={myPatched && farPatched ? 'is-patched' : myPatched || farPatched ? 'is-partial' : ''}>
+              <tr
+                key={c.id}
+                className={
+                  myPatched && farPatched
+                    ? 'is-patched'
+                    : myPatched || farPatched
+                      ? 'is-partial'
+                      : ''
+                }
+              >
                 <td>
                   <span className="name">{mySocket || '—'}</span>
                   {c.cableNumber && <span className="sub2 mono">{c.cableNumber}</span>}
                 </td>
                 <td className="chk">
-                  <input type="checkbox" checked={myPatched} onChange={(e) => setMine(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={myPatched}
+                    onChange={(e) => setMine(e.target.checked)}
+                  />
                 </td>
                 <td>
                   <span className="name">{otherName || '—'}</span>

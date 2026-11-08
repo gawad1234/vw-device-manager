@@ -9,6 +9,7 @@ import {
   withBuiltIns,
   type CableRec,
   type PaperworkTemplate,
+  type PatchRec,
   type PortRec
 } from '../src/shared/paperwork.ts'
 import type { Fixture } from '../src/shared/types.ts'
@@ -229,4 +230,63 @@ test('v2.9.0 lighting templates carry over and every export’s built-in is adde
   assert.ok(!saved.some((t) => t.id === 'channel-hookup'))
   assert.equal(usedBy('channel-hookup'), null)
   assert.match(usedBy('ipschedule-devices') ?? '', /IP schedule/)
+})
+
+test('patch sheet: inputs then outputs, each sorted by socket, "device › socket" ends', () => {
+  const rec = (o: Partial<PatchRec>): PatchRec => ({
+    device: 'MTX1',
+    direction: 'Inputs',
+    socket: '',
+    srcDevice: '',
+    srcSocket: '',
+    dstDevice: '',
+    dstSocket: '',
+    signal: 'HDMI',
+    cable: '',
+    connector: '',
+    rack: '',
+    patched: false,
+    tested: false,
+    notes: '',
+    ...o
+  })
+  const recs = [
+    rec({
+      direction: 'Outputs',
+      socket: 'OUT 1',
+      srcDevice: 'MTX1',
+      srcSocket: 'OUT 1',
+      dstDevice: 'PJ1',
+      dstSocket: 'HDMI 1'
+    }),
+    rec({
+      socket: 'IN 10',
+      srcDevice: 'SRV2',
+      srcSocket: 'OUT 1',
+      dstDevice: 'MTX1',
+      dstSocket: 'IN 10',
+      patched: true
+    }),
+    rec({
+      socket: 'IN 2',
+      srcDevice: 'SRV1',
+      srcSocket: 'OUT 1',
+      dstDevice: 'MTX1',
+      dstSocket: 'IN 2'
+    })
+  ]
+  const r = buildReport(preset('patchsheet'), recs)
+  assert.deepEqual(r.headers, ['Source', 'Destination', 'Signal', 'Cable #', 'Patched'])
+  assert.deepEqual(
+    r.sections.map((s) => s.title),
+    ['Inputs', 'Outputs']
+  )
+  assert.deepEqual(
+    r.sections[0].rows.map((row) => [row[0], row[1], row[4]]),
+    [
+      ['SRV1 › OUT 1', 'MTX1 › IN 2', '☐'],
+      ['SRV2 › OUT 1', 'MTX1 › IN 10', '☑']
+    ]
+  )
+  assert.equal(usedBy('patchsheet'), 'Patching › Patch sheets')
 })

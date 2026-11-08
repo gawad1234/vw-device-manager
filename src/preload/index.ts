@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { PaperworkSource, PaperworkTemplate } from '../shared/paperwork'
 import type { TableStyle } from '../shared/table-style'
+import type { PaperworkHeader } from '../shared/paperwork-header'
 import type {
   FixtureInput,
   FixtureType,
@@ -216,6 +217,10 @@ const api: VwDeviceManagerApi = {
     get: () => invoke('companyName:get'),
     set: (name: string | null) => invoke('companyName:set', name)
   },
+  paperworkHeader: {
+    get: () => invoke('paperworkHeader:get'),
+    set: (h: PaperworkHeader) => invoke('paperworkHeader:set', h)
+  },
   tableStyle: {
     get: () => invoke('tableStyle:get'),
     set: (style: TableStyle) => invoke('tableStyle:set', style)
@@ -284,7 +289,8 @@ const api: VwDeviceManagerApi = {
   },
   circuits: {
     list: () => invoke('circuits:list'),
-    setStatus: (id: number, input: Partial<CircuitStatusInput>) => invoke('circuits:setStatus', id, input),
+    setStatus: (id: number, input: Partial<CircuitStatusInput>) =>
+      invoke('circuits:setStatus', id, input),
     import: () => invoke('circuits:import'),
     clear: () => invoke('circuits:clear')
   },

@@ -105,7 +105,7 @@ Switch the Devices page from **List** to **IP sheet** (top right) to edit every 
 
 ### Projectors
 
-**Devices → Projectors** sets up **Panasonic PT-RZ / PT-RQ** laser projectors. *Beta — the commands haven't been tested on a real projector yet.*
+**Network → Projectors** sets up **Panasonic PT-RZ / PT-RQ** laser projectors. *Beta — the commands haven't been tested on a real projector yet.*
 
 1. **+ Add projector…** — pick the device, then its **Model**.
 2. Tick the settings you want changed and pick values. They're grouped as **Network Settings** (projector name, projector ID), **Signal Settings** (input, startup input, backup input, auto switch, startup logo, back color), **Installation & Lens** (projection method, lens model, position in the array, lens-memory names), **Light Settings** (operating mode, light output, standby mode, brightness control), **Picture Settings**, **Shutter Settings** and **Edge Blending**.
@@ -119,13 +119,13 @@ Switch the Devices page from **List** to **IP sheet** (top right) to edit every 
 
 ### Wallpapers
 
-**Devices → Wallpapers** makes branded desktop wallpapers for show computers: your **show logo** centered, the **computer's name** under it and your **company logo** top-right, on a color you pick for that computer.
+**Network → Wallpapers** makes branded desktop wallpapers for show computers: your **show logo** centered, the **computer's name** under it and your **company logo** top-right, on a color you pick for that computer.
 
 **+ Add computer…**, set its color, add its displays (width × height — mark a display **Black** for a plain black background), then **Generate wallpapers…** and pick a folder. You get one PNG per display, or tick **Combine displays** for one image spanning all of them (for Windows).
 
 ### Software install kits
 
-**Devices → Software** builds a USB-ready install kit per computer, so setting up show machines is "plug in, double-click, walk away". *Windows only for now; beta.*
+**Network → Software** builds a USB-ready install kit per computer, so setting up show machines is "plug in, double-click, walk away". *Windows only for now; beta.*
 
 1. **Software library…** — add each Windows installer (`.exe` or `.msi`) with **Browse…**. The name fills in from the file, and the **silent install switches** start from a guess (`/qn /norestart` for an .msi, `/S` for an .exe); the **Presets** menu has MSI, Inno Setup, NSIS, InstallShield and generic `/quiet`. The library is shared by every show.
 2. **+ Add computer…** and tick the software it needs.
@@ -295,6 +295,8 @@ Track the patching of cables on devices by importing a Vectorworks **ConnectCAD 
 
 The Patching tab lists the whole show (filter by device / rack / signal / status, group by rack, device or signal, with live totals). Each device's **Connections** tab shows just its circuits. With the [Show Server](#show-server) running, crew can tick connections off from their phones.
 
+**Patch sheets** — paper for anyone patching without the app. Click **Patch sheets…** on the Patching tab, tick the devices (search, **Select all**) and choose **PDF**, **Excel** or **CSV**. Each device gets its own page (or Excel sheet) with its **Inputs** then its **Outputs**: every line reads source → destination, e.g. `MEDIA-01 › OUT 1` → `MTX-1 › IN 1` on a video matrix's sheet, with the signal, cable number and a Patched box. A device's **Connections** tab has **Print patch sheet** for just that device. **Edit layout…** opens the *Patch sheet* template in [Paperwork](#paperwork) to change the columns.
+
 ---
 
 ## Orders
@@ -359,6 +361,7 @@ Create several — e.g. a tight *"Pull order — compact, landscape"* for the sh
 |---|---|---|
 | Cables | **Pull sheet**, **Cable schedule** | Cables → Export |
 | Devices & network | **Device list**, **IP schedule — switches**, **IP schedule — devices** (printed together as the IP schedule) | Devices → Export |
+| Cables | **Patch sheet (one device)** | Patching → Patch sheets |
 | Trucking | **Truck load sheet (case list)** — the case table on each load sheet | Trucking → load sheets |
 | Lighting | **Channel hookup**, **Instrument schedule**, **Patch (by address)**, **Color schedule**, **Gobo pull list** | exported from this page |
 
@@ -450,6 +453,7 @@ A joined computer can see the whole show **and the shared library on the host, i
 
 - **Shared library** — where crew, kits, cable types, templates and the other shared lists live. To use them on more than one computer, choose the same folder that syncs, such as one in Dropbox, on each computer. The first computer moves its library in. The next one uses what's there and keeps its old library as a backup (`library.before-sharing.json`); the two aren't merged, so start with the computer that has the fuller list.
 - **Company branding** — your company name and logo, stamped as a letterhead on every project's paperwork. Shared across all projects.
+- **Paperwork header** — what prints at the top of every PDF and where: company logo, company name, show name, document title, a line of your own (e.g. the production office number), the date printed and the show logo can each go **Left**, **Center**, **Right** or be **Hidden**. Also the logo height and a line under the header. The preview uses this show's real names and logos. **Reset** puts back the standard look. Shared across all projects. (The Equipment list order layout keeps its own title band.)
 - **Table style** — how the tables in every Excel and PDF export look: header color and text color, alternating row colors (on/off and the color), lines (grid, between rows, or none), the **font** (fonts that exist on Mac, Windows and in Excel), **header size** (% of the text), **bold header**, **CAPITALS** and **padding** (tight / normal / roomy). Start from a color preset (Classic, Dark header, Blue bands, Plain — they leave the font and header choices alone) and adjust; the sample table shows the result. Text size is set per template (Paperwork, order formats). Shared across all projects.
 - **Show branding** — the show **name** and **logo**. These stamp onto exports (pull orders, schedules, labels) and feed the `{Show}` token and the Show-name/logo label elements. Per project.
 - **Network signal types** — the shared library of signal types used by ports. Shared across all projects.

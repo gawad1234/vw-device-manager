@@ -9,6 +9,7 @@ import { exportDocument, exportPaperwork } from './exports'
 import { recordsFor } from './paperwork-data'
 import type { PaperworkSource, PaperworkTemplate } from '../shared/paperwork'
 import type { TableStyle } from '../shared/table-style'
+import type { PaperworkHeader } from '../shared/paperwork-header'
 import { generateVlanScript } from './vlan-script'
 import vlanManagerPs1 from '../../host-tools/VlanManager.ps1?raw'
 import applyVlanConfigPs1 from '../../host-tools/Apply-VlanConfig.ps1?raw'
@@ -333,6 +334,8 @@ export function registerIpcHandlers(): void {
   handle('companyName:get', () => library.getCompanyName())
   handle('companyName:set', (_e, name: string | null) => library.setCompanyName(name))
   handle('tableStyle:get', () => library.getTableStyle())
+  handle('paperworkHeader:get', () => library.getPaperworkHeader())
+  handle('paperworkHeader:set', (_e, h: PaperworkHeader) => library.setPaperworkHeader(h))
   handle('tableStyle:set', (_e, style: TableStyle) => library.setTableStyle(style))
   handle('switchConfig:get', () => library.getSwitchConfig())
   handle('switchConfig:set', (_e, input: SwitchConfigSettings) => library.setSwitchConfig(input))

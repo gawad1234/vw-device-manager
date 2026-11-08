@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Device Manager**
-Effective date: November 1, 2026
+Effective date: November 8, 2026
 Provided by: Gabriel Awad ("we", "us") — contact: gabriel@gabrielawad.com
 
 ## The short version
@@ -21,10 +21,12 @@ crew and trucking schedules, lighting fixtures and universes, and your company/s
 - **Project files** (`*.vwdm`) — one per show, plain SQLite databases.
 - **A shared library file** (`library.json`) — your cross-project catalogs
   (device categories, cable types, signal types, auto-add kits, the software
-  library, the switch-config template and admin login, lighting fixture types and paperwork templates, the table style for exports), your **company name and
+  library, the switch-config template and admin user name, lighting fixture types and paperwork templates, the table style and paperwork header for exports), your **company name and
   logo**, and your **crew directory**.
 - **Per-machine settings** (`settings.json` in the app's data folder) — e.g.
-  your recent-projects list and update preference.
+  your recent-projects list, update preference, where your shared library
+  lives, and the switch admin password and SNMP community, which stay on each
+  computer and are never synced.
 
 These files are created and read **only on your device**. Software install kits
 you build are written only to the folder you choose (for example a USB stick). If you keep them in a

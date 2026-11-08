@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Circuit } from '../../../shared/types'
+import PatchSheetModal from '../components/PatchSheetModal'
 
 type GroupBy = 'none' | 'device' | 'rack' | 'signal'
 type StatusFilter = 'all' | 'unpatched' | 'patched' | 'untested'
@@ -18,6 +19,7 @@ function PatchingPage(): React.JSX.Element {
   const [rack, setRack] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
   const [groupBy, setGroupBy] = useState<GroupBy>('rack')
+  const [sheets, setSheets] = useState(false)
 
   const refresh = useCallback(async () => {
     setCircuits(await window.api.circuits.list())
@@ -49,7 +51,8 @@ function PatchingPage(): React.JSX.Element {
       if (status === 'unpatched' && full) return false
       if (status === 'untested' && c.tested) return false
       if (needle) {
-        const hay = `${c.cableNumber} ${c.signal} ${c.srcName} ${c.srcSocket} ${c.dstName} ${c.dstSocket}`.toLowerCase()
+        const hay =
+          `${c.cableNumber} ${c.signal} ${c.srcName} ${c.srcSocket} ${c.dstName} ${c.dstSocket}`.toLowerCase()
         if (!hay.includes(needle)) return false
       }
       return true
@@ -57,7 +60,9 @@ function PatchingPage(): React.JSX.Element {
   }, [circuits, q, signal, rack, status])
 
   const fullyPatched = circuits.filter((c) => c.srcPatched && c.dstPatched).length
-  const partlyPatched = circuits.filter((c) => (c.srcPatched || c.dstPatched) && !(c.srcPatched && c.dstPatched)).length
+  const partlyPatched = circuits.filter(
+    (c) => (c.srcPatched || c.dstPatched) && !(c.srcPatched && c.dstPatched)
+  ).length
   const testedCount = circuits.filter((c) => c.tested).length
 
   async function patch(
@@ -129,6 +134,11 @@ function PatchingPage(): React.JSX.Element {
               Clear
             </button>
           )}
+          {circuits.length > 0 && (
+            <button className="btn" onClick={() => setSheets(true)}>
+              Patch sheets…
+            </button>
+          )}
           <button className="btn btn-primary" onClick={doImport} disabled={busy}>
             {busy ? 'Importing…' : circuits.length ? 'Re-import report…' : 'Import circuit report…'}
           </button>
@@ -151,9 +161,13 @@ function PatchingPage(): React.JSX.Element {
       ) : (
         <>
           <div className="patch-stats">
-            <span className="pill ok">{fullyPatched}/{circuits.length} fully patched</span>
+            <span className="pill ok">
+              {fullyPatched}/{circuits.length} fully patched
+            </span>
             {partlyPatched > 0 && <span className="pill warn">{partlyPatched} one end only</span>}
-            <span className="pill">{testedCount}/{circuits.length} tested</span>
+            <span className="pill">
+              {testedCount}/{circuits.length} tested
+            </span>
             <span className="muted">{filtered.length} shown</span>
           </div>
 
@@ -167,13 +181,17 @@ function PatchingPage(): React.JSX.Element {
             <select value={signal} onChange={(e) => setSignal(e.target.value)}>
               <option value="">All signals</option>
               {signals.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
             </select>
             <select value={rack} onChange={(e) => setRack(e.target.value)}>
               <option value="">All racks</option>
               {racks.map((r) => (
-                <option key={r} value={r}>{r}</option>
+                <option key={r} value={r}>
+                  {r}
+                </option>
               ))}
             </select>
             <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)}>
@@ -228,13 +246,23 @@ function PatchingPage(): React.JSX.Element {
                         </td>
                         <td>
                           <span className="name">{c.srcName}</span>
-                          <span className="sub2">{c.srcSocket}{c.srcConnector ? ` (${c.srcConnector})` : ''}</span>
-                          {c.srcRack && <span className="sub2">{loc(c.srcRack, c.srcRackU, c.srcSlot)}</span>}
+                          <span className="sub2">
+                            {c.srcSocket}
+                            {c.srcConnector ? ` (${c.srcConnector})` : ''}
+                          </span>
+                          {c.srcRack && (
+                            <span className="sub2">{loc(c.srcRack, c.srcRackU, c.srcSlot)}</span>
+                          )}
                         </td>
                         <td>
                           <span className="name">{c.dstName}</span>
-                          <span className="sub2">{c.dstSocket}{c.dstConnector ? ` (${c.dstConnector})` : ''}</span>
-                          {c.dstRack && <span className="sub2">{loc(c.dstRack, c.dstRackU, c.dstSlot)}</span>}
+                          <span className="sub2">
+                            {c.dstSocket}
+                            {c.dstConnector ? ` (${c.dstConnector})` : ''}
+                          </span>
+                          {c.dstRack && (
+                            <span className="sub2">{loc(c.dstRack, c.dstRackU, c.dstSlot)}</span>
+                          )}
                         </td>
                         <td className="chk">
                           <input
@@ -273,6 +301,7 @@ function PatchingPage(): React.JSX.Element {
           ))}
         </>
       )}
+      {sheets && <PatchSheetModal circuits={circuits} onClose={() => setSheets(false)} />}
     </div>
   )
 }

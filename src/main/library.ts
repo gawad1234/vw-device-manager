@@ -27,6 +27,7 @@ import type {
 } from '../shared/types'
 import { DOC_TEMPLATES, withBuiltIns, type PaperworkTemplate } from '../shared/paperwork'
 import { normalizeTableStyle, type TableStyle } from '../shared/table-style'
+import { normalizeHeader, type PaperworkHeader } from '../shared/paperwork-header'
 
 const LIBRARY_FILE = 'library.json'
 
@@ -79,6 +80,8 @@ interface Library {
   lightingReports?: Omit<PaperworkTemplate, 'source' | 'mergeRepeats'>[] | null
   /** How exported tables look (Excel + PDF); null = the default look. */
   tableStyle: TableStyle | null
+  /** The header on every PDF (what goes left/center/right); null = the default look. */
+  paperworkHeader?: PaperworkHeader | null
   /** Next id per list, so a deleted row's id is never handed to someone new:
    *  projects keep these ids (crew bookings, a computer's software). */
   nextIds?: Partial<Record<IdList, number>>
@@ -158,7 +161,8 @@ function readLibrary(): Library {
     fixtureTypes: raw.fixtureTypes ?? [],
     paperwork: raw.paperwork ?? null,
     lightingReports: raw.lightingReports,
-    tableStyle: raw.tableStyle ?? null
+    tableStyle: raw.tableStyle ?? null,
+    paperworkHeader: raw.paperworkHeader ?? null
   }
 }
 
@@ -604,7 +608,10 @@ export function listStickerDesigns(): StickerDesign[] {
 
 export function saveStickerDesign(id: number | null, input: StickerDesignInput): StickerDesign {
   const lib = readLibrary()
-  const design: StickerDesign = { ...input, id: id ?? newId(lib, 'stickerDesigns', lib.stickerDesigns) }
+  const design: StickerDesign = {
+    ...input,
+    id: id ?? newId(lib, 'stickerDesigns', lib.stickerDesigns)
+  }
   lib.stickerDesigns = [...lib.stickerDesigns.filter((d) => d.id !== design.id), design].sort(
     byName
   )
@@ -656,6 +663,19 @@ export function savePaperwork(list: PaperworkTemplate[]): PaperworkTemplate[] {
 export function templatesForDoc(doc: keyof typeof DOC_TEMPLATES): PaperworkTemplate[] {
   const list = listPaperwork()
   return DOC_TEMPLATES[doc].map((id) => list.find((t) => t.id === id)!)
+}
+
+// ---- Paperwork header (shared) ---------------------------------------------
+
+export function getPaperworkHeader(): PaperworkHeader {
+  return normalizeHeader(readLibrary().paperworkHeader)
+}
+
+export function setPaperworkHeader(h: PaperworkHeader): PaperworkHeader {
+  const lib = readLibrary()
+  lib.paperworkHeader = normalizeHeader(h)
+  writeLibrary(lib)
+  return lib.paperworkHeader
 }
 
 // ---- Exported table style (shared) ----------------------------------------

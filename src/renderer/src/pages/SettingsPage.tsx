@@ -4,6 +4,7 @@ import UpdatesPanel from '../components/UpdatesPanel'
 import ServerPanel from '../components/ServerPanel'
 import KitModal from '../components/KitModal'
 import TableStylePanel from '../components/TableStylePanel'
+import HeaderPanel from '../components/HeaderPanel'
 import LibraryPanel from '../components/LibraryPanel'
 
 interface Props {
@@ -141,7 +142,11 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
   }
 
   async function removeCableType(t: CableType): Promise<void> {
-    if (!window.confirm(`Remove cable type "${t.name}"? Cables already tagged with it keep the label.`))
+    if (
+      !window.confirm(
+        `Remove cable type "${t.name}"? Cables already tagged with it keep the label.`
+      )
+    )
       return
     await window.api.cableTypes.remove(t.name)
     onChanged()
@@ -232,7 +237,12 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           <div className="signal-add">
             <label className="btn btn-small btn-primary file-btn">
               {companyLogo ? 'Replace…' : 'Choose image…'}
-              <input type="file" accept="image/png,image/jpeg" hidden onChange={onCompanyLogoFile} />
+              <input
+                type="file"
+                accept="image/png,image/jpeg"
+                hidden
+                onChange={onCompanyLogoFile}
+              />
             </label>
             {companyLogo && (
               <button className="btn btn-small btn-danger" onClick={removeCompanyLogo}>
@@ -243,6 +253,7 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
         </div>
       </div>
 
+      <HeaderPanel />
       <TableStylePanel />
 
       <div className="panel">
@@ -283,8 +294,8 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
       <div className="panel">
         <h3>Cable types</h3>
         <p className="muted">
-          The catalog of cable types you can assign to cables in the Cables tab (e.g. Cat6,
-          Fiber SM, XLR, Coax). Names are case-insensitive and must be unique.
+          The catalog of cable types you can assign to cables in the Cables tab (e.g. Cat6, Fiber
+          SM, XLR, Coax). Names are case-insensitive and must be unique.
         </p>
 
         <form onSubmit={addCableType} className="signal-add">
@@ -357,10 +368,10 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           <h3>Switch config generator</h3>
           <p className="muted">
             The base NETGEAR M4350 config + admin login used to generate each switch&rsquo;s full,
-            uploadable config (shown on the Show Server device page with Download/Copy). Shared across
-            all projects. <strong>The admin password is written into the generated config in
-            plaintext</strong> so the upload is turn-key. It stays on this computer, so enter it on
-            each one.
+            uploadable config (shown on the Show Server device page with Download/Copy). Shared
+            across all projects.{' '}
+            <strong>The admin password is written into the generated config in plaintext</strong> so
+            the upload is turn-key. It stays on this computer, so enter it on each one.
           </p>
           <div className="form-grid">
             <label>
@@ -446,8 +457,9 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           <p className="muted">
             Tokens the generator fills: <code>{'{{VLANS}}'}</code> <code>{'{{USERS}}'}</code>{' '}
             <code>{'{{LAGS}}'}</code> <code>{'{{SYSNAME}}'}</code> <code>{'{{INTERFACES}}'}</code>{' '}
-            <code>{'{{MGMT}}'}</code> <code>{'{{MONITORING}}'}</code>. Everything else is kept as-is. Per-VLAN multicast and L3/SVI
-            routing aren&rsquo;t generated yet — keep those in the template if you need them.
+            <code>{'{{MGMT}}'}</code> <code>{'{{MONITORING}}'}</code>. Everything else is kept
+            as-is. Per-VLAN multicast and L3/SVI routing aren&rsquo;t generated yet — keep those in
+            the template if you need them.
           </p>
         </div>
       )}

@@ -2711,3 +2711,92 @@ body.col-resizing {
 .fmt-preview.eq table tbody tr:nth-child(even) { background: none; }
 .fmt-preview .bal { display: inline-block; min-width: 2.2em; padding: 0 6px; border-radius: 10px; color: #b8c1ca; }
 .fmt-preview .bal.due { background: #ffcf7a; color: #5a3a00; font-weight: 700; }
+
+/* Patching › Patch sheets device picker */
+.ps-pick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ps-pick-bar .search {
+  flex: 1;
+  min-width: 180px;
+}
+.ps-pick {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.ps-pick label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.ps-pick li + li {
+  border-top: 1px solid var(--line-soft);
+}
+.ps-pick label span:first-of-type {
+  flex: 1;
+}
+.ps-pick li.muted {
+  padding: 10px 12px;
+}
+.conn-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -4px 0 8px;
+}
+
+/* Settings › Paperwork header */
+.hdr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+.hdr-grid label,
+.hdr-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ev-c-text-2);
+}
+.hdr-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+.hdr-row .hdr-text {
+  flex: 1;
+  min-width: 220px;
+}
+.hdr-row input[type='number'] {
+  width: 80px;
+}
+.hdr-row label.checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  padding-bottom: 8px;
+}
+/* drawn as paper, like the PDF */
+.hdr-preview {
+  background: #fff;
+  color: #1b1b1f;
+  border-radius: 6px;
+  padding: 16px 18px 4px;
+  font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 12px;
+}

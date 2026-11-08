@@ -1,5 +1,6 @@
 import type { PaperworkSource, PaperworkTemplate } from './paperwork'
 import type { TableStyle } from './table-style'
+import type { PaperworkHeader } from './paperwork-header'
 export interface Subnet {
   id: number
   name: string
@@ -211,6 +212,8 @@ export interface ExportOptions {
   orderId?: number
   /** `loadsheet`: one trip's sheet; omitted = every trip, one page each */
   tripId?: number
+  /** `patchsheet`: the devices to print, one page each (names as in Patching) */
+  devices?: string[]
   doc:
     | 'pullsheet'
     | 'schedule'
@@ -219,6 +222,7 @@ export interface ExportOptions {
     | 'devicelist'
     | 'projectorsheet'
     | 'loadsheet'
+    | 'patchsheet'
     | 'order'
     | 'receiving'
   format: 'pdf' | 'xlsx' | 'csv'
@@ -1036,6 +1040,11 @@ export interface VwDeviceManagerApi {
   companyName: {
     get: () => Promise<string | null>
     set: (name: string | null) => Promise<void>
+  }
+  /** The header on every PDF, shared by every show. */
+  paperworkHeader: {
+    get: () => Promise<PaperworkHeader>
+    set: (h: PaperworkHeader) => Promise<PaperworkHeader>
   }
   /** How exported tables look (Excel + PDF), shared by every show. */
   tableStyle: {

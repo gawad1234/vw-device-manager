@@ -26,7 +26,7 @@ Each show is one **project file** (`.vwdm`). The convention is to keep it **next
 
 ## 3. Set your show branding
 
-**Settings → Show branding** — enter the show name and (optionally) drop in a logo. These get stamped onto every export (pull orders, schedules, case labels), so it's worth doing once up front.
+**Settings → Show branding** — enter the show name and (optionally) drop in a logo. These get stamped onto every export (pull orders, schedules, case labels), so it's worth doing once up front. **Settings → Paperwork header** chooses where they go on the page.
 
 ---
 
@@ -45,12 +45,14 @@ The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 
 - **Orders** — build a shop order (or import a bill of materials from the drawing), track received-vs-ordered, and export a **pull order** or **receiving checklist**. You can save custom **export formats** for different order types (columns, header text, drag-to-resize widths, text size), including a ready-made **Equipment list** layout.
 - **Cables** — group cables into bundles (looms) and export pull sheets and labels; **Loom labels** prints a sticker for each end of every cable onto manufacturer sticker sheets.
+- **Patching** — import the drawing's circuit report, then **Patch sheets…** prints a page per device (say, a video matrix) showing what feeds each input and where each output goes, to hand to anyone patching.
 - **Labels + Cases** — design a road-case label template, list what's in each case, and print a label per case.
 - **Schedule** — book crew and track their days, call times and cost (**Crew**); plan trucks and trips and print **load sheets** for the shop (**Trucking**).
 - **Lighting** — turn on Lightwright data exchange in Vectorworks' Spotlight preferences, tick **Live sync** on **Lighting → Fixtures**, and the rig flows both ways: channels, addresses, purposes, colors, gobos. **Universes** shows each DMX universe as a 512-address grid and flags overlaps. 
 - **Paperwork** — want the pull sheet, IP schedule or any other export laid out differently? Open **Paperwork** (or **Edit layout…** in an Export menu), pick the template, then click headings to change columns and drag their edges to resize. The export follows.
-- **Devices → Projectors / Wallpapers / Software** — Panasonic projector setup sheets, branded desktop wallpapers, and USB install kits for show computers.
-- **Networking → Configs** — a Hyper-V VLAN script for a Windows host, or **Save VLAN Manager…** for a small Windows GUI that shows a host's live VLANs and lets you change them (Preview first, then Apply).
+- **Network → Projectors / Wallpapers / Software** — Panasonic projector setup sheets, branded desktop wallpapers, and USB install kits for show computers.
+- **Network → Configs** — a Hyper-V VLAN script for a Windows host, or **Save VLAN Manager…** for a small Windows GUI that shows a host's live VLANs and lets you change them (Preview first, then Apply).
+- **Settings → Paperwork header** — where your logos, the show name, the document title, the date and a line of your own sit at the top of every PDF.
 - **Settings → Table style** — the font, header style, colors and padding every Excel and PDF table uses.
 
 ---

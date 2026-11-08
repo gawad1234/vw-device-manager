@@ -11,6 +11,7 @@ import {
   buildDeviceIndex,
   caseRecords,
   recordsFor,
+  patchRecords,
   resolveEndpoint,
   TRIP_KIND_LABEL,
   type DeviceIndex
@@ -36,7 +37,14 @@ import {
   PROJECTOR_SETTINGS,
   projectorValueLabel
 } from '../shared/projector-settings'
-import { getCompanyName, getCompanyLogo, getTableStyle, templatesForDoc } from './library'
+import {
+  getCompanyName,
+  getCompanyLogo,
+  getPaperworkHeader,
+  getTableStyle,
+  templatesForDoc
+} from './library'
+import { HEADER_CSS, headerHtml } from '../shared/paperwork-header'
 import { argb, tableFont, tableStyleCss } from '../shared/table-style'
 import type {
   Bundle,
@@ -203,36 +211,38 @@ function eqCss(fill: string, text: string): string {
     .eq-note { display: block; color: #a85a1c; font-style: italic; font-weight: 700; font-size: .9em; }`
 }
 
-function page(title: string, body: string, logo: string | null, fontSize = 12, eq = false): string {
+/** The header from Settings › Paperwork header, filled in for this show and document. */
+function pageHeader(title: string, logo: string | null): string {
+  return headerHtml(getPaperworkHeader(), {
+    title,
+    showName: docShowName,
+    showLogo: logo,
+    companyName: getCompanyName(),
+    companyLogo: getCompanyLogo(),
+    date: new Date().toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+  })
+}
+
+/** A PDF document. `ownHeaders`: the body prints a header per page (patch sheets). */
+function page(
+  title: string,
+  body: string,
+  logo: string | null,
+  fontSize = 12,
+  eq = false,
+  ownHeaders = false
+): string {
   const st = getTableStyle()
-  const titleBlock = docShowName
-    ? `<div class="show">${esc(docShowName)}</div><div class="doctitle">${esc(title)}</div>`
-    : `<div class="show">${esc(title)}</div>`
-  // Company letterhead (shared across projects) sits above the show name.
-  const companyName = getCompanyName()
-  const companyLogo = getCompanyLogo()
-  const companyBlock =
-    companyName || companyLogo
-      ? `<div class="company">${companyLogo ? `<img class="clogo" src="${esc(companyLogo)}" alt="">` : ''}${
-          companyName ? `<span class="cname">${esc(companyName)}</span>` : ''
-        }</div>`
-      : ''
-  const header = `<header class="ph"><div class="ph-l">${companyBlock}${titleBlock}</div>${
-    logo ? `<img class="logo" src="${esc(logo)}" alt="logo">` : ''
-  }</header>`
+  const header = eq || ownHeaders ? '' : pageHeader(title, logo)
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
            color: #1b1b1f; margin: 0; padding: 22px; font-size: 12px; }
-    .ph { display: flex; align-items: center; justify-content: space-between; gap: 16px;
-          border-bottom: 2px solid #dddddd; padding-bottom: 10px; margin-bottom: 16px; }
-    .ph-l { display: flex; flex-direction: column; gap: 2px; }
-    .company { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .company .clogo { max-height: 34px; max-width: 170px; object-fit: contain; }
-    .company .cname { font-size: 13px; font-weight: 700; color: #333; }
-    .show { font-size: 18px; font-weight: 700; }
-    .doctitle { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
-    .logo { max-height: 62px; max-width: 260px; object-fit: contain; }
+    ${HEADER_CSS}
     h1 { font-size: 18px; margin: 0 0 14px; }
     .sec { margin: 20px 0 6px; }
     .dcell { font-weight: 600; vertical-align: middle; }
@@ -279,7 +289,7 @@ function page(title: string, body: string, logo: string | null, fontSize = 12, e
     ${tableStyleCss(st)}
     body { font-family: ${tableFont(st).css}; font-size: ${fontSize}px; }
     ${eq ? eqCss(st.headerFill, st.headerText) : ''}
-  </style></head><body${eq ? ' class="eq"' : ''}>${eq ? '' : header}${body}</body></html>`
+  </style></head><body${eq ? ' class="eq"' : ''}>${header}${body}</body></html>`
 }
 
 function labelsHtml(bundles: Bundle[], idx: DeviceIndex, logo: string | null): string {
@@ -644,7 +654,11 @@ async function sheetsXlsx(
   const wb = new ExcelJS.Workbook()
   const used = new Set<string>()
   for (const { name, table: t, widths, fontPx } of sheets) {
-    const base = name.replace(/[[\]:*?/\\]/g, '-').replace(/^'+|'+$/g, '').slice(0, 28) || 'Sheet'
+    const base =
+      name
+        .replace(/[[\]:*?/\\]/g, '-')
+        .replace(/^'+|'+$/g, '')
+        .slice(0, 28) || 'Sheet'
     let sheetName = base
     for (let n = 2; used.has(sheetName.toLowerCase()); n++) sheetName = `${base} ${n}`
     used.add(sheetName.toLowerCase())
@@ -744,11 +758,7 @@ function templateTable(
         ...built.headers
       ],
       rows: built.sections.flatMap((s) =>
-        s.rows.map((r) => [
-          ...(grouped ? [s.title] : []),
-          ...(noted ? [s.note ?? ''] : []),
-          ...r
-        ])
+        s.rows.map((r) => [...(grouped ? [s.title] : []), ...(noted ? [s.note ?? ''] : []), ...r])
       )
     },
     widths: [
@@ -787,7 +797,10 @@ async function writeTemplated(
   logo: string | null
 ): Promise<void> {
   if (format === 'csv')
-    writeCsv(outPath, parts.map((p) => tableCsv(templateTable(p.t, p.built).table)).join('\r\n\r\n'))
+    writeCsv(
+      outPath,
+      parts.map((p) => tableCsv(templateTable(p.t, p.built).table)).join('\r\n\r\n')
+    )
   else if (format === 'xlsx')
     writeFileSync(
       outPath,
@@ -804,6 +817,68 @@ async function writeTemplated(
     writeFileSync(
       outPath,
       await htmlToPdf(templatesPage(title, parts, logo), parts[0]?.t.orientation === 'landscape')
+    )
+}
+
+/** Each device's patch sheet, built from the Patch sheet template. */
+export function patchSheetParts(
+  devices: string[]
+): { device: string; t: PaperworkTemplate; built: BuiltReport }[] {
+  const [t] = templatesForDoc('patchsheet')
+  const recs = patchRecords()
+  return devices.map((device) => ({
+    device,
+    t,
+    built: buildReport(
+      t,
+      recs.filter((r) => r.device === device)
+    )
+  }))
+}
+
+/** Patch sheets as a PDF page body: every device starts a new page under its own header. */
+export function patchSheetHtml(devices: string[], logo: string | null): string {
+  const parts = patchSheetParts(devices)
+  const body = parts
+    .map(
+      (p) =>
+        `<div class="ps">${pageHeader(`${p.device} — Patch Sheet`, logo)}${templateHtml(p.t, p.built)}</div>`
+    )
+    .join('')
+  const css = '<style>.ps + .ps { page-break-before: always; }</style>'
+  return page('Patch Sheet', TEMPLATE_CSS + css + body, logo, 12, false, true)
+}
+
+async function writePatchSheets(
+  outPath: string,
+  format: ExportOptions['format'],
+  devices: string[],
+  logo: string | null
+): Promise<void> {
+  const parts = patchSheetParts(devices)
+  if (format === 'csv')
+    writeCsv(
+      outPath,
+      parts
+        .map((p) => `${csvCell(p.device)}\r\n${tableCsv(templateTable(p.t, p.built).table)}`)
+        .join('\r\n\r\n')
+    )
+  else if (format === 'xlsx')
+    writeFileSync(
+      outPath,
+      await sheetsXlsx(
+        parts.map((p) => ({
+          name: p.device,
+          ...templateTable(p.t, p.built),
+          fontPx: p.t.fontSize
+        })),
+        logo
+      )
+    )
+  else
+    writeFileSync(
+      outPath,
+      await htmlToPdf(patchSheetHtml(devices, logo), parts[0]?.t.orientation === 'landscape')
     )
 }
 
@@ -937,7 +1012,8 @@ function sortItems(
   sort: OrderExportFormat['sort'] | 'categoryOnly'
 ): ShopOrder['items'] {
   const out = items.slice()
-  if (sort === 'categoryOnly') out.sort((a, b) => (a.category || '￿').localeCompare(b.category || '￿'))
+  if (sort === 'categoryOnly')
+    out.sort((a, b) => (a.category || '￿').localeCompare(b.category || '￿'))
   else if (sort === 'name') out.sort((a, b) => natural(a.name, b.name))
   else if (sort === 'outstanding')
     out.sort((a, b) => {
@@ -1001,11 +1077,7 @@ function fmtTs(ts: string | null): string {
 
 /** Flat table (CSV/XLSX) built from the resolved format's columns. When
  *  `prevMap` is set, a leading Change column is added. */
-function shopOrderTable(
-  order: ShopOrder,
-  r: Resolved,
-  prevMap: PrevItems | null
-): Table {
+function shopOrderTable(order: ShopOrder, r: Resolved, prevMap: PrevItems | null): Table {
   const cols = flatColumns(r)
   const rows = sortItems(order.items, r.sort).map((it) => {
     const qty = Number(it.quantity) || 0
@@ -1162,7 +1234,10 @@ function shopOrderHtml(
     bodyHtml = '<p>No items on this order.</p>'
   } else if (r.groupByCategory) {
     const groups: { cat: string; items: ShopOrder['items'] }[] = []
-    for (const it of sortItems(sortItems(order.items, r.sort === 'outstanding' ? 'outstanding' : 'name'), 'categoryOnly')) {
+    for (const it of sortItems(
+      sortItems(order.items, r.sort === 'outstanding' ? 'outstanding' : 'name'),
+      'categoryOnly'
+    )) {
       const label = it.category?.trim() || 'Uncategorized'
       const last = groups[groups.length - 1]
       if (last && last.cat === label) last.items.push(it)
@@ -1189,7 +1264,10 @@ function shopOrderHtml(
   const cables = cableSectionHtml(order, receiving)
   const gone = r.removed.length
     ? `<section><h2>Removed since last export <span class="meta">(${r.removed.length})</span></h2><ul>${r.removed
-        .map((p) => `<li>${esc(p.name)}${p.modelNumber ? ` · ${esc(p.modelNumber)}` : ''} × ${Number(p.quantity) || 0}</li>`)
+        .map(
+          (p) =>
+            `<li>${esc(p.name)}${p.modelNumber ? ` · ${esc(p.modelNumber)}` : ''} × ${Number(p.quantity) || 0}</li>`
+        )
         .join('')}</ul></section>`
     : ''
   if (eq) {
@@ -1288,6 +1366,7 @@ const DOC_LABEL: Record<ExportOptions['doc'], string> = {
   devicelist: 'device list',
   projectorsheet: 'projector setup sheet',
   loadsheet: 'load sheet',
+  patchsheet: 'patch sheet',
   order: 'pull order',
   receiving: 'receiving checklist'
 }
@@ -1378,6 +1457,24 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
         templatesForDoc('loadsheet')[0].orientation === 'landscape'
       )
     )
+    shell.openPath(res.filePath)
+    return res.filePath
+  }
+
+  // Patch sheets: one page per device, every connection on it (inputs, then outputs).
+  if (opts.doc === 'patchsheet') {
+    const devices = opts.devices ?? []
+    if (!devices.length) return null
+    const res = await dialog.showSaveDialog({
+      defaultPath:
+        `${devices.length === 1 ? `${devices[0]} patch sheet` : 'Patch sheets'}.${opts.format}`.replace(
+          /[/\\:*?"<>|]/g,
+          '-'
+        ),
+      filters: [{ name: opts.format.toUpperCase(), extensions: [opts.format] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    await writePatchSheets(res.filePath, opts.format, devices, logo)
     shell.openPath(res.filePath)
     return res.filePath
   }

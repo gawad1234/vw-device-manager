@@ -1,6 +1,7 @@
 import {
   listBundles,
   listCasesByIds,
+  listCircuits,
   listDevices,
   listFixtures,
   listSubnets,
@@ -13,6 +14,7 @@ import type {
   CaseRec,
   DeviceRec,
   PaperworkSource,
+  PatchRec,
   PortRec,
   SwitchPortRec
 } from '../shared/paperwork'
@@ -187,7 +189,55 @@ export function caseRecords(tripId?: number): CaseRec[] {
     )
 }
 
-/** Every record a source lists in the open project (cables: the given bundles, or all). */
+/** Every circuit end in the Patching tab, one per device at that end. */
+export function patchRecords(): PatchRec[] {
+  return listCircuits().flatMap((c) => {
+    const base = {
+      srcDevice: c.srcName,
+      srcSocket: c.srcSocket,
+      dstDevice: c.dstName,
+      dstSocket: c.dstSocket,
+      signal: c.signal,
+      cable: c.cableNumber,
+      tested: c.tested,
+      notes: c.notes ?? ''
+    }
+    const rack = (r: string, u: string, slot: string): string =>
+      [r, u && `U${u}`, slot && `slot ${slot}`].filter(Boolean).join(' · ')
+    const out: PatchRec[] = []
+    if (c.srcName)
+      out.push({
+        ...base,
+        device: c.srcName,
+        direction: 'Outputs',
+        socket: c.srcSocket,
+        connector: c.srcConnector,
+        rack: rack(c.srcRack, c.srcRackU, c.srcSlot),
+        patched: c.srcPatched
+      })
+    if (c.dstName)
+      out.push({
+        ...base,
+        device: c.dstName,
+        direction: 'Inputs',
+        socket: c.dstSocket,
+        connector: c.dstConnector,
+        rack: rack(c.dstRack, c.dstRackU, c.dstSlot),
+        patched: c.dstPatched
+      })
+    return out
+  })
+}
+
+/** The devices that have patch connections, in name order. */
+export function patchDevices(recs = patchRecords()): string[] {
+  return [...new Set(recs.map((r) => r.device))].sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+  )
+}
+
+/** Every record a source lists in the open project (cables: the given bundles, or all).
+ *  Patch connections are per device: the Paperwork preview shows the first device. */
 export function recordsFor(source: PaperworkSource, bundles?: Bundle[]): object[] {
   switch (source) {
     case 'cables':
@@ -202,5 +252,10 @@ export function recordsFor(source: PaperworkSource, bundles?: Bundle[]): object[
       return caseRecords()
     case 'fixtures':
       return listFixtures()
+    case 'patch': {
+      const recs = patchRecords()
+      const first = patchDevices(recs)[0]
+      return recs.filter((r) => r.device === first)
+    }
   }
 }

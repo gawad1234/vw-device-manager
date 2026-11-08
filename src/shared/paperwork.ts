@@ -6,7 +6,8 @@ import type { Fixture } from './types'
 // Paperwork preview, the PDF/Excel/CSV exports and the tests all build the
 // exact same rows. Pure: the main process supplies the records.
 
-export type PaperworkSource = 'cables' | 'devices' | 'switchPorts' | 'ports' | 'cases' | 'fixtures'
+export type PaperworkSource =
+  'cables' | 'devices' | 'switchPorts' | 'ports' | 'cases' | 'fixtures' | 'patch'
 
 export interface ReportColumn {
   /** a field key of the template's source */
@@ -86,6 +87,29 @@ export interface SwitchPortRec {
   vlan: string
   nativeVlan: string
   taggedVlans: string
+}
+
+/** One end of a patched circuit, seen from the device at that end: a circuit
+ *  gives its source device an Output row and its destination device an Input row. */
+export interface PatchRec {
+  /** the device this sheet is for */
+  device: string
+  direction: 'Inputs' | 'Outputs'
+  /** this device's socket */
+  socket: string
+  srcDevice: string
+  srcSocket: string
+  dstDevice: string
+  dstSocket: string
+  signal: string
+  cable: string
+  /** this end's connector and rack position */
+  connector: string
+  rack: string
+  /** this end patched */
+  patched: boolean
+  tested: boolean
+  notes: string
 }
 
 /** One case on a truck trip. */
@@ -249,7 +273,46 @@ export const SOURCES: Record<PaperworkSource, SourceDef> = {
     ]),
     dynamic: (r) => (r as CaseRec).fields
   },
-  fixtures: { label: 'Lighting fixtures', area: 'Lighting', fields: fixtureFields }
+  fixtures: { label: 'Lighting fixtures', area: 'Lighting', fields: fixtureFields },
+  patch: {
+    label: 'Patch connections (one device)',
+    area: 'Cables',
+    fields: fieldsOf<PatchRec>([
+      { key: 'source', label: 'Source', get: (r) => endText(r.srcDevice, r.srcSocket) },
+      {
+        key: 'destination',
+        label: 'Destination',
+        get: (r) => endText(r.dstDevice, r.dstSocket)
+      },
+      { key: 'direction', label: 'In / out', get: (r) => r.direction },
+      { key: 'socket', label: 'This socket', get: (r) => r.socket },
+      {
+        key: 'other',
+        label: 'Connects to',
+        get: (r) =>
+          r.direction === 'Inputs'
+            ? endText(r.srcDevice, r.srcSocket)
+            : endText(r.dstDevice, r.dstSocket)
+      },
+      { key: 'srcDevice', label: 'Source device', get: (r) => r.srcDevice },
+      { key: 'srcSocket', label: 'Source socket', get: (r) => r.srcSocket },
+      { key: 'dstDevice', label: 'Destination device', get: (r) => r.dstDevice },
+      { key: 'dstSocket', label: 'Destination socket', get: (r) => r.dstSocket },
+      { key: 'signal', label: 'Signal', get: (r) => r.signal },
+      { key: 'cable', label: 'Cable #', get: (r) => r.cable },
+      { key: 'connector', label: 'Connector', get: (r) => r.connector },
+      { key: 'rack', label: 'Rack', get: (r) => r.rack },
+      { key: 'device', label: 'Device', get: (r) => r.device },
+      { key: 'patchedBox', label: 'Patched ☐', get: (r) => box(r.patched), center: true },
+      { key: 'testedBox', label: 'Tested ☐', get: (r) => box(r.tested), center: true },
+      { key: 'notes', label: 'Notes', get: (r) => r.notes }
+    ])
+  }
+}
+
+/** "Server A › OUT 1" */
+function endText(device: string, socket: string): string {
+  return [device, socket].filter(Boolean).join(' › ')
 }
 
 function findField(source: PaperworkSource, key: string): Field | undefined {
@@ -310,10 +373,27 @@ type Preset = Omit<PaperworkTemplate, 'mergeRepeats' | 'kind'> &
 const preset = (p: Preset): PaperworkTemplate => ({ kind: 'list', mergeRepeats: 0, ...p })
 
 const fx = (f: string, w: number, l?: string): ReportColumn => col('fixtures', f, w, l)
+const pt = (f: string, w: number, l?: string): ReportColumn => col('patch', f, w, l)
 const cb = (f: string, w: number, l?: string): ReportColumn => col('cables', f, w, l)
 
 /** The built-in templates. Ones bound to an export (DOC_TEMPLATES) can be reset but never deleted. */
 export const PRESETS: PaperworkTemplate[] = [
+  preset({
+    id: 'patchsheet',
+    name: 'Patch sheet (one device)',
+    source: 'patch',
+    columns: [
+      pt('source', 200),
+      pt('destination', 200),
+      pt('signal', 70),
+      pt('cable', 80),
+      pt('patchedBox', 70, 'Patched')
+    ],
+    groupBy: 'direction',
+    sortBy: ['socket'],
+    orientation: 'portrait',
+    fontSize: 12
+  }),
   preset({
     id: 'pullsheet',
     name: 'Pull sheet',
@@ -505,7 +585,8 @@ export const DOC_TEMPLATES = {
   schedule: ['schedule'],
   devicelist: ['devicelist'],
   ipschedule: ['ipschedule-switches', 'ipschedule-devices'],
-  loadsheet: ['loadsheet']
+  loadsheet: ['loadsheet'],
+  patchsheet: ['patchsheet']
 } as const
 
 export type TemplatedDoc = keyof typeof DOC_TEMPLATES
@@ -517,7 +598,8 @@ export function usedBy(id: string): string | null {
     schedule: 'Cables › Export › Cable schedule',
     devicelist: 'Devices › Export › Device list',
     ipschedule: 'Devices › Export › IP schedule',
-    loadsheet: 'Trucking › Load sheets'
+    loadsheet: 'Trucking › Load sheets',
+    patchsheet: 'Patching › Patch sheets'
   }
   for (const [doc, ids] of Object.entries(DOC_TEMPLATES))
     if ((ids as readonly string[]).includes(id)) return label[doc as TemplatedDoc]

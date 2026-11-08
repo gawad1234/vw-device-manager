@@ -29,21 +29,33 @@ workspace context and the cross-machine handoff log — check those first.
     single `data/library.json` (Dropbox-synced, **gitignored** — `/data` — and
     excluded from builds), NOT stored per project. Holds network signals, cable
     types, device categories, auto-add kits, company branding, the switch-config
-    template + admin login, the **software library** and the **crew directory**
+    template + admin user name, the **paperwork header** (`paperworkHeader`), the **software library** and the **crew directory**
     (names, phones, emails, rates — personal data: must never be committed or
     served). `ensureLibrary()` seeds it once from the legacy DB. Cables reference
     their type by **name** (`cables.cable_type`), so nothing is tied to a
-    per-project id.
+    per-project id. Each machine picks the library's folder (Settings → Shared
+    library, `libraryFolder` in its `settings.json`); writes go temp-file → rename
+    with a `.bak`, and an unreadable file throws rather than saving over it.
+  - `settings.ts` — the per-machine `userData/settings.json`: recent projects, library
+    folder, and the **secrets that never sync**: switch admin password and SNMP community.
+  - `print-html.ts` — `withPrintWindow`: loads HTML from a temp file in a hidden window
+    for printToPDF/print (data: URLs fail past ~1 MB).
   - `exports.ts` — every PDF/Excel/CSV document (`exportDocument`, HTML → PDF via
     an offscreen BrowserWindow `printToPDF`): pull sheets, schedules, labels, IP
     schedule, device list, orders, **projector setup sheet** (one worksheet/page
-    per projector) and **truck load sheets** (one page per trip).
+    per projector), **truck load sheets** (one page per trip) and **patch sheets**
+    (one page / Excel sheet per device, `doc: 'patchsheet'` with `devices`). Every PDF
+    header comes from `pageHeader()` → `shared/paperwork-header.ts` (except the
+    Equipment-list order layout, which draws its own).
   - `server.ts` — the LAN **Show Server** (plain `node:http`); reuses repo/exports.
     Also the **host side of sharing a show** with other Device Manager computers:
     `/rpc/login` (manager PIN required — a PIN-less show can't be joined — plus
     matching app version → bearer token), `/rpc/call` (runs a handler from
     `rpc-registry.ts`, only channels `shared/remote-scope.ts` marks `read`),
-    `/rpc/changes` (a change counter joined computers poll).
+    `/rpc/changes` (a change counter joined computers poll). The crew pages are a
+    phone app (bottom tabs Home/Receive/Devices/Patch, web manifest for Add to Home
+    Screen); `hostAllowed` refuses non-LAN Host headers (DNS rebinding), `/api/*`
+    needs a JSON content type, wrong PINs lock out per address.
   - `remote.ts` — the **joining side**: `join/leave/info/call`; polls `/rpc/changes`
     (1.5 s focused, 4.5 s in the background) and sends `data-changed`.
   - `ipc.ts` registers every handler through `handle(channel, fn)`: while joined,
@@ -68,17 +80,17 @@ workspace context and the cross-machine handoff log — check those first.
   - `repository.ts` — CRUD + validation for devices/subnets (IP conflict
     checks, IP-outside-subnet checks, etc. — see `DeviceWarning` types).
   - `ipc.ts` — wires repository methods to IPC handlers.
-  - `ip-utils.ts` — CIDR/IP helper functions.
   - `index.ts` — Electron app bootstrap/window creation.
 - **Preload** (`src/preload/`): exposes the typed `VwDeviceManagerApi`
   (`src/shared/types.ts`) to the renderer via `contextBridge`.
-- **Renderer** (`src/renderer/src/`): React UI — `App.tsx` shell with the
-  sidebar (Devices › Projectors/Wallpapers/Software, Networking, Schedule ›
-  Crew/Trucking, Cables, Lighting › Fixtures/Universes/Fixture types, Patching, Orders, Packing, Settings) and one file per
-  page in `pages/`. Shared two-pane page: `components/DeviceSetupPage.tsx`.
+- **Renderer** (`src/renderer/src/`): React UI — `App.tsx` shell with a data-driven
+  `NAV` sidebar grouped by job (Network, Cables, Lighting, Paperwork, Schedule, Packing;
+  open groups kept in localStorage `sidebar.openGroups`) and one file per page in `pages/`. Shared two-pane page: `components/DeviceSetupPage.tsx`.
 - **Shared** (`src/shared/`): `types.ts` (all data types + the
   `VwDeviceManagerApi` contract shared between main/preload/renderer), and pure
-  logic used by both sides: `projector-settings.ts` (Panasonic command catalog),
+  logic used by both sides: `ip-utils.ts` (CIDR/IP helpers, `mainRoute` = a device's
+  main IP + VLAN), `paperwork-header.ts` (`headerHtml`/`HEADER_CSS`, shared by the PDFs
+  and the Settings preview), `projector-settings.ts` (Panasonic command catalog),
   `software.ts` (silent-switch presets), `crew-cost.ts` (hours/OT/cost),
   `lw-exchange.ts` (parse/build the Lightwright exchange file, absolute ↔ universe/address),
   `lighting-checks.ts` (patch warnings), `sticker-sheet.ts` (label-template .docx parser — positioned shapes or Avery
@@ -146,7 +158,14 @@ workspace context and the cross-machine handoff log — check those first.
   builds the plain records from the DB. `exports.ts` `templateHtml` / `writeTemplated` render the
   pull sheet, cable schedule, device list, IP schedule (two templates), the load sheet's case
   table, the Show Server's IP-schedule/device pages and Paperwork-page exports. Labels, projector
-  sheets and orders (their own export formats) are not templated.
+  sheets and orders (their own export formats) are not templated. Source `patch` (`PatchRec`,
+  from `paperwork-data.patchRecords()`): each circuit is an Outputs row for its source device and
+  an Inputs row for its destination; built-in `patchsheet` is printed once per device.
+- **Paperwork header:** `library.json` → `paperworkHeader` (null = `DEFAULT_HEADER`): a slot
+  (left/center/right/hidden) per piece (company logo/name, show name, doc title, own text, date,
+  show logo), `logoHeight`, `rule`, `text`; `normalizeHeader` repairs bad values.
+- **Order change tracking:** `shop_orders.prev_export_json` / `prev_export_at` (guarded) keep the
+  export before last, so re-exporting the same lines compares to the right baseline.
 - **Table style:** `library.json` → `tableStyle` (null = default). `src/shared/table-style.ts`:
   colors/stripes/lines plus font (`TABLE_FONTS`, Mac+Windows+Excel safe), header size %/bold/caps and
   padding. `page()` appends `tableStyleCss()` and the body font to every PDF; `styleSheet()` paints
