@@ -407,7 +407,7 @@ A **packing manager** that turns your label templates into per-case labels.
 
 **Streamlined entry:** when you open a case, its Fields are **pre-filled from the tokens your label templates use**, so you just type values instead of remembering field names.
 
-**Printing labels for cases:** on the Cases tab, pick a **template**, tick the cases you want, set **how many copies** of each (the Copies column), and **Print labels**. The template's text tokens are filled in per case:
+**Printing labels for cases:** on the Cases tab, pick a **template**, tick the cases you want, set **how many copies** of each (the Copies column; 2 each by default), and **Print labels**. The template's text tokens are filled in per case:
 
 | Token | Becomes |
 |---|---|

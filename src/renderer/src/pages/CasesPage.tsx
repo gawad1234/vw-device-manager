@@ -41,7 +41,7 @@ function CasesPage(): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState(false)
 
-  const copiesFor = (id: number): number => copies[id] ?? 1
+  const copiesFor = (id: number): number => copies[id] ?? 2
   function setCopiesFor(id: number, n: number): void {
     setCopies((prev) => ({ ...prev, [id]: Math.max(1, Math.min(99, Math.trunc(n) || 1)) }))
   }
