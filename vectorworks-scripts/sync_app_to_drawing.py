@@ -342,7 +342,8 @@ def main():
 
     if not handles:
         vs.AlrtDialog(
-            "No linked objects found. Run link_selected.py on your devices first."
+            "No linked objects found. Select your devices and run "
+            "Device Manager - Link Selected first."
         )
         conn.close()
         return

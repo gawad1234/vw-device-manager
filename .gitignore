@@ -20,3 +20,10 @@ graphify-out/
 # Dropbox sync conflict copies
 node_modules 2
 *conflicted copy*
+
+# Vectorworks workgroup folder: only our plug-ins are ours; VW fills in the rest
+__pycache__/
+vectorworks-scripts/workgroup/*
+!vectorworks-scripts/workgroup/Plug-ins/
+vectorworks-scripts/workgroup/Plug-ins/*
+!vectorworks-scripts/workgroup/Plug-ins/*.vsm
