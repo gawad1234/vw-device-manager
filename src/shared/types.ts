@@ -432,6 +432,12 @@ export interface ServerPins {
   manager: string
 }
 
+/** Where this computer drops cable-label CSVs for VectorLabel, and whether it exists. */
+export interface LabelFolderState {
+  path: string
+  found: boolean
+}
+
 // ---- Host VLAN config generator -------------------------------------------
 
 /** One network on a host NIC config (mirrors the PowerShell $DefaultVlans entry). */
@@ -1095,6 +1101,8 @@ export interface VwDeviceManagerApi {
     setPins: (pins: ServerPins) => Promise<void>
     /** a PNG data-URL QR of the primary connect URL (null when not running) */
     connectQr: () => Promise<string | null>
+    getLabelFolder: () => Promise<LabelFolderState>
+    chooseLabelFolder: () => Promise<LabelFolderState>
   }
   /** Fires whenever the server status changes. Returns an unsubscribe fn. */
   onServerStatus: (cb: (status: ServerStatus) => void) => () => void

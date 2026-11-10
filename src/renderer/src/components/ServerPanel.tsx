@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ServerStatus, ServerPins } from '../../../shared/types'
+import type { ServerStatus, ServerPins, LabelFolderState } from '../../../shared/types'
 
 /**
  * Settings → Show Server. Turns the embedded LAN web server on/off, shows the
@@ -12,6 +12,7 @@ function ServerPanel(): React.JSX.Element {
   const [portDraft, setPortDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [qr, setQr] = useState<string>('')
+  const [labels, setLabels] = useState<LabelFolderState | null>(null)
   const portInit = useRef(false)
 
   useEffect(() => {
@@ -23,6 +24,7 @@ function ServerPanel(): React.JSX.Element {
       }
     })
     window.api.server.getPins().then(setPins)
+    window.api.server.getLabelFolder().then(setLabels)
     return window.api.onServerStatus((s) => setStatus(s))
   }, [])
 
@@ -165,6 +167,27 @@ function ServerPanel(): React.JSX.Element {
         PINs are saved with the show (the project file), so any computer that opens this project
         serves it with the same PINs.
       </p>
+
+      <h4>Cable labels (VectorLabel)</h4>
+      <p className="muted" style={{ fontSize: 13 }}>
+        Crew can tap <strong>Print label</strong> on a cable on the phone Patch page: this computer
+        drops that cable&apos;s labels (both ends) into VectorLabel&apos;s watch folder, and
+        VectorLabel&apos;s Auto Print picks them up. The button only shows when the folder exists.
+        Set per computer.
+      </p>
+      <div className="server-row">
+        <span className="mono" style={{ fontSize: 13 }}>
+          {labels?.path ?? '…'}{' '}
+          {labels && !labels.found && <span className="muted">(not found)</span>}
+        </span>
+        <button
+          className="btn"
+          type="button"
+          onClick={async () => setLabels(await window.api.server.chooseLabelFolder())}
+        >
+          Choose folder…
+        </button>
+      </div>
     </div>
   )
 }

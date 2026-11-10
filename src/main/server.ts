@@ -7,6 +7,7 @@ import QRCode from 'qrcode'
 import { readFileSync } from 'node:fs'
 import appIcon from '../../resources/icon.png?asset'
 import { startBeacon, stopBeacon } from './discovery'
+import { getLabelFolder, printCableLabel } from './vectorlabel'
 import type {
   OrderItem,
   ServerPins,
@@ -373,6 +374,7 @@ function layout(title: string, body: string, role: Role | null, active = ''): st
   .ends button, .tested { min-height:52px; padding:4px 8px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--text); font-size:14px; }
   .ends button.on, .tested.on { border-color:var(--accent); background:rgba(34,199,184,.14); }
   .tested { width:100%; min-height:44px; }
+  .tested.label:disabled { opacity:.7; }
   .filters { display:flex; gap:8px; margin-bottom:10px; }
   .filters select { flex:1 1 0; min-width:0; min-height:48px; padding:0 10px; border-radius:8px; background:var(--card); color:var(--text); border:1px solid var(--line); }
   input[type=text], input[type=password], input[type=number] { min-height:48px; font-size:16px; }
@@ -579,6 +581,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
   }
   if (path.startsWith('/device/')) return sendHtml(res, 200, await devicePage(Number(path.slice(8)), req))
   if (path === '/api/patch' && method === 'POST') return apiPatch(req, res)
+  if (path === '/api/patch/label' && method === 'POST') return apiPrintLabel(req, res)
 
   if (path === '/paperwork') return sendHtml(res, 200, paperworkHubPage())
   if (path === '/paperwork/ip-schedule') return sendHtml(res, 200, ipSchedulePageHtml())
@@ -981,6 +984,7 @@ function patchScript(): string {
 
 function patchingPage(): string {
   const circuits = listCircuits()
+  const labels = getLabelFolder().found
   const racks = [...new Set(circuits.flatMap((c) => [c.srcRack, c.dstRack]).filter(Boolean))].sort()
   const end = (id: string, label: string, on: boolean): string =>
     `<button type="button" class="${id}${on ? ' on' : ''}" aria-pressed="${on}">${on ? '✓ ' : ''}${esc(label)}</button>`
@@ -994,6 +998,7 @@ function patchingPage(): string {
         </span>
         <div class="ends">${end('src', a, c.srcPatched)}${end('dst', b, c.dstPatched)}</div>
         <button type="button" class="tested${c.tested ? ' on' : ''}" aria-pressed="${c.tested}">${c.tested ? '✓ Tested' : 'Mark tested'}</button>
+        ${labels ? '<button type="button" class="tested label">🏷 Print label</button>' : ''}
       </div>`
     })
     .join('')
@@ -1034,6 +1039,14 @@ function patchingPage(): string {
          t.textContent = d.tested ? '✓ Tested' : 'Mark tested';
          draw();
        }
+       function printLabel(c, b){
+         b.disabled = true; b.textContent = 'Sending…';
+         fetch('/api/patch/label', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id:+c.getAttribute('data-id') }) })
+           .then(function(r){ return r.json(); })
+           .then(function(d){ b.textContent = d && d.ok ? '✓ Sent to printer' : '🏷 Print label'; if (!(d && d.ok)) alert((d && d.error) || 'Couldn’t send the label.'); })
+           .catch(function(){ b.textContent = '🏷 Print label'; alert('Couldn’t reach the show. Check the WiFi and try again.'); })
+           .then(function(){ setTimeout(function(){ b.disabled = false; b.textContent = '🏷 Print label'; }, 2000); });
+       }
        function send(c, body){
          body.id = +c.getAttribute('data-id');
          fetch('/api/patch', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
@@ -1045,6 +1058,8 @@ function patchingPage(): string {
          c.querySelector('.src').addEventListener('click', function(){ send(c, { end:'src', patched:!on(c, 'src') }); });
          c.querySelector('.dst').addEventListener('click', function(){ send(c, { end:'dst', patched:!on(c, 'dst') }); });
          c.querySelector('.tested').addEventListener('click', function(){ send(c, { tested:!on(c, 'tested') }); });
+         var lb = c.querySelector('.label');
+         if (lb) lb.addEventListener('click', function(){ printLabel(c, lb); });
        });
        ['rack', 'show'].forEach(function(id){ var el = document.getElementById(id); if (el) el.addEventListener('change', draw); });
        draw();
@@ -1084,6 +1099,34 @@ async function apiPatch(req: http.IncomingMessage, res: http.ServerResponse): Pr
   })
   if (result.ok) notifyDataChanged()
   sendJson(res, result.ok ? 200 : 400, result)
+}
+
+/** Phone → one cable's labels (both ends) into VectorLabel's watch folder on this computer. */
+async function apiPrintLabel(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!allow(req, 'crew')) return sendJson(res, 403, { ok: false, error: 'not allowed' })
+  let id: unknown
+  try {
+    id = JSON.parse(await readBody(req))?.id
+  } catch {
+    return sendJson(res, 400, { ok: false, error: 'bad request' })
+  }
+  if (typeof id !== 'number') return sendJson(res, 400, { ok: false, error: 'bad request' })
+  const c = getCircuitById(id)
+  if (!c) return sendJson(res, 404, { ok: false, error: 'circuit not found' })
+  if (!getLabelFolder().found)
+    return sendJson(res, 400, {
+      ok: false,
+      error: 'VectorLabel isn’t set up on the host computer.'
+    })
+  try {
+    printCableLabel(c, getProjectMeta('showName') || getCurrentProject()?.name || 'Device Manager')
+  } catch (e) {
+    return sendJson(res, 500, {
+      ok: false,
+      error: `Couldn’t write the label file: ${(e as Error).message}`
+    })
+  }
+  sendJson(res, 200, { ok: true })
 }
 
 // ---------------------------------------------------------------------------

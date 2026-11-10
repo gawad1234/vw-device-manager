@@ -19,6 +19,7 @@ import * as updater from './updater'
 import * as server from './server'
 import * as remote from './remote'
 import * as discovery from './discovery'
+import * as vectorlabel from './vectorlabel'
 import { handlers, bumpChange, type Handler } from './rpc-registry'
 import { channelScope } from '../shared/remote-scope'
 import { projectorCommandsCsv } from '../shared/projector-settings'
@@ -485,4 +486,6 @@ export function registerIpcHandlers(): void {
   handle('server:getPins', () => server.getPins())
   handle('server:setPins', (_e, pins: ServerPins) => server.setPins(pins))
   handle('server:connectQr', () => server.connectQr())
+  handle('server:getLabelFolder', () => vectorlabel.getLabelFolder())
+  handle('server:chooseLabelFolder', () => vectorlabel.chooseLabelFolder())
 }

@@ -40,7 +40,6 @@ import type {
 /** ipcRenderer.invoke, minus Electron's "Error invoking remote method 'x': Error:" prefix,
  *  so pages can show a handler's message as written. */
 const invoke = (channel: string, ...args: unknown[]): Promise<any> =>
-  // eslint-disable-line @typescript-eslint/no-explicit-any
   ipcRenderer.invoke(channel, ...args).catch((err: unknown) => {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(msg.replace(/^Error invoking remote method '[^']*': (Error: )?/, ''))
@@ -250,7 +249,9 @@ const api: VwDeviceManagerApi = {
     setPort: (port: number) => invoke('server:setPort', port),
     getPins: () => invoke('server:getPins'),
     setPins: (pins: ServerPins) => invoke('server:setPins', pins),
-    connectQr: () => invoke('server:connectQr')
+    connectQr: () => invoke('server:connectQr'),
+    getLabelFolder: () => invoke('server:getLabelFolder'),
+    chooseLabelFolder: () => invoke('server:chooseLabelFolder')
   },
   onServerStatus: (cb) => {
     const listener = (_e: unknown, status: Parameters<typeof cb>[0]): void => cb(status)

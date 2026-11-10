@@ -16,6 +16,8 @@ export interface Settings {
   /** switch logins stay on each computer: the library can sync through Dropbox */
   switchAdminPassword?: string
   snmpCommunity?: string
+  /** VectorLabel's watch folder (has Exports/ inside), per-machine; unset = ~/Documents/VectorLabel */
+  vectorLabelFolder?: string
 }
 
 // Settings live in this machine's userData (NOT the Dropbox folder), so Mac
