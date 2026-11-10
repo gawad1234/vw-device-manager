@@ -151,6 +151,12 @@ socket sub-objects, or a Data Tag that can associate with an individual socket.
 
 ## Known issues
 
+- **Editing a device in ConnectCAD clears its jack records.** Entering a
+  device (double-click) and pressing *Exit Device* rebuilds its sockets, which
+  drops every `VWDM Port` record on them. Re-run **Sync to Drawing** to put them
+  back. The device's own `VWDM Sync` record and its `vwdm_ports` summary are not
+  affected, so a Data Tag on `vwdm_ports` is the dependable way to show port IPs.
+  (Seen in Vectorworks 2027, 2026-11-10.)
 - **The OIP can still show a just-written field as stale** until you
   deselect/reselect the device (reopening the document always refreshes). This
   is a Vectorworks display-refresh quirk, not data loss — the value is really on
