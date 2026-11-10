@@ -297,6 +297,9 @@ const api: VwDeviceManagerApi = {
     import: () => invoke('circuits:import'),
     clear: () => invoke('circuits:clear')
   },
+  showSandbox: {
+    import: () => invoke('showsandbox:import')
+  },
   orderFormats: {
     list: () => invoke('orderFormats:list'),
     create: (input: OrderExportFormatInput) => invoke('orderFormats:create', input),

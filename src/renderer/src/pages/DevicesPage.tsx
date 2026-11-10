@@ -44,6 +44,27 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
 
   const catOf = (d: Device): string => d.category?.trim() || UNCATEGORIZED
 
+  async function importShowSandbox(): Promise<void> {
+    try {
+      const r = await window.api.showSandbox.import()
+      if (!r) return
+      onChanged()
+      const lines = [
+        `Imported "${r.showName || 'show'}":`,
+        `${r.devicesAdded} devices added, ${r.devicesMatched} already here (empty fields filled)`,
+        `${r.portsAdded} network ports, ${r.subnetsAdded} subnets`,
+        `${r.cablesAdded} cables in ${r.bundlesAdded} new bundles` +
+          (r.cablesSkipped ? `, ${r.cablesSkipped} already here` : ''),
+        `${r.circuitsAdded} circuits added to Patching` +
+          (r.circuitsKept ? `, ${r.circuitsKept} already there (left as they were)` : ''),
+        ...(r.warnings.length ? ['', 'Check these:', ...r.warnings] : [])
+      ]
+      window.alert(lines.join('\n'))
+    } catch (e) {
+      window.alert(`Import failed: ${(e as Error).message}`)
+    }
+  }
+
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return devices
@@ -153,6 +174,13 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
           {devices.length > 0 && (
             <ExportMenu scope="all" label="Export" sections={EXPORT_SECTIONS} />
           )}
+          <button
+            className="btn"
+            title="Add the devices, network ports, IPs, cables and patching circuits from a ShowSandbox show. Rows already here are matched by name and only their empty fields are filled."
+            onClick={importShowSandbox}
+          >
+            Import ShowSandbox…
+          </button>
           <button className="btn btn-primary" onClick={() => setOpenId('new')}>
             + Add device
           </button>

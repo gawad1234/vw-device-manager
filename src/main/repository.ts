@@ -1170,7 +1170,13 @@ export function clearCircuits(): void {
 /** Upsert the imported circuits by connection identity, preserving patched/
  *  tested/notes on ones that persist, and removing circuits no longer present
  *  in the report (the drawing is authoritative for which circuits exist). */
-export function mergeCircuits(rows: CircuitImport[]): CircuitImportResult {
+/** addOnly: add circuits that aren't there yet and touch nothing else — for a
+ *  source that isn't the drawing (a ShowSandbox plan), so it can't overwrite or
+ *  remove ConnectCAD's circuits or their patch status. */
+export function mergeCircuits(
+  rows: CircuitImport[],
+  opts: { addOnly?: boolean } = {}
+): CircuitImportResult {
   return withTx(() => {
     let added = 0
     let updated = 0
@@ -1184,6 +1190,7 @@ export function mergeCircuits(rows: CircuitImport[]): CircuitImportResult {
         r.srcName, r.srcSocket, r.srcConnector, r.srcRack, r.srcRackU, r.srcSlot,
         r.dstName, r.dstSocket, r.dstConnector, r.dstRack, r.dstRackU, r.dstSlot
       ]
+      if (existing && opts.addOnly) continue
       if (existing) {
         dbRun(
           `UPDATE circuits SET cable_number=?, signal=?, est_length=?,
@@ -1210,7 +1217,7 @@ export function mergeCircuits(rows: CircuitImport[]): CircuitImportResult {
     // rows (that would destroy the crew's patch status). Deliberate wiping is the
     // Clear button (clearCircuits).
     let removed = 0
-    if (keys.length) {
+    if (keys.length && !opts.addOnly) {
       const ph = keys.map(() => '?').join(',')
       const stale = queryOne(`SELECT count(*) AS n FROM circuits WHERE conn_key NOT IN (${ph})`, keys)
       removed = (stale?.n as number) ?? 0

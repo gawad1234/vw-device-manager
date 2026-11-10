@@ -53,6 +53,7 @@ const HOST_ONLY = new Set([
   'software:pickInstaller',
   'software:buildKit',
   'circuits:import',
+  'showsandbox:import',
   'paperwork:export',
   'wallpapers:save'
 ])

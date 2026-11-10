@@ -15,6 +15,7 @@ import vlanManagerPs1 from '../../host-tools/VlanManager.ps1?raw'
 import applyVlanConfigPs1 from '../../host-tools/Apply-VlanConfig.ps1?raw'
 import { printCaseLabels, printCasesLabels } from './caselabels'
 import { importCircuitReport } from './circuit-import'
+import { importShowSandbox } from './showsandbox-import'
 import * as updater from './updater'
 import * as server from './server'
 import * as remote from './remote'
@@ -465,6 +466,7 @@ export function registerIpcHandlers(): void {
   )
   handle('circuits:import', () => importCircuitReport())
   handle('circuits:clear', () => repo.clearCircuits())
+  handle('showsandbox:import', () => importShowSandbox())
 
   // App auto-update (Settings → Updates).
   handle('updates:getState', () => updater.getUpdateStatus())

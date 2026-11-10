@@ -515,6 +515,25 @@ export interface CircuitStatusInput {
 }
 
 /** Summary returned after importing a circuit report. */
+/** What Import ShowSandbox show… did to the open project. */
+export interface ShowSandboxImportResult {
+  showName: string
+  devicesAdded: number
+  /** already in the project by name: only empty fields were filled */
+  devicesMatched: number
+  portsAdded: number
+  subnetsAdded: number
+  bundlesAdded: number
+  cablesAdded: number
+  /** a cable with that name was already in its bundle */
+  cablesSkipped: number
+  /** new rows on the Patching page */
+  circuitsAdded: number
+  /** already on the Patching page (e.g. from a ConnectCAD report): left exactly as they were */
+  circuitsKept: number
+  warnings: string[]
+}
+
 export interface CircuitImportResult {
   added: number
   updated: number
@@ -1170,6 +1189,10 @@ export interface VwDeviceManagerApi {
     import: () => Promise<CircuitImportResult | null>
     /** remove all circuits (start over) */
     clear: () => Promise<void>
+  }
+  showSandbox: {
+    /** open a file dialog, read a ShowSandbox show (.json), merge it into the project */
+    import: () => Promise<ShowSandboxImportResult | null>
   }
 }
 
