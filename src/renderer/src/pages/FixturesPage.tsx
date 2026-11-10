@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { Fixture, FixtureType, LightingSyncStatus } from '../../../shared/types'
-import { checkPatch, type PatchWarning } from '../../../shared/lighting-checks'
+import { checkPatch, isAccessory, type PatchWarning } from '../../../shared/lighting-checks'
 import FixtureModal from '../components/FixtureModal'
 
 const numeric = (a: string, b: string): number => a.localeCompare(b, undefined, { numeric: true })
@@ -11,6 +11,7 @@ const time = (iso: string | null): string => (iso ? new Date(iso).toLocaleTimeSt
 /** Lighting › Fixtures: the rig by position (or by channel), live-synced with Vectorworks. */
 function FixturesPage(): React.JSX.Element {
   const [fixtures, setFixtures] = useState<Fixture[]>([])
+  const [accessories, setAccessories] = useState(0)
   const [types, setTypes] = useState<FixtureType[]>([])
   const [warnings, setWarnings] = useState<PatchWarning[]>([])
   const [sync, setSync] = useState<LightingSyncStatus | null>(null)
@@ -22,8 +23,10 @@ function FixturesPage(): React.JSX.Element {
       window.api.fixtures.list(),
       window.api.fixtureTypes.list(),
       window.api.lighting.get()
-    ]).then(([f, t, s]) => {
+    ]).then(([all, t, s]) => {
+      const f = all.filter((x) => !isAccessory(x))
       setFixtures(f)
+      setAccessories(all.length - f.length)
       setTypes(t)
       setWarnings(checkPatch(f, t, s))
     })
@@ -104,6 +107,12 @@ function FixturesPage(): React.JSX.Element {
         </div>
       )}
 
+      {accessories > 0 && (
+        <p className="muted">
+          {fixtures.length} fixture{fixtures.length === 1 ? '' : 's'} · {accessories} accessor
+          {accessories === 1 ? 'y' : 'ies'} (template holders etc.) from the drawing not counted
+        </p>
+      )}
       {fixtures.length === 0 ? (
         <div className="muted" style={{ maxWidth: 620 }}>
           <p>No fixtures yet. They come from the Vectorworks drawing:</p>

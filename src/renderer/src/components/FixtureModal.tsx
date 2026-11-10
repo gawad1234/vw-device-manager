@@ -33,6 +33,7 @@ function FixtureModal({ fixture, types, onClose, onSaved }: Props): React.JSX.El
   const [d, setD] = useState<Fixture>({ ...fixture, userFields: [...fixture.userFields] })
   const [error, setError] = useState('')
   const modes = types.find((t) => t.name === d.instType)?.modes ?? []
+  const fromVw = !!fixture.vw?.Fixture_Mode
   const set = (k: keyof FixtureInput, v: string): void => setD({ ...d, [k]: v })
 
   async function save(e?: React.FormEvent): Promise<void> {
@@ -79,11 +80,12 @@ function FixtureModal({ fixture, types, onClose, onSaved }: Props): React.JSX.El
             <input value={d[k] as string} onChange={(e) => set(k, e.target.value)} />
           </label>
         ))}
-        <label>
-          Mode
+        <label title={fromVw ? 'Set in Vectorworks (Fixture Mode)' : undefined}>
+          Mode{fromVw && <small className="muted"> · from Vectorworks</small>}
           <input
             value={d.mode}
             list="fixture-modes"
+            disabled={fromVw}
             onChange={(e) => set('mode', e.target.value)}
           />
           <datalist id="fixture-modes">

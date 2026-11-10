@@ -242,13 +242,15 @@ Tie it to Device Manager with **Export JSON…** here → **Load config…** in 
 
 *(beta)* The **Lighting** group in the sidebar tracks a lighting rig, Lightwright-style. Fixtures come from your Vectorworks Spotlight drawing (see [live sync](#live-sync-with-vectorworks-spotlight) below) and are stored in the show's project file.
 
-**Fixtures** — the rig, grouped by hanging position and sorted by unit number. **Sort by channel** flips it into a channel hookup. Columns: unit, type (and mode), purpose, channel, universe/address (shown as `1/101`), color, gobo, dimmer and notes. Click a row to edit every field: position, unit, instrument type, mode, purpose, channel, universe + address, color, gobo 1/2, accessories, wattage, dimmer, circuit name/number, mark, user fields 1–6 and notes. **Notes** and **mode** stay in Device Manager; everything else is sent to the drawing.
+**Fixtures** — the rig, grouped by hanging position and sorted by unit number. **Sort by channel** flips it into a channel hookup. Columns: unit, type (and mode), purpose, channel, universe/address (shown as `1/101`), color, gobo, dimmer and notes. Click a row to edit every field: position, unit, instrument type, mode, purpose, channel, universe + address, color, gobo 1/2, accessories, wattage, dimmer, circuit name/number, mark, user fields 1–6 and notes. **Notes** stay in Device Manager; everything else is sent to the drawing. **Mode** comes from Vectorworks when the drawing sends it (the box is greyed out, marked *from Vectorworks*); otherwise you set it here and it stays in Device Manager.
+
+Accessories drawn as lighting devices (template holders and the like, *Static Accessory* in Vectorworks) aren't counted as fixtures: the list says how many were left out, and they're skipped on the Universes page and in lighting paperwork. They still sync, so nothing in the drawing is lost.
 
 **Patch checks** — a **To check** count in the header (click it to jump to the first one), with a **!** on each affected row and the reason right under it. Warnings about a whole universe are listed under the table:
 - two fixtures whose address ranges **overlap** in the same universe,
 - a fixture that **runs past address 512**,
 - a fixture with a **channel but no address** (or an address but no channel),
-- a fixture type whose **footprint isn't known** yet (it's counted as 1 address until you set it),
+- a fixture type whose **footprint isn't known** yet (it's counted as 1 address until you set it). When Vectorworks sends a fixture's **DMX Footprint**, that number is used instead,
 - a universe in use that **isn't linked to a DMX node**.
 
 Several fixtures on one channel is normal, so that isn't flagged.
@@ -263,7 +265,7 @@ Lighting paperwork (channel hookup, instrument schedule, patch, color and gobo l
 
 Device Manager talks to Vectorworks the way **Lightwright** does, through the data exchange file Vectorworks keeps beside the drawing (`MyShow.vwx` → `MyShow.xml`). No scripts are needed.
 
-1. In Vectorworks: **Spotlight preferences → Lightwright**, turn on the data exchange and tick the fields to share (channel, purpose, address, color, gobos, position, unit number…).
+1. In Vectorworks: **Spotlight preferences → Lightwright**, turn on the data exchange and tick the fields to share (channel, purpose, address, color, gobos, position, unit number…). Also tick **Fixture Mode** and **DMX Footprint** so each fixture's mode and real channel count come across.
 2. Keep the show's project beside the drawing with the same name (`MyShow.vwdm`). Device Manager finds `MyShow.xml` on its own; **Choose file…** points it at a different one.
 3. On **Lighting → Fixtures**, tick **Live sync with Vectorworks**.
 

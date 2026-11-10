@@ -189,8 +189,10 @@ export function fixtureFromExchange(
   universes: Record<string, UniverseRange[]>,
   prev?: FixtureInput
 ): FixtureInput {
+  // Spotlight's Fixture Mode (tick it in the Lightwright pane) wins; it's the .lit name
+  const vwMode = (f.Fixture_Mode ?? prev?.vw?.Fixture_Mode ?? '').replace(/\.lit$/i, '').trim()
   const out = {
-    mode: prev?.mode ?? '',
+    mode: vwMode || prev?.mode || '',
     notes: prev?.notes ?? '',
     vwUid: f.UID ?? prev?.vwUid ?? '',
     vw: { ...prev?.vw, ...f },
@@ -220,6 +222,19 @@ export function fixtureToExchange(
   })
   if ('Absolute_Address' in fx.vw || fx.address != null) {
     out.Absolute_Address = String(toAbsolute(fx.universe, fx.address, fx.system, universes))
+    // the split address fields (if ticked) must agree with it, or VW gets two answers
+    const patched = fx.universe != null && fx.address != null
+    const split: [string, string][] = [
+      ['Universe', String(fx.universe)],
+      ['DMX_Address', String(fx.address)],
+      ['UniverseAddress', `${fx.universe}/${fx.address}`]
+    ]
+    for (const [t, v] of split) {
+      if (!(t in fx.vw)) continue
+      if (patched) out[t] = v
+      else delete out[t] // Absolute_Address 0 says unpatched
+    }
   }
+  // Fixture_Mode and Num_Channels are Vectorworks' own: echoed back untouched from fx.vw
   return out
 }

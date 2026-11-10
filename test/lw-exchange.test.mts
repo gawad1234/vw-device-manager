@@ -10,7 +10,12 @@ import {
   toAbsolute,
   utcStamp
 } from '../src/shared/lw-exchange.ts'
-import { checkPatch, type PatchWarning } from '../src/shared/lighting-checks.ts'
+import {
+  checkPatch,
+  footprintOf,
+  isAccessory,
+  type PatchWarning
+} from '../src/shared/lighting-checks.ts'
 import type { Fixture } from '../src/shared/types.ts'
 
 // A real Vectorworks export of a 5-fixture scratch drawing (no show data).
@@ -161,4 +166,64 @@ test('a field Spotlight does not export is left out, not sent blank', () => {
   const out = fixtureToExchange(fx, {})
   assert.equal('Absolute_Address' in out, false)
   assert.equal('User_Field_1' in out, false)
+})
+
+test("template holders (Static Accessory) share their light's address but are not fixtures", () => {
+  const light = {
+    Device_Type: 'Light',
+    Inst_Type: 'Source Four',
+    Unit_Number: '14',
+    Channel: '7',
+    Absolute_Address: '2177',
+    System: 'A'
+  }
+  const holder = {
+    ...light,
+    Device_Type: 'Static Accessory',
+    Inst_Type: 'S4B Template Holder',
+    UID: '1012.1.1.1.1'
+  }
+  const all = [light, holder].map((f, i) => ({ ...fixtureFromExchange(f, {}), id: i + 1 }))
+  assert.deepEqual(all.map(isAccessory), [false, true])
+  assert.ok(checkPatch(all, [], { universes: {} }).some((w) => w.kind === 'overlap'))
+  const lights = all.filter((f) => !isAccessory(f))
+  assert.equal(lights.length, 1)
+  assert.ok(!checkPatch(lights, [], { universes: {} }).some((w) => w.kind === 'overlap'))
+})
+
+test('mode and footprint come from Vectorworks; split address fields follow a re-patch', () => {
+  const vw = {
+    UID: '1008.1.1.0.0',
+    Device_Type: 'Moving Light',
+    Inst_Type: 'Elation Proteus Maximus',
+    Fixture_Mode: 'Elation Proteus Maximus EX.lit',
+    Num_Channels: '61',
+    Absolute_Address: '2110',
+    Universe: '5',
+    DMX_Address: '62',
+    UniverseAddress: '5/62',
+    System: 'A'
+  }
+  const f = {
+    ...fixtureFromExchange(vw, {}, { mode: 'old app mode', userFields: [] } as never),
+    id: 7
+  } as Fixture
+  assert.equal(f.mode, 'Elation Proteus Maximus EX')
+  assert.deepEqual([f.universe, f.address], [5, 62])
+  assert.equal(footprintOf(f, []), 61) // no Fixture types entry needed
+  // no VW mode: the app's own mode is kept, footprint falls back to the library
+  const plain = fixtureFromExchange({ ...vw, Fixture_Mode: '', Num_Channels: '' }, {}, {
+    mode: 'Std',
+    userFields: []
+  } as never)
+  assert.equal(plain.mode, 'Std')
+  assert.equal(footprintOf({ ...plain, id: 1 } as Fixture, []), null)
+
+  const out = fixtureToExchange({ ...f, universe: 6, address: 1 }, {})
+  assert.equal(out.Absolute_Address, '2561')
+  assert.deepEqual([out.Universe, out.DMX_Address, out.UniverseAddress], ['6', '1', '6/1'])
+  assert.equal(out.Fixture_Mode, 'Elation Proteus Maximus EX.lit') // echoed untouched
+  const off = fixtureToExchange({ ...f, universe: null, address: null }, {})
+  assert.equal(off.Absolute_Address, '0')
+  assert.ok(!('Universe' in off) && !('DMX_Address' in off) && !('UniverseAddress' in off))
 })

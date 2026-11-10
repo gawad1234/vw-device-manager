@@ -8,6 +8,7 @@ import {
   listTruckTrips
 } from './repository'
 import { mainRoute } from '../shared/ip-utils'
+import { isAccessory } from '../shared/lighting-checks'
 import type { Bundle, CableEndpoint, PackCase } from '../shared/types'
 import type {
   CableRec,
@@ -251,7 +252,7 @@ export function recordsFor(source: PaperworkSource, bundles?: Bundle[]): object[
     case 'cases':
       return caseRecords()
     case 'fixtures':
-      return listFixtures()
+      return listFixtures().filter((f) => !isAccessory(f))
     case 'patch': {
       const recs = patchRecords()
       const first = patchDevices(recs)[0]

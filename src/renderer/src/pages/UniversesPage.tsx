@@ -3,6 +3,7 @@ import type { Device, Fixture, FixtureType, LightingSettings } from '../../../sh
 import {
   checkPatch,
   fixtureLabel,
+  isAccessory,
   footprintOf,
   type PatchWarning
 } from '../../../shared/lighting-checks'
@@ -29,7 +30,8 @@ function UniversesPage({ devices }: Props): React.JSX.Element {
       window.api.fixtures.list(),
       window.api.fixtureTypes.list(),
       window.api.lighting.get()
-    ]).then(([f, t, s]) => {
+    ]).then(([all, t, s]) => {
+      const f = all.filter((x) => !isAccessory(x)) // they share their light's address
       setFixtures(f)
       setTypes(t)
       setSettings(s)

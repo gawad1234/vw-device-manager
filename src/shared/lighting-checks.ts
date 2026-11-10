@@ -8,13 +8,23 @@ export interface PatchWarning {
   message: string
 }
 
-/** How many addresses a fixture takes (1 when its type/mode isn't in Fixture types). */
+/** How many addresses a fixture takes: Vectorworks' DMX Footprint when it sends one, else the
+ *  Fixture types library; null = unknown (counted as 1). */
 export function footprintOf(f: Fixture, types: FixtureType[]): number | null {
+  const vw = Number(f.vw?.Num_Channels)
+  if (Number.isInteger(vw) && vw > 0) return vw
   const t = types.find((x) => x.name === f.instType)
   const m =
     t?.modes.find((x) => x.name === f.mode) ?? (t?.modes.length === 1 ? t.modes[0] : undefined)
   return m ? m.footprint : null
 }
+
+/** Vectorworks accessories (Device Type "Static Accessory" etc. — template holders, top hats)
+ *  come through as their own rows sharing their light's unit, channel and address. They stay in
+ *  the database so the sync writes them back, but they aren't fixtures: not listed, counted,
+ *  patched or reported. */
+export const isAccessory = (f: Pick<Fixture, 'vw'>): boolean =>
+  /accessory/i.test(f.vw?.Device_Type ?? '')
 
 export const fixtureLabel = (f: Fixture): string =>
   [f.position, f.unit && `#${f.unit}`].filter(Boolean).join(' ') || `Fixture ${f.id}`
