@@ -94,6 +94,55 @@ export function parseDocxLabelSheet(xml: string): ParsedSheet | null {
   return fromTable.length >= 2 ? { pageW, pageH, labels: fromTable, rounded: false } : null
 }
 
+/** Old binary Word (.doc) templates (Avery's downloads): label tables there are stored as
+ *  property codes ("sprms") with fixed ids, so we scan the bytes for them instead of
+ *  decoding the whole file: each table row's cell edges (sprmTDefTable 0xD608) and height
+ *  (sprmTDyaRowHeight 0x9407), and the page size and margins (0xB01F/0xB020, 0xB021, 0x9023).
+ *  shortcut: Word may store identical rows only once per 512-byte page, which would drop
+ *  rows here; decode the bin table (FIB → PlcfBtePapx) if a template comes in short. */
+export function parseDocLabelSheet(bytes: Uint8Array): ParsedSheet | null {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const n = bytes.length
+  const at = (op: number): number[] => {
+    const out: number[] = []
+    for (let i = 0; i + 4 <= n; i++) if (dv.getUint16(i, true) === op) out.push(i)
+    return out
+  }
+  const first = (op: number, fallback: number): number => {
+    const i = at(op)[0]
+    return i == null ? fallback : Math.abs(dv.getInt16(i + 2, true))
+  }
+  const pageW = (at(0xb01f)[0] != null ? dv.getUint16(at(0xb01f)[0] + 2, true) : 12240) / TWIP
+  const pageH = (at(0xb020)[0] != null ? dv.getUint16(at(0xb020)[0] + 2, true) : 15840) / TWIP
+  const marLeft = first(0xb021, 0) / TWIP
+  const marTop = first(0x9023, 0) / TWIP
+  const heights = at(0x9407)
+
+  const cells: StickerRect[] = []
+  let y = marTop
+  let rh = 0
+  for (const i of at(0xd608)) {
+    const cb = dv.getUint16(i + 2, true)
+    const itc = bytes[i + 4]
+    if (itc < 1 || itc > 63 || cb < 1 + 2 * (itc + 1) || i + 5 + 2 * (itc + 1) > n) continue
+    const edges = Array.from({ length: itc + 1 }, (_, k) => dv.getInt16(i + 5 + 2 * k, true))
+    if (edges.some((e, k) => k > 0 && e <= edges[k - 1])) continue // not really a row
+    // this row's height sits in the same property list, a few bytes either side
+    const near = heights.filter((h) => h > i - 128 && h < i + 4 + cb + 128)
+    if (near.length) {
+      const h = near.reduce((a, b) => (Math.abs(b - i) < Math.abs(a - i) ? b : a))
+      rh = Math.abs(dv.getInt16(h + 2, true)) / TWIP
+    }
+    for (let k = 0; k < itc; k++) {
+      const w = (edges[k + 1] - edges[k]) / TWIP
+      if (w >= 0.3 && rh >= 0.2) cells.push({ x: marLeft + edges[k] / TWIP, y, w, h: rh })
+    }
+    y += rh
+  }
+  const labels = tidyLabels(cells, pageW, pageH)
+  return labels.length >= 2 ? { pageW, pageH, labels, rounded: false } : null
+}
+
 /** Labels for printing: sheet order from `startAt`, filling as many sheets as needed. */
 export function stickerSlots(
   perSheet: number,

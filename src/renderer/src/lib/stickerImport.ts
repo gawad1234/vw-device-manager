@@ -1,8 +1,13 @@
 import JSZip from 'jszip'
-import { parseDocxLabelSheet, tidyLabels, type ParsedSheet } from '../../../shared/sticker-sheet'
+import {
+  parseDocLabelSheet,
+  parseDocxLabelSheet,
+  tidyLabels,
+  type ParsedSheet
+} from '../../../shared/sticker-sheet'
 import type { StickerRect } from '../../../shared/types'
 
-/** Read a sticker manufacturer's template (.docx or .pdf) into label boxes. */
+/** Read a sticker manufacturer's template (.docx, .doc or .pdf) into label boxes. */
 export async function importStickerTemplate(file: File): Promise<ParsedSheet> {
   const data = await file.arrayBuffer()
   if (/\.docx$/i.test(file.name)) {
@@ -12,8 +17,16 @@ export async function importStickerTemplate(file: File): Promise<ParsedSheet> {
     if (!sheet) throw new Error('No labels found in that Word template.')
     return sheet
   }
+  if (/\.doc$/i.test(file.name)) {
+    const sheet = parseDocLabelSheet(new Uint8Array(data))
+    if (!sheet)
+      throw new Error(
+        'No label table found in that .doc. Save it as .docx or PDF in Word and try again.'
+      )
+    return sheet
+  }
   if (/\.pdf$/i.test(file.name)) return parsePdfLabelSheet(data)
-  throw new Error('Pick a .docx or .pdf label template.')
+  throw new Error('Pick a .docx, .doc or .pdf label template.')
 }
 
 type Matrix = [number, number, number, number, number, number]

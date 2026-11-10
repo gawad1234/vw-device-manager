@@ -1,6 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cableEndGender, parseDocxLabelSheet, stickerSlots, tidyLabels } from '../src/shared/sticker-sheet.ts'
+import {
+  cableEndGender,
+  parseDocLabelSheet,
+  parseDocxLabelSheet,
+  stickerSlots,
+  tidyLabels
+} from '../src/shared/sticker-sheet.ts'
 
 const page = '<w:pgSz w:w="12240" w:h="15840" /><w:pgMar w:top="720" w:left="472" />'
 const anchor = (x: number, y: number, prst = 'roundRect'): string =>
@@ -72,4 +78,34 @@ test('{Gender}: XLR source end is M, destination F; other cables blank', () => {
   assert.equal(cableEndGender('xlr', false), 'F')
   assert.equal(cableEndGender('Cat5 Ethercon', true), '')
   assert.equal(cableEndGender('', false), '')
+})
+
+test('.doc (binary Word) label table: Avery 5160 layout from its property codes', () => {
+  // made-up bytes laid out the way Word stores them: page + margins, then 10 rows,
+  // each a row height followed by the row's cell edges (3 labels, 2 spacer columns)
+  const bytes: number[] = [0, 0, 0]
+  const op = (code: number, ...vals: number[]): void => {
+    bytes.push(code & 255, code >> 8)
+    for (const v of vals) bytes.push(v & 255, (v >> 8) & 255)
+  }
+  op(0xb01f, 12240)
+  op(0xb020, 15840)
+  op(0xb021, 367)
+  op(0x9023, 720)
+  const edges = [-86, 3701, 3873, 7660, 7832, 11619]
+  for (let r = 0; r < 10; r++) {
+    bytes.push(0, 0, 0, 0)
+    op(0x9407, -1440)
+    bytes.push(0x08, 0xd6, 114, 0, 5)
+    for (const e of edges) bytes.push(e & 255, (e >> 8) & 255)
+    bytes.push(...new Array(100).fill(0))
+  }
+  const s = parseDocLabelSheet(new Uint8Array(bytes))!
+  assert.equal(s.pageW, 8.5)
+  assert.equal(s.pageH, 11)
+  assert.equal(s.labels.length, 30)
+  assert.deepEqual(s.labels[0], { x: 0.195, y: 0.5, w: 2.63, h: 1 })
+  assert.deepEqual(s.labels[2], { x: 5.694, y: 0.5, w: 2.63, h: 1 })
+  assert.equal(s.labels[29].y, 9.5)
+  assert.equal(parseDocLabelSheet(new Uint8Array(200)), null)
 })

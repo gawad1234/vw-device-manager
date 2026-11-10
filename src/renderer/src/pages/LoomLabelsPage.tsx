@@ -103,7 +103,7 @@ function LoomLabelsPage({ bundles, onChanged }: Props): React.JSX.Element {
       const parsed = await importStickerTemplate(file)
       const saved = await window.api.stickers.saveSheet(null, {
         ...parsed,
-        name: file.name.replace(/\.(docx|pdf)$/i, ''),
+        name: file.name.replace(/\.(docx?|pdf)$/i, ''),
         offsetX: 0,
         offsetY: 0,
         source: file.name
@@ -171,7 +171,7 @@ function LoomLabelsPage({ bundles, onChanged }: Props): React.JSX.Element {
           <input
             ref={fileRef}
             type="file"
-            accept=".docx,.pdf"
+            accept=".docx,.doc,.pdf"
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0]
@@ -182,7 +182,7 @@ function LoomLabelsPage({ bundles, onChanged }: Props): React.JSX.Element {
         </div>
       </div>
       <p className="muted">
-        Import a sticker sheet template from the manufacturer (Word .docx or PDF — e.g.
+        Import a sticker sheet template from the manufacturer (Word .docx or .doc, or PDF — e.g.
         OnlineLabels, Avery), design what goes on each sticker, then print every cable in the looms
         you pick — one sticker for each end.
       </p>
