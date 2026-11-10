@@ -65,7 +65,7 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
 - Company + show branding, the **Paperwork header** (where the logos, names, title, date and a line of your own sit at the top of every PDF, plus an optional company-logo watermark), the **Table style** (one look for every Excel and PDF table: font, header colors, stripes, lines, padding), the shared library and the folder it syncs from, kits, the switch-config template and monitoring, the **Show Server** and updates.
 
 **Also**
-- **Crew phone app** — the **Show Server** puts the show on the production WiFi: crew open it in a phone browser (or add it to the home screen) to receive orders, look up devices and tick off patching.
+- **Crew phone app** — the **Show Server** puts the show on the production WiFi: crew open it in a phone browser (or add it to the home screen) to receive orders, look up devices, tick off patching and print a cable's labels through VectorLabel.
 - **Share a show with other computers** *(beta, view-only for now)* — other copies of Device Manager on the same network can **join** the show open on the host (project menu → *Join a show on the network…* lists the shows it finds on the network; pick one and enter the manager PIN) and see it update live.
 
 📖 **New here? Start with the [Quick Start](docs/QUICK-START.md), then the full [User Guide](docs/USER-GUIDE.md).**
