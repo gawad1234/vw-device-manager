@@ -37,7 +37,7 @@ The app is **not code-signed** yet (that costs money we're skipping during the b
 Everything lives in **projects** — one `.vwdm` file per show, kept next to its `.vwx` drawing. Use the project menu in the top-left to make a new one, open another, or save a copy. The sidebar groups pages by job (fold any group you don't use):
 
 **Network**
-- **Devices** — every piece of gear, its ports, IPs, VLANs, MAC, type and location (Details / Ports / Connections tabs); the list shows each device's main VLAN and IP. Switches get management/OOB IPs, VLAN-only ports, LAGs and a generated NETGEAR config, including SNMP and syslog for your monitoring PC. The app warns about duplicate IPs and IPs outside their subnet. The **IP sheet** view edits every IP and VLAN in one spreadsheet (paste a column from Excel).
+- **Devices** — every piece of gear, its ports, IPs, VLANs, MAC, type and location (Details / Ports / Connections tabs); the list shows each device's main VLAN and IP. Switches get management/OOB IPs, VLAN-only ports, LAGs and a generated NETGEAR config, including SNMP and syslog for your monitoring PC. The app warns about duplicate IPs and IPs outside their subnet. The **IP sheet** view edits every IP and VLAN in one spreadsheet (paste a column from Excel). **Import ShowSandbox…** brings in a show planned in ShowSandbox: devices, network ports and IPs, cables and patching circuits.
 - **Subnets** (name, CIDR, VLAN, gateway) and **Configs** (a Hyper-V VLAN PowerShell script or JSON for the VLAN Manager host tool, which the Configs page saves to a folder for you).
 - **Projectors** — Panasonic PT-RZ / PT-RQ setup: pick settings, save a command list for Panasonic's Multi Monitoring & Control, print a one-page-per-projector setup sheet. *(beta)*
 - **Wallpapers** — branded desktop wallpapers per show computer.
@@ -45,7 +45,7 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
 
 **Cables**
 - **Cables** — cable bundles and the cables in them (type, color, length, endpoints, pulled/labeled). Export pull sheets, schedules and cable labels.
-- **Patching** — import the drawing's circuit report and track patching per end, plus tested. Print **patch sheets**: one page per device listing every input and output with where it comes from and goes to (e.g. which server output lands on which matrix input), for anyone patching without the app.
+- **Patching** — import the drawing's circuit report (or start from a ShowSandbox show) and track patching per end, plus tested. Print **patch sheets**: one page per device listing every input and output with where it comes from and goes to (e.g. which server output lands on which matrix input), for anyone patching without the app.
 - **Loom labels** — import a sticker sheet template (Word or PDF, e.g. OnlineLabels / Avery), design the sticker, and print one for each end of every cable in the looms you pick.
 
 **Lighting** *(beta)*

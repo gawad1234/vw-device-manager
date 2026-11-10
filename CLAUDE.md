@@ -99,7 +99,13 @@ workspace context and the cross-machine handoff log — check those first.
   `software.ts` (silent-switch presets), `crew-cost.ts` (hours/OT/cost),
   `lw-exchange.ts` (parse/build the Lightwright exchange file, absolute ↔ universe/address),
   `lighting-checks.ts` (patch warnings), `sticker-sheet.ts` (label-template .docx parser — positioned shapes or Avery
-  table — plus `tidyLabels`/`stickerSlots`, `BUNDLE_COLOR`).
+  table, `parseDocLabelSheet` for binary .doc — plus `tidyLabels`/`stickerSlots`, `BUNDLE_COLOR`),
+  `showsandbox.ts` (`planShowImport`: a ShowSandbox `showsandbox-show/1` JSON → devices / network
+  ports / subnets / cables / circuits; names are the join key — ident else label, jack label).
+- **ShowSandbox import** (`main/showsandbox-import.ts` `applyShowPlan`, one transaction): matched by
+  name, only EMPTY fields filled, nothing deleted; circuits go through `mergeCircuits(rows, { addOnly: true })`
+  so the drawing's circuit report (the normal, replacing `mergeCircuits`) stays the authority. Host-only
+  channel `showsandbox:import`; button on DevicesPage.
 - **Sticker template import runs in the renderer** (`lib/stickerImport.ts`): .docx via
   `jszip`, .pdf via `pdfjs-dist` (bounding boxes of drawn paths on page 1, CTM
   tracked; loaded on demand, worker run in-thread so it works under the CSP).

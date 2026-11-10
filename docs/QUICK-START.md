@@ -38,6 +38,8 @@ Each show is one **project file** (`.vwdm`). The convention is to keep it **next
 The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 
 > Already have a ConnectCAD drawing? You'll usually **link** devices from the drawing instead of typing them — see the [Vectorworks sync guide](../vectorworks-scripts/README.md).
+>
+> Planned the show in **ShowSandbox**? **Devices → Import ShowSandbox…** brings in its devices, network ports and IPs, cables and patching circuits — see [Importing a ShowSandbox show](USER-GUIDE.md#importing-a-showsandbox-show).
 
 ---
 

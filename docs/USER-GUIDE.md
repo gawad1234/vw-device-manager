@@ -7,6 +7,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Core concepts](#core-concepts)
 - [Projects (the top-left menu)](#projects)
 - [Devices](#devices)
+  - [Importing a ShowSandbox show](#importing-a-showsandbox-show)
   - [IP sheet (edit every IP at once)](#ip-sheet)
   - [Projectors (Panasonic)](#projectors)
   - [Wallpapers](#wallpapers)
@@ -91,6 +92,21 @@ Unsaved edits on one tab are kept when you switch tabs, and **Save changes** sav
 - **IP outside subnet** — if a port's IP isn't inside its untagged subnet's CIDR, you're warned.
 
 Device **type** and **location** are usually owned by the drawing (read-only in the app) once a device is linked from ConnectCAD.
+
+### Importing a ShowSandbox show
+
+Planned the rig in **ShowSandbox**? Bring it in instead of typing it again: on **Devices** click **Import ShowSandbox…** and pick the show's `.json` file (ShowSandbox keeps them in `~/Library/Application Support/ShowSandbox/shows/`; in the file picker press ⌘⇧G and paste that path).
+
+What comes in:
+- **Devices** — named by their ShowSandbox **ident** (SW1, CON1…), or their label if they have none, with type (make + model) and location (rack, or position). A device whose category has *switch* in it comes in as a switch.
+- **Network ports** — every RJ45 / etherCON jack (or any jack with an IP), with the IP ShowSandbox assigned.
+- **Subnets** — the VLAN subnets you changed in the show's settings, with their VLAN tags. IPs on ShowSandbox's built-in default subnets come in without a VLAN unless the project already has a matching subnet.
+- **Cables** — one per connection, in a bundle named after its loom (e.g. *FOH-STAGE LOOM*), or *<rack> INBOARD* for a cable that never leaves its rack. Non-network jacks (XLR and so on) are written in the cable's notes, e.g. *From: OUT 1 · To: IN A*.
+- **Patching circuits** — one per connection, with cable number, signal, and each end's device, socket, connector, rack and U (see [Patching](#patching)). A cable drawn backwards in ShowSandbox (input to output) is turned round so the output is the source.
+
+**Importing again is safe.** Everything is matched by name, and an existing row only has its *empty* fields filled — MACs, IPs, notes and pulled / labeled / patched ticks you've entered are never overwritten, and nothing is deleted. A summary lists what was added and anything to check (such as an IP already used by another device).
+
+**With the drawing:** name your ConnectCAD devices like the ShowSandbox idents. **Link Selected** in Vectorworks then picks up the imported devices and ports by name instead of making duplicates.
 
 ### IP sheet
 
@@ -289,6 +305,8 @@ Track the patching of cables on devices by importing a Vectorworks **ConnectCAD 
 **Import:** in Vectorworks, export an **All Layers Circuit Report** to CSV. On the **Patching** tab click **Import circuit report…** and pick the file. Each row becomes a **circuit** — a run from a source device/socket to a destination device/socket, with its signal, cable number, connector and rack/U/slot.
 
 **Re-importing keeps your checkmarks:** it adds new circuits, updates existing ones and removes circuits no longer in the report. If the file you pick has no circuits in it (the wrong file), nothing is removed.
+
+**From ShowSandbox:** [Import ShowSandbox…](#importing-a-showsandbox-show) on the Devices page also fills Patching, one circuit per connection. It only *adds* circuits that aren't there yet: circuits from the drawing's report, and their checkmarks, are never changed or removed by it. Once the drawing exists, its circuit report is the one to trust.
 
 **Per-end tracking:**
 - **From ✓** / **To ✓** mark *that end* patched, so a run plugged in on only one side shows as "one end only".
