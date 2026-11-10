@@ -14,25 +14,18 @@ VW2026's embedded Python, v3.34.0).
 
 ## One-time setup
 
-1. In Vectorworks: **Resource Manager > New Resource > Record Format >
-   Create**. Name it exactly `VWDM Sync` and add these fields, all type
-   Text: `vwdm_id`, `vwdm_ip`, `vwdm_subnet`, `vwdm_type`, `vwdm_mac`,
-   `vwdm_location`, `vwdm_notes`. (This is the **device-level** record.
-   `vwdm_ip`/`vwdm_subnet` are now left blank — IP/subnet moved to ports.)
-2. Create a second Record Format named exactly `VWDM Port` with three Text
-   fields — `vwdm_ip`, `vwdm_untagged`, `vwdm_tagged`. This is the
-   **per-jack** record `sync_app_to_drawing.py` writes onto each network
-   socket. (A device flagged as a **switch** in the app has VLAN-only ports —
-   `vwdm_ip` is left blank for those jacks; only `vwdm_untagged`/`vwdm_tagged`
-   are written.)
-2b. *Optional — switches only.* If you want a switch's device-level
-   **management** and **out-of-band** IPs on the drawing, add two more Text
-   fields to the `VWDM Sync` record: `vwdm_mgmt_ip` and `vwdm_oob_ip`. The sync
-   writes them best-effort, so it's fine to skip this if you don't need them.
-3. Optional: add linked text referencing these fields if you want them
+1. **Record formats are created for you.** The first Link or Sync in a drawing
+   adds two record formats if the drawing doesn't have them: `VWDM Sync` (on
+   each device: `vwdm_id`, `vwdm_ip`, `vwdm_subnet`, `vwdm_type`, `vwdm_mac`,
+   `vwdm_location`, `vwdm_notes`, `vwdm_mgmt_ip`, `vwdm_oob_ip`, `vwdm_ports`)
+   and `VWDM Port` (on each network jack: `vwdm_ip`, `vwdm_untagged`,
+   `vwdm_tagged`), all Text. A format that already exists is left as it is,
+   so older drawings with hand-made formats keep working (optional fields
+   missing from them are skipped). A switch's jacks get VLANs only, no IP.
+2. Optional: add linked text referencing these fields if you want them
    visible on the schematic graphic itself, not just in the Object Info
    palette / worksheets.
-4. **Project database location:** the app now uses per-project files. Save each
+3. **Project database location:** the app now uses per-project files. Save each
    project's database **beside its drawing with a matching name** (`Foo.vwx` →
    `Foo.vwdm`) via the app's **project menu → Save a Copy As**. The scripts
    derive the database from the active drawing's own path (`resolve_project_db()`

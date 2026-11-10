@@ -95,6 +95,33 @@ SOCKET_FIELD_SIGNAL = "signal"
 DEFAULT_NETWORK_SIGNALS = {"LAN"}
 
 
+# The record formats this script writes. Created on first run if the drawing
+# doesn't have them yet, so there's no manual Resource Manager setup.
+RECORD_FORMATS = {
+    "VWDM Sync": ["vwdm_id", "vwdm_ip", "vwdm_subnet", "vwdm_type", "vwdm_mac",
+                  "vwdm_location", "vwdm_notes", "vwdm_mgmt_ip", "vwdm_oob_ip", "vwdm_ports"],
+    "VWDM Port": ["vwdm_ip", "vwdm_untagged", "vwdm_tagged"],
+}
+
+
+def ensure_record_formats():
+    """Create any missing VWDM record format (all Text fields). An existing
+    format is left exactly as it is."""
+    for rec, fields in RECORD_FORMATS.items():
+        if not vs.GetObject(rec):
+            for f in fields:
+                vs.NewField(rec, f, "", 4, 0)  # 4 = Text
+
+
+def has_record(h, rec):
+    """True if record format `rec` is attached to object h. (GetRField can't
+    tell: it returns '' for an unattached record in Vectorworks 2027.)"""
+    for i in range(1, vs.NumRecords(h) + 1):
+        if vs.GetName(vs.GetRecord(h, i)) == rec:
+            return True
+    return False
+
+
 def active_doc_path():
     """Full path of the active drawing, or '' if it's unsaved/unavailable."""
     try:
@@ -267,7 +294,7 @@ def build_ports_summary(cur, device_id):
 
 
 def clear_port_record(sock):
-    if vs.GetRField(sock, PORT_RECORD, PORT_FIELD_IP) is None:
+    if not has_record(sock, PORT_RECORD):
         return  # never had the record
     for field in (PORT_FIELD_IP, PORT_FIELD_UNTAGGED, PORT_FIELD_TAGGED):
         vs.SetRField(sock, PORT_RECORD, field, "")
@@ -307,7 +334,7 @@ def write_port_records(cur, device_id, h, net_signals):
         tagged = ", ".join(r[0] for r in cur.fetchall())
 
         # Attach the record the first time, then fill it.
-        if vs.GetRField(sock, PORT_RECORD, PORT_FIELD_IP) is None:
+        if not has_record(sock, PORT_RECORD):
             vs.SetRecord(sock, PORT_RECORD)
         vs.SetRField(sock, PORT_RECORD, PORT_FIELD_IP, ip_address or "")
         vs.SetRField(sock, PORT_RECORD, PORT_FIELD_UNTAGGED, untagged_name or "")
@@ -329,6 +356,8 @@ def main():
             + "\n\nThen re-run. (If the drawing is untitled, save the .vwx first.)"
         )
         return
+
+    ensure_record_formats()
 
     try:
         conn = sqlite3.connect(db_path)

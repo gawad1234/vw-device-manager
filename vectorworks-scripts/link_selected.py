@@ -77,6 +77,33 @@ SOCKET_FIELD_SIGNAL = "signal"
 DEFAULT_NETWORK_SIGNALS = {"LAN"}
 
 
+# The record formats this script writes. Created on first run if the drawing
+# doesn't have them yet, so there's no manual Resource Manager setup.
+RECORD_FORMATS = {
+    "VWDM Sync": ["vwdm_id", "vwdm_ip", "vwdm_subnet", "vwdm_type", "vwdm_mac",
+                  "vwdm_location", "vwdm_notes", "vwdm_mgmt_ip", "vwdm_oob_ip", "vwdm_ports"],
+    "VWDM Port": ["vwdm_ip", "vwdm_untagged", "vwdm_tagged"],
+}
+
+
+def ensure_record_formats():
+    """Create any missing VWDM record format (all Text fields). An existing
+    format is left exactly as it is."""
+    for rec, fields in RECORD_FORMATS.items():
+        if not vs.GetObject(rec):
+            for f in fields:
+                vs.NewField(rec, f, "", 4, 0)  # 4 = Text
+
+
+def has_record(h, rec):
+    """True if record format `rec` is attached to object h. (GetRField can't
+    tell: it returns '' for an unattached record in Vectorworks 2027.)"""
+    for i in range(1, vs.NumRecords(h) + 1):
+        if vs.GetName(vs.GetRecord(h, i)) == rec:
+            return True
+    return False
+
+
 def active_doc_path():
     """Full path of the active drawing, or '' if it's unsaved/unavailable."""
     try:
@@ -251,6 +278,8 @@ def main():
         )
         return
 
+    ensure_record_formats()
+
     try:
         conn = sqlite3.connect(db_path)
     except Exception as e:
@@ -354,7 +383,7 @@ def main():
                     elif status == "orphaned":
                         relinked_orphaned += 1
 
-                stamps.append((h, existing_id is None, device_id))
+                stamps.append((h, device_id))
 
             # Discover network jacks -> ports for every linked device.
             created, refreshed = upsert_ports(cur, device_id, h, net_signals)
@@ -362,9 +391,8 @@ def main():
             ports_refreshed += refreshed
 
         conn.commit()
-        for h, needs_record, device_id in stamps:
-            if needs_record:
-                # record not attached to the object yet
+        for h, device_id in stamps:
+            if not has_record(h, RECORD_NAME):
                 vs.SetRecord(h, RECORD_NAME)
             # (Re)stamp the object with the resolved id — repairs blank/stale ids.
             vs.SetRField(h, RECORD_NAME, FIELD_ID, str(device_id))
