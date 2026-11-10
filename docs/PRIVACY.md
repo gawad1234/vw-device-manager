@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Device Manager**
-Effective date: November 8, 2026
+Effective date: November 10, 2026
 Provided by: Gabriel Awad ("we", "us") — contact: gabriel@gabrielawad.com
 
 ## The short version
@@ -71,7 +71,10 @@ usage statistics, crash reports, your IP address, or any personal information.
    network you trust, and use the optional crew/manager PINs to limit access.
    Other copies of Device Manager on the same network can **join** the show with
    the manager PIN and read it through the same local server; that traffic also
-   stays on your network.
+   stays on your network. While the Show Server is on, the app also broadcasts a
+   small announcement on your local network every few seconds — the show name,
+   the computer's name and the server's port, nothing else — so those computers
+   can find the show without typing an address. It never leaves your local network.
 
 Apart from these, the app makes no outbound connections. (Lighting sync with
 Vectorworks is not a network connection: the app reads and writes the exchange

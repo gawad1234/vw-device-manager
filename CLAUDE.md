@@ -56,6 +56,11 @@ workspace context and the cross-machine handoff log — check those first.
     phone app (bottom tabs Home/Receive/Devices/Patch, web manifest for Add to Home
     Screen); `hostAllowed` refuses non-LAN Host headers (DNS rebinding), `/api/*`
     needs a JSON content type, wrong PINs lock out per address.
+  - `discovery.ts` — LAN **auto-discovery**: while the Show Server runs, a UDP beacon
+    (`{magic:'vwdm-show/1', showName, hostName, port}`, no PIN/data) goes to each
+    interface's directed broadcast address on port **8786** every 2 s (/32 VPN
+    interfaces skipped); the Join dialog polls `project:discover` (local scope),
+    which listens while asked and stops after 10 s idle. Errors switch it off, never the server.
   - `remote.ts` — the **joining side**: `join/leave/info/call`; polls `/rpc/changes`
     (1.5 s focused, 4.5 s in the background) and sends `data-changed`.
   - `ipc.ts` registers every handler through `handle(channel, fn)`: while joined,
@@ -163,7 +168,8 @@ workspace context and the cross-machine handoff log — check those first.
   an Inputs row for its destination; built-in `patchsheet` is printed once per device.
 - **Paperwork header:** `library.json` → `paperworkHeader` (null = `DEFAULT_HEADER`): a slot
   (left/center/right/hidden) per piece (company logo/name, show name, doc title, own text, date,
-  show logo), `logoHeight`, `rule`, `text`; `normalizeHeader` repairs bad values.
+  show logo), `logoHeight`, `rule`, `text`, `watermark` (company logo faint behind every PDF page —
+  `watermarkHtml`, added in `page()` so it covers every PDF incl. the Equipment-list layout); `normalizeHeader` repairs bad values.
 - **Order change tracking:** `shop_orders.prev_export_json` / `prev_export_at` (guarded) keep the
   export before last, so re-exporting the same lines compares to the right baseline.
 - **Table style:** `library.json` → `tableStyle` (null = default). `src/shared/table-style.ts`:

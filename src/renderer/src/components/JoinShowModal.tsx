@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Modal from './Modal'
-import type { ProjectInfo } from '../../../shared/types'
+import type { DiscoveredShow, ProjectInfo } from '../../../shared/types'
 
 interface Props {
   onClose: () => void
@@ -13,6 +13,30 @@ function JoinShowModal({ onClose, onJoined }: Props): React.JSX.Element {
   const [pin, setPin] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [found, setFound] = useState<DiscoveredShow[]>([])
+
+  // list the shows announcing themselves on the LAN while this dialog is open
+  useEffect(() => {
+    let live = true
+    const look = (): void => {
+      window.api.projects
+        .discover()
+        .then((list) => live && setFound(list))
+        .catch(() => {})
+    }
+    look()
+    const t = setInterval(look, 1500)
+    return () => {
+      live = false
+      clearInterval(t)
+      void window.api.projects.stopDiscover()
+    }
+  }, [])
+
+  function pick(show: DiscoveredShow): void {
+    setAddress(show.address)
+    document.getElementById('join-pin')?.focus()
+  }
 
   async function join(e?: React.FormEvent): Promise<void> {
     e?.preventDefault()
@@ -46,11 +70,36 @@ function JoinShowModal({ onClose, onJoined }: Props): React.JSX.Element {
     >
       <form className="form-grid" onSubmit={join}>
         <p className="muted" style={{ gridColumn: 'span 2', margin: 0 }}>
-          Open the show from the computer that has it (usually the Vectorworks machine). You get the
-          address and Manager PIN on that computer under Settings → Show Server. For now a joined
-          computer can view everything but not change it.
+          Shows with their Show Server on appear below — pick one and enter its Manager PIN (on the
+          host under Settings → Show Server). Not listed? Type the address shown there. For now a
+          joined computer can view everything but not change it.
         </p>
         {error && <div className="banner banner-error">{error}</div>}
+        <div style={{ gridColumn: 'span 2' }}>
+          <strong>On this network</strong>
+          {found.length === 0 ? (
+            <p className="muted" style={{ margin: '4px 0 0' }}>
+              Looking for shows…
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+              {found.map((f) => (
+                <button
+                  key={f.address}
+                  type="button"
+                  className={`btn${f.address === address ? ' btn-primary' : ''}`}
+                  style={{ justifyContent: 'space-between', display: 'flex' }}
+                  onClick={() => pick(f)}
+                >
+                  <span>{f.showName}</span>
+                  <span className="muted mono">
+                    {f.hostName} · {f.address}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <label>
           Host address
           <input

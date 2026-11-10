@@ -186,6 +186,8 @@ const api: VwDeviceManagerApi = {
     saveCopyAs: () => invoke('project:saveCopyAs'),
     reveal: () => invoke('project:reveal'),
     join: (address: string, pin: string) => invoke('project:join', address, pin),
+    discover: () => invoke('project:discover'),
+    stopDiscover: () => invoke('project:stopDiscover'),
     leave: () => invoke('project:leave')
   },
   onDataChanged: (cb: () => void) => {

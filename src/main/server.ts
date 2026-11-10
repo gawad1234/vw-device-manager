@@ -6,6 +6,7 @@ import { app, type BrowserWindow } from 'electron'
 import QRCode from 'qrcode'
 import { readFileSync } from 'node:fs'
 import appIcon from '../../resources/icon.png?asset'
+import { startBeacon, stopBeacon } from './discovery'
 import type {
   OrderItem,
   ServerPins,
@@ -162,6 +163,12 @@ export function startServer(): Promise<ServerStatus> {
     s.listen(port, '0.0.0.0', () => {
       server = s
       lastError = null
+      // let Join dialogs on the LAN find this show (no PIN or data in the beacon)
+      startBeacon(() => ({
+        showName: getProjectMeta('showName') || getCurrentProject()?.name || 'Shared show',
+        hostName: os.hostname().replace(/\.local$/, ''),
+        port
+      }))
       emitStatus()
       resolve(getServerStatus())
     })
@@ -171,6 +178,7 @@ export function startServer(): Promise<ServerStatus> {
 export function stopServer(): Promise<ServerStatus> {
   sessions.clear()
   pinFailures.clear()
+  stopBeacon()
   return new Promise((resolve) => {
     if (!server) return resolve(getServerStatus())
     const s = server

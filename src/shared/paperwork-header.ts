@@ -17,6 +17,8 @@ export interface PaperworkHeader {
   rule: boolean
   /** your own line, e.g. "Production office 555-0100" */
   text: string
+  /** the company logo faintly behind the content of every page */
+  watermark: boolean
 }
 
 export const HEADER_ITEMS: { key: HeaderItem; label: string }[] = [
@@ -42,7 +44,8 @@ export const DEFAULT_HEADER: PaperworkHeader = {
   },
   logoHeight: 62,
   rule: true,
-  text: ''
+  text: '',
+  watermark: false
 }
 
 const SLOTS: HeaderSlot[] = ['left', 'center', 'right', 'hidden']
@@ -59,7 +62,8 @@ export function normalizeHeader(h: Partial<PaperworkHeader> | null | undefined):
     slots,
     logoHeight: Number.isFinite(height) ? Math.min(140, Math.max(20, Math.round(height))) : 62,
     rule: h?.rule ?? true,
-    text: typeof h?.text === 'string' ? h.text : ''
+    text: typeof h?.text === 'string' ? h.text : '',
+    watermark: h?.watermark === true
   }
 }
 
@@ -111,6 +115,11 @@ export function headerHtml(h: PaperworkHeader, d: HeaderData): string {
   return `<header class="ph${h.rule ? ' ph-rule' : ''}" style="--logo-h:${h.logoHeight}px">${slot('left')}${slot('center')}${slot('right')}</header>`
 }
 
+/** The watermark's HTML (empty when off or there's no company logo); style it with HEADER_CSS. */
+export function watermarkHtml(h: PaperworkHeader, companyLogo: string | null): string {
+  return h.watermark && companyLogo ? `<img class="wm" src="${esc(companyLogo)}" alt="">` : ''
+}
+
 export const HEADER_CSS = `
   .ph { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px;
         padding-bottom: 10px; margin-bottom: 16px; }
@@ -125,4 +134,8 @@ export const HEADER_CSS = `
   .ph .show { font-size: 18px; font-weight: 700; color: #1b1b1f; }
   .ph .doctitle { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
   .ph .htext, .ph .hdate { font-size: 11px; color: #444; }
-  .ph .logo { max-height: var(--logo-h); max-width: 260px; object-fit: contain; }`
+  .ph .logo { max-height: var(--logo-h); max-width: 260px; object-fit: contain; }
+  /* position: fixed repeats it on every printed page */
+  .wm { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 60%; max-height: 60%; object-fit: contain; opacity: 0.08;
+        z-index: -1; pointer-events: none; }`

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_HEADER, headerHtml, normalizeHeader } from '../src/shared/paperwork-header.ts'
+import { DEFAULT_HEADER, headerHtml, normalizeHeader, watermarkHtml } from '../src/shared/paperwork-header.ts'
 
 const data = {
   title: 'Pull Sheet',
@@ -50,4 +50,12 @@ test('normalize keeps good values and repairs bad ones', () => {
   assert.equal(h.logoHeight, 140)
   assert.equal(h.rule, true)
   assert.deepEqual(normalizeHeader(null), DEFAULT_HEADER)
+})
+
+test('watermark: off by default, needs a logo, escaped', () => {
+  assert.equal(normalizeHeader({}).watermark, false)
+  const on = normalizeHeader({ watermark: true })
+  assert.equal(watermarkHtml(DEFAULT_HEADER, 'data:x'), '')
+  assert.equal(watermarkHtml(on, null), '')
+  assert.equal(watermarkHtml(on, 'a"b'), '<img class="wm" src="a&quot;b" alt="">')
 })

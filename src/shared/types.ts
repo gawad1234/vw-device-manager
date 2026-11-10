@@ -196,6 +196,14 @@ export interface Bundle {
 export type BundleInput = Omit<Bundle, 'id' | 'createdAt' | 'updatedAt' | 'cables'>
 
 /** An open-able project database. `name` is the file basename without extension. */
+/** A Show Server heard on the LAN; `address` goes in the Join dialog's address box. */
+export interface DiscoveredShow {
+  address: string
+  showName: string
+  hostName: string
+  port: number
+}
+
 export interface ProjectInfo {
   path: string
   name: string
@@ -1006,6 +1014,9 @@ export interface VwDeviceManagerApi {
     reveal: () => Promise<void>
     /** join a show another computer has open (its Show Server address + Manager PIN) */
     join: (address: string, pin: string) => Promise<ProjectInfo | { error: string }>
+    /** shows whose Show Server is announcing itself on the LAN (call repeatedly while looking) */
+    discover: () => Promise<DiscoveredShow[]>
+    stopDiscover: () => Promise<void>
     /** stop viewing the shared show; returns the local project again */
     leave: () => Promise<ProjectInfo | null>
   }

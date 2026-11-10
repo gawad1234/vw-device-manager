@@ -118,6 +118,14 @@ function HeaderPanel(): React.JSX.Element {
           />
           Line under the header
         </label>
+        <label className="checkbox-field" title="Needs a company logo (Company branding)">
+          <input
+            type="checkbox"
+            checked={h.watermark}
+            onChange={(e) => change({ watermark: e.target.checked })}
+          />
+          Company logo watermark
+        </label>
         <button className="btn btn-small" onClick={() => change(DEFAULT_HEADER)}>
           Reset
         </button>

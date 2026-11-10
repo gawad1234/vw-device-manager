@@ -44,7 +44,7 @@ import {
   getTableStyle,
   templatesForDoc
 } from './library'
-import { HEADER_CSS, headerHtml } from '../shared/paperwork-header'
+import { HEADER_CSS, headerHtml, watermarkHtml } from '../shared/paperwork-header'
 import { argb, tableFont, tableStyleCss } from '../shared/table-style'
 import type {
   Bundle,
@@ -238,6 +238,7 @@ function page(
 ): string {
   const st = getTableStyle()
   const header = eq || ownHeaders ? '' : pageHeader(title, logo)
+  const wm = watermarkHtml(getPaperworkHeader(), getCompanyLogo())
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -289,7 +290,7 @@ function page(
     ${tableStyleCss(st)}
     body { font-family: ${tableFont(st).css}; font-size: ${fontSize}px; }
     ${eq ? eqCss(st.headerFill, st.headerText) : ''}
-  </style></head><body${eq ? ' class="eq"' : ''}>${header}${body}</body></html>`
+  </style></head><body${eq ? ' class="eq"' : ''}>${wm}${header}${body}</body></html>`
 }
 
 function labelsHtml(bundles: Bundle[], idx: DeviceIndex, logo: string | null): string {

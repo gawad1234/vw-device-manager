@@ -18,6 +18,7 @@ import { importCircuitReport } from './circuit-import'
 import * as updater from './updater'
 import * as server from './server'
 import * as remote from './remote'
+import * as discovery from './discovery'
 import { handlers, bumpChange, type Handler } from './rpc-registry'
 import { channelScope } from '../shared/remote-scope'
 import { projectorCommandsCsv } from '../shared/projector-settings'
@@ -317,6 +318,8 @@ export function registerIpcHandlers(): void {
     leaveIfOpened(await projects.openProjectPath(path))
   )
   handle('project:join', (_e, address: string, pin: string) => remote.join(address, pin))
+  handle('project:discover', () => discovery.scan())
+  handle('project:stopDiscover', () => discovery.stopScan())
   handle('project:leave', () => (remote.leave(), projects.getCurrentProject()))
   handle('project:saveCopyAs', async () => leaveIfOpened(await projects.saveCopyAs()))
   handle('project:reveal', () => projects.revealCurrent())
