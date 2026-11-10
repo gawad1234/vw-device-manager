@@ -6,7 +6,7 @@ import { bundleToRows } from './exports'
 import { buildDeviceIndex } from './paperwork-data'
 import { getProjectMeta, listBundles, updateCable } from './repository'
 import { listStickerDesigns, listStickerSheets } from './library'
-import { BUNDLE_COLOR, stickerSlots } from '../shared/sticker-sheet'
+import { BUNDLE_COLOR, cableEndGender, stickerSlots } from '../shared/sticker-sheet'
 import type { PrintStickersOptions, StickerSheet } from '../shared/types'
 
 // Cable loom stickers: every cable in the chosen looms, `perCable` stickers each
@@ -43,6 +43,7 @@ function cableStickers(
             'this end': atFrom ? r.from : r.to,
             'other end': atFrom ? r.to : r.from,
             end: atFrom ? 'A' : 'B',
+            gender: cableEndGender(r.type, atFrom),
             notes: r.notes
           }
         })

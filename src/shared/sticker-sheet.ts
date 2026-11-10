@@ -109,3 +109,8 @@ export function stickerSlots(
 
 /** Stand-in color value: a sticker element drawn in this "color" takes the cable's bundle color. */
 export const BUNDLE_COLOR = 'bundle'
+
+/** {Gender} on a loom sticker: on XLR cables the source end is male and the destination
+ *  end female (Gabe's convention), so each sticker says which end it goes on. */
+export const cableEndGender = (cableType: string, atSource: boolean): string =>
+  /xlr/i.test(cableType) ? (atSource ? 'M' : 'F') : ''

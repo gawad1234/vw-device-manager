@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseDocxLabelSheet, stickerSlots, tidyLabels } from '../src/shared/sticker-sheet.ts'
+import { cableEndGender, parseDocxLabelSheet, stickerSlots, tidyLabels } from '../src/shared/sticker-sheet.ts'
 
 const page = '<w:pgSz w:w="12240" w:h="15840" /><w:pgMar w:top="720" w:left="472" />'
 const anchor = (x: number, y: number, prst = 'roundRect'): string =>
@@ -65,4 +65,11 @@ test('printing starts at the chosen sticker and runs onto new sheets', () => {
     { page: 1, index: 1 },
     { page: 1, index: 2 }
   ])
+})
+
+test('{Gender}: XLR source end is M, destination F; other cables blank', () => {
+  assert.equal(cableEndGender('XLR 3-pin', true), 'M')
+  assert.equal(cableEndGender('xlr', false), 'F')
+  assert.equal(cableEndGender('Cat5 Ethercon', true), '')
+  assert.equal(cableEndGender('', false), '')
 })

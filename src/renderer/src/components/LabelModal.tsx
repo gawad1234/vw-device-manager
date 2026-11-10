@@ -127,7 +127,7 @@ export interface StickerEditing {
   onDelete?: () => Promise<boolean>
 }
 
-const STICKER_TOKENS = ['{Cable}', '{This end}', '{Other end}', '{From}', '{To}', '{Type}', '{Length}', '{Bundle}', '{End}', '{Notes}', '{Show}']
+const STICKER_TOKENS = ['{Cable}', '{This end}', '{Other end}', '{From}', '{To}', '{Type}', '{Length}', '{Bundle}', '{End}', '{Gender}', '{Notes}', '{Show}']
 
 interface Props {
   template: LabelTemplate | null
