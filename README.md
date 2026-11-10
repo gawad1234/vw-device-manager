@@ -49,7 +49,7 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
 - **Loom labels** — import a sticker sheet template (Word or PDF, e.g. OnlineLabels / Avery), design the sticker, and print one for each end of every cable in the looms you pick.
 
 **Lighting** *(beta)*
-- **Fixtures**: the lighting rig (position, unit, type, mode, purpose, channel, universe/address, color, gobos, dimmer, circuit, user fields, notes) with **live two-way sync with Vectorworks Spotlight** through its Lightwright exchange file. **Universes**: what's patched where in each DMX universe, overlaps in red, and which DMX/sACN node from Devices each universe comes out of. **Fixture types**: DMX modes and footprints, shared by every show. Patch checks flag overlapping addresses, fixtures past 512, half-patched fixtures and universes with no node.
+- **Fixtures**: the lighting rig (position, unit, type, mode, purpose, channel, universe/address, color, gobos, dimmer, circuit, user fields, notes) with **live two-way sync with Vectorworks Spotlight** through its Lightwright exchange file. **Universes**: what's patched where in each DMX universe, overlaps in red, and which DMX/sACN node from Devices each universe comes out of. **Fixture types**: DMX modes and footprints, shared by every show. Patch checks flag overlapping addresses, fixtures past 512, half-patched fixtures and universes with no node. Each fixture's mode and DMX footprint come from the drawing when Vectorworks sends them, and template holders aren't counted as fixtures.
 
 **Paperwork**
 - **Orders** — shop orders with equipment + cables, tracking **ordered vs. received**. Import from the drawing, paste from Excel, auto-add kits, and export **pull orders** and **receiving checklists** (PDF/Excel/CSV) in your own **export formats** — columns, header text, widths, text size, and a ready-made **Equipment list** layout with Old/New qty and a Balance column.
@@ -88,6 +88,12 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
 | **Case labels** — one for every road case | **Crew** — days, call times and what it costs |
 | ![Truck load sheet](docs/images/load-sheet.jpg) | ![The Show Server on crew phones](docs/images/show-server.jpg) |
 | **Trucking** — load sheets with the on-arrival contact | **Show Server** — the show on the crew's phones |
+| ![Lighting fixtures synced live with Vectorworks Spotlight](docs/images/lighting.jpg) | ![The 512-address grid for a universe](docs/images/universes.jpg) |
+| **Lighting** — the Spotlight rig, synced live both ways, Lightwright-style | **Universes** — every address, every fixture, overlaps striped red |
+| ![Overlapping addresses flagged](docs/images/patch-checks.jpg) | ![A channel hookup with the company logo watermark](docs/images/lighting-paperwork.jpg) |
+| **Patch checks** — modes and footprints from the drawing, overlaps flagged | **Paperwork** — hookups and patch lists with your letterhead and logo |
+| ![Join a show found on the network](docs/images/join-show.jpg) | |
+| **Sharing a show** — pick the host from *On this network*, no IP to type | |
 
 ---
 
