@@ -4,7 +4,7 @@
   "description": "Tracks AV and network devices, cables, orders, crew and lighting for live shows",
   "main": "./out/main/index.js",
   "author": "Gabriel Awad",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/gawad1234/vw-device-manager",
   "scripts": {
     "format": "prettier --write .",

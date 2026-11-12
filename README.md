@@ -147,7 +147,8 @@ Architecture notes live in [CLAUDE.md](CLAUDE.md); the cross-machine handoff log
 
 ## License
 
-Free for **non-commercial** use under the [PolyForm Noncommercial License 1.0.0](LICENSE): you may use,
-copy and change it for personal, educational, hobby or non-profit work. **Commercial use is not
-allowed** without separate written permission from the author. This is a source-available
-license, not an OSI "open source" one. See also the [Terms of Use](docs/TERMS.md).
+**Free to use, not for sale.** Licensed under the [Apache License 2.0 with the Commons Clause](LICENSE):
+anyone may use, copy and change it, including for paid shows and at companies. **Nobody but the
+author may sell it**, sell a hosted version of it, or charge for a product or service built mainly
+on it. Because of the no-selling condition this is "source-available", not OSI "open source".
+See also the [Terms of Use](docs/TERMS.md).

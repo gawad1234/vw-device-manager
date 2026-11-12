@@ -17,12 +17,13 @@ It is **local-first**: your data is stored in files on your own device (see the
 
 ## 2. License
 
-The Software is licensed under the **PolyForm Noncommercial License 1.0.0** —
-see the [LICENSE](../LICENSE) file for the full text. In short: anyone may use,
-copy and modify it for **non-commercial** purposes; **commercial use is not
-allowed** without separate written permission from us. The Software is provided
-**free of charge**. If anything in these Terms conflicts with the LICENSE, the
-LICENSE wins on what you may do with the Software.
+The Software is licensed under the **Apache License 2.0 with the Commons Clause
+License Condition v1.0** — see the [LICENSE](../LICENSE) file for the full text. In
+short: anyone may use, copy and modify it, including for commercial work such as
+paid shows; **nobody but the author may sell it**, or charge for a product or
+service whose value comes entirely or substantially from it. The Software is
+provided **free of charge**. If anything in these Terms conflicts with the
+LICENSE, the LICENSE wins on what you may do with the Software.
 
 ## 3. Your responsibilities
 
