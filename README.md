@@ -144,3 +144,10 @@ export CSC_IDENTITY_AUTO_DISCOVERY=false
 
 Architecture notes live in [CLAUDE.md](CLAUDE.md); the cross-machine handoff log is `../PROGRESS.md`.
 </details>
+
+## License
+
+Free for **non-commercial** use under the [PolyForm Noncommercial License 1.0.0](LICENSE): you may use,
+copy and change it for personal, educational, hobby or non-profit work. **Commercial use is not
+allowed** without separate written permission from the author. This is a source-available
+license, not an OSI "open source" one. See also the [Terms of Use](docs/TERMS.md).

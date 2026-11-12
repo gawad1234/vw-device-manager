@@ -1,7 +1,7 @@
 # Terms of Service
 
 **Device Manager**
-Effective date: October 19, 2026
+Effective date: November 11, 2026
 Provided by: Gabriel Awad ("we", "us") — contact: gabriel@gabrielawad.com
 
 Please read these Terms. By downloading, installing, or using Device Manager
@@ -17,10 +17,12 @@ It is **local-first**: your data is stored in files on your own device (see the
 
 ## 2. License
 
-We grant you a personal, non-exclusive, non-transferable license to install and
-use the Software for your own production and business work. The Software is
-provided **free of charge**. You may not sell or redistribute the Software as
-your own, or remove or alter its notices.
+The Software is licensed under the **PolyForm Noncommercial License 1.0.0** —
+see the [LICENSE](../LICENSE) file for the full text. In short: anyone may use,
+copy and modify it for **non-commercial** purposes; **commercial use is not
+allowed** without separate written permission from us. The Software is provided
+**free of charge**. If anything in these Terms conflicts with the LICENSE, the
+LICENSE wins on what you may do with the Software.
 
 ## 3. Your responsibilities
 
@@ -32,7 +34,13 @@ your own, or remove or alter its notices.
 - **Your network, if you use the Show Server.** The optional Show Server serves
   your project over your local network using plain (unencrypted) HTTP. You are
   responsible for running it only on a trusted network and for setting access
-  PINs as appropriate. Do not expose it to the public internet.
+  PINs as appropriate. Do not expose it to the public internet. The same goes
+  for sharing a show over the LAN and the crew phone pages.
+- **Show equipment you control.** Some features talk to real equipment on your
+  network: the Timecode page sends commands to a lighting console (it can fire
+  cues and record new, empty cues on an ETC Eos), and Show › Status pings the
+  devices in your project. Only connect to equipment you are authorized to
+  operate, and check what the Software will do before using it near a live show.
 - **Lawful and appropriate use.** You will use the Software in compliance with
   applicable laws and only for work you are authorized to do.
 
@@ -46,7 +54,9 @@ obligated to provide updates, maintenance, or support.
 
 The Software interoperates with third-party services and software you choose to
 use, including **GitHub** (for updates), **Dropbox** or similar (if you sync your
-files), and **Vectorworks / ConnectCAD** (for the drawing sync scripts). Your use
+files), **Vectorworks / ConnectCAD / Spotlight** (for the drawing sync scripts
+and the lighting exchange file), **ETC Eos** family consoles (for the Timecode
+page), and files from other tools you import (such as ShowSandbox shows). Your use
 of those is governed by **their** terms and policies, not ours.
 
 ## 6. No warranty
@@ -57,8 +67,11 @@ merchantability, fitness for a particular purpose, accuracy, and
 non-infringement. We do not warrant that the Software will be error-free,
 uninterrupted, or that any data it produces (schedules, labels, configurations,
 exports) is correct or complete. **You are responsible for verifying anything
-important before relying on it** — particularly network configurations and the
-host VLAN tools, which can affect live systems.
+important before relying on it** — particularly network, switch and projector
+configurations, the host VLAN tools, and anything that sends commands to show
+equipment (such as cues fired or recorded on a lighting console), all of which
+can affect live systems. Test with the equipment before the show, and do not
+rely on the Software as the only control of show-critical equipment.
 
 ## 7. Limitation of liability
 
@@ -71,8 +84,8 @@ to the Software will not exceed **US $0**.
 
 ## 8. Termination
 
-You may stop using the Software at any time by uninstalling it. This license ends
-automatically if you breach these Terms. Sections 6, 7, and 9 survive
+You may stop using the Software at any time by uninstalling it. Your license
+ends as described in the LICENSE file, including if you break its terms. Sections 6, 7, and 9 survive
 termination.
 
 ## 9. Governing law
