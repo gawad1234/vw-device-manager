@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { LabelTemplate, PackCase } from '../../../shared/types'
 import CaseModal from '../components/CaseModal'
+import PageHeader from '../components/PageHeader'
 
 /** Tokens the templates fill in automatically — not user-defined case fields. */
 const RESERVED_TOKENS = new Set(['case', 'contents', 'show'])
@@ -50,7 +51,9 @@ function CasesPage(): React.JSX.Element {
     const [cs, ts] = await Promise.all([window.api.cases.list(), window.api.labels.list()])
     setCases(cs)
     setTemplates(ts)
-    setTemplateId((prev) => (prev !== '' && ts.some((t) => t.id === prev) ? prev : (ts[0]?.id ?? '')))
+    setTemplateId((prev) =>
+      prev !== '' && ts.some((t) => t.id === prev) ? prev : (ts[0]?.id ?? '')
+    )
     setSelected((prev) => new Set([...prev].filter((id) => cs.some((c) => c.id === id))))
   }, [])
 
@@ -58,7 +61,8 @@ function CasesPage(): React.JSX.Element {
     refresh().finally(() => setLoading(false))
   }, [refresh])
 
-  const openCase = openId === 'new' || openId == null ? null : (cases.find((c) => c.id === openId) ?? null)
+  const openCase =
+    openId === 'new' || openId == null ? null : (cases.find((c) => c.id === openId) ?? null)
   const templateTokens = useMemo(() => collectTemplateTokens(templates), [templates])
 
   function toggle(id: number): void {
@@ -70,7 +74,9 @@ function CasesPage(): React.JSX.Element {
     })
   }
   function toggleAll(): void {
-    setSelected((prev) => (prev.size === cases.length ? new Set() : new Set(cases.map((c) => c.id))))
+    setSelected((prev) =>
+      prev.size === cases.length ? new Set() : new Set(cases.map((c) => c.id))
+    )
   }
 
   // Total labels = each selected case repeated by its copy count.
@@ -97,21 +103,19 @@ function CasesPage(): React.JSX.Element {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h2>Cases</h2>
-        <div className="page-header-actions">
-          <button className="btn btn-primary" onClick={() => setOpenId('new')}>
-            + New case
-          </button>
-        </div>
-      </div>
-
-      <p className="muted" style={{ marginBottom: 14, maxWidth: 720 }}>
-        Track what&apos;s packed in each road case, then print labels for them from any template on
-        the <strong>Labels</strong> tab. Templates fill in each case with <code>{'{Case}'}</code>,{' '}
-        <code>{'{Contents}'}</code>, <code>{'{Show}'}</code>, and any <code>{'{Field name}'}</code>{' '}
-        you add to the case.
-      </p>
+      <PageHeader
+        title="Cases"
+        count={cases.length}
+        description={
+          <>
+            Track what&apos;s packed in each road case, then print labels for them from any template
+            on the <strong>Labels</strong> tab. Templates fill in each case with{' '}
+            <code>{'{Case}'}</code>, <code>{'{Contents}'}</code>, <code>{'{Show}'}</code>, and any{' '}
+            <code>{'{Field name}'}</code> you add to the case.
+          </>
+        }
+        primary={{ label: '+ New case', onClick: () => setOpenId('new') }}
+      />
 
       {templates.length > 0 && (
         <div className="print-bar">
@@ -142,13 +146,18 @@ function CasesPage(): React.JSX.Element {
       <table className="table">
         <thead>
           <tr>
-            <th style={{ width: 32 }}>
-              <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Select all" />
+            <th className="col-check">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                onChange={toggleAll}
+                aria-label="Select all"
+              />
             </th>
             <th>Case</th>
-            <th>Fields</th>
+            <th className="num">Fields</th>
             <th>Contents</th>
-            <th style={{ width: 90 }}>Copies</th>
+            <th className="num col-copies">Copies</th>
           </tr>
         </thead>
         <tbody>
@@ -160,10 +169,22 @@ function CasesPage(): React.JSX.Element {
             </tr>
           )}
           {cases.map((c) => {
-            const items = c.contents.split('\n').map((l) => l.trim()).filter(Boolean)
+            const items = c.contents
+              .split('\n')
+              .map((l) => l.trim())
+              .filter(Boolean)
             return (
-              <tr key={c.id} className="clickable">
-                <td onClick={(e) => e.stopPropagation()}>
+              <tr
+                key={c.id}
+                className="clickable"
+                tabIndex={0}
+                onClick={() => setOpenId(c.id)}
+                onKeyDown={(e) => {
+                  // Enter on the row itself, not on its checkbox or copies box
+                  if (e.key === 'Enter' && e.target === e.currentTarget) setOpenId(c.id)
+                }}
+              >
+                <td className="col-check" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selected.has(c.id)}
@@ -171,14 +192,12 @@ function CasesPage(): React.JSX.Element {
                     aria-label={`Select ${c.name}`}
                   />
                 </td>
-                <td onClick={() => setOpenId(c.id)}>{c.name}</td>
-                <td className="muted" onClick={() => setOpenId(c.id)}>
-                  {c.fields.length}
-                </td>
-                <td className="muted" onClick={() => setOpenId(c.id)}>
+                <td>{c.name}</td>
+                <td className="muted num">{c.fields.length}</td>
+                <td className="muted">
                   {items.length ? `${items.length} item${items.length === 1 ? '' : 's'}` : '—'}
                 </td>
-                <td onClick={(e) => e.stopPropagation()}>
+                <td className="num" onClick={(e) => e.stopPropagation()}>
                   <input
                     className="case-copies"
                     type="number"
@@ -196,7 +215,7 @@ function CasesPage(): React.JSX.Element {
       </table>
 
       {templates.length === 0 && !loading && (
-        <p className="muted" style={{ marginTop: 14 }}>
+        <p className="muted after-table">
           Create a label template on the <strong>Labels</strong> tab to print case labels.
         </p>
       )}

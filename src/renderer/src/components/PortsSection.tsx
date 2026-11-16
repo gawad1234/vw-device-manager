@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Circuit, Device, DeviceWarning, Port, RowSaver, Subnet } from '../../../shared/types'
+import Field, { withFix } from './Field'
+import { useModal } from './Modal'
 
 function subnetLabel(s: Subnet): string {
   return s.vlan ? `${s.name} (VLAN ${s.vlan})` : s.name
@@ -22,7 +24,11 @@ function reflectionVlan(r: Reflection, subnets: Subnet[]): string {
 }
 
 /** Map each switch port label → the VLAN of whatever device the patching circuits connect to it. */
-function computeReflections(switchName: string, circuits: Circuit[], devices: Device[]): Record<string, Reflection> {
+function computeReflections(
+  switchName: string,
+  circuits: Circuit[],
+  devices: Device[]
+): Record<string, Reflection> {
   const byName = new Map(devices.map((d) => [d.name, d]))
   const out: Record<string, Reflection> = {}
   // shortcut: exact name+socket match, first circuit per jack wins — matches how the rest of the app links circuits.
@@ -59,7 +65,15 @@ interface PortRowProps {
   registerSaver?: (fn: RowSaver) => () => void
 }
 
-function PortRow({ port, subnets, isSwitch, reflection, switchPort, onChanged, registerSaver }: PortRowProps): React.JSX.Element {
+function PortRow({
+  port,
+  subnets,
+  isSwitch,
+  reflection,
+  switchPort,
+  onChanged,
+  registerSaver
+}: PortRowProps): React.JSX.Element {
   const [label, setLabel] = useState(port.label)
   const [ip, setIp] = useState(port.ipAddress ?? '')
   const [untagged, setUntagged] = useState<number | null>(port.untaggedSubnetId)
@@ -70,6 +84,8 @@ function PortRow({ port, subnets, isSwitch, reflection, switchPort, onChanged, r
   const [showTags, setShowTags] = useState(false)
 
   const fromVw = port.vwSocketKey != null
+  const modal = useModal()
+  const scope = `port-${port.id}`
 
   // Persist this row's fields; returns whether it saved (for the bulk flush).
   async function persist(): Promise<{ ok: boolean; error?: string }> {
@@ -94,6 +110,7 @@ function PortRow({ port, subnets, isSwitch, reflection, switchPort, onChanged, r
     }
     setError(null)
     setWarnings(result.warnings)
+    modal?.markClean(scope) // this row's edits are on disk now
     return { ok: true }
   }
 
@@ -150,32 +167,53 @@ function PortRow({ port, subnets, isSwitch, reflection, switchPort, onChanged, r
     .filter((s): s is Subnet => Boolean(s))
     .map(subnetLabel)
 
+  // An IP conflict belongs under the IP field; anything else is about the row.
+  const ipError =
+    !isSwitch &&
+    error &&
+    (/\bIP\b|address|already (on|used)/i.test(error) ||
+      (ip.trim() !== '' && error.includes(ip.trim())))
+      ? withFix(error)
+      : null
+  const ipErrorId = `port-${port.id}-ip-error`
+  const rowError = error && !ipError ? error : null
+
   return (
-    <div className={`port-row${port.isUnused ? ' port-unused' : ''}`}>
-      {error && <div className="banner banner-error">{error}</div>}
+    <div className={`port-row${port.isUnused ? ' port-unused' : ''}`} data-dirty-scope={scope}>
+      {rowError && <div className="banner banner-error">{rowError}</div>}
       {warnings.map((w, i) => (
         <div className="banner banner-warning" key={i}>
           {w.message}
         </div>
       ))}
-      <div className="port-fields">
-        <label>
-          {switchPort ? `Jack (switch port 1/0/${switchPort})` : 'Jack'}
-          <input
-            value={label}
-            readOnly={fromVw}
-            title={fromVw ? 'Comes from the ConnectCAD jack — edit in Vectorworks.' : undefined}
-            onChange={(e) => setLabel(e.target.value)}
-          />
-        </label>
+      <div className={`port-grid ${isSwitch ? 'port-grid-switch' : 'port-grid-device'}`}>
+        <Field
+          label="Jack"
+          hint={
+            [
+              switchPort ? `Switch port 1/0/${switchPort}` : null,
+              fromVw ? 'From ConnectCAD — edit in Vectorworks' : null
+            ]
+              .filter(Boolean)
+              .join(' · ') || undefined
+          }
+        >
+          <input value={label} readOnly={fromVw} onChange={(e) => setLabel(e.target.value)} />
+        </Field>
         {!isSwitch && (
-          <label>
-            IP address
-            <input value={ip} placeholder="10.0.10.21" onChange={(e) => setIp(e.target.value)} />
-          </label>
+          <Field label="IP" externalErrorId={ipError ? ipErrorId : undefined}>
+            <input
+              className="mono"
+              value={ip}
+              placeholder="10.0.10.21"
+              onChange={(e) => {
+                setIp(e.target.value)
+                if (ipError) setError(null)
+              }}
+            />
+          </Field>
         )}
-        <label>
-          Untagged network
+        <Field label="Untagged VLAN">
           <select
             value={untagged ?? ''}
             onChange={(e) => setUntagged(e.target.value ? Number(e.target.value) : null)}
@@ -187,18 +225,17 @@ function PortRow({ port, subnets, isSwitch, reflection, switchPort, onChanged, r
               </option>
             ))}
           </select>
-        </label>
+        </Field>
         {isSwitch && (
-          <label>
-            LAG
+          <Field label="LAG" hint="Same name = one link">
             <input
               value={lag}
-              placeholder="e.g. LAG1"
+              placeholder="LAG1"
               title="Group this port with others on the same switch into one logical link — give them the same LAG name."
               onChange={(e) => setLag(e.target.value)}
               onBlur={saveLag}
             />
-          </label>
+          </Field>
         )}
         <div className="port-actions">
           <button
@@ -216,22 +253,31 @@ function PortRow({ port, subnets, isSwitch, reflection, switchPort, onChanged, r
           {!isSwitch && !port.isUnused && (
             <button
               type="button"
-              className={`btn btn-small primary-toggle${port.isPrimary ? ' is-on' : ''}`}
+              className="btn btn-small"
+              aria-pressed={port.isPrimary}
               title="Use this port's IP + VLAN as the device's main access route (shown in the Device list export)"
               onClick={togglePrimary}
             >
               {port.isPrimary ? '★ Main' : '☆ Main'}
             </button>
           )}
-          <button className="btn btn-small btn-primary" onClick={save} disabled={saving}>
-            Save
-          </button>
+          {/* Inside the device editor the footer's save flushes every row. */}
+          {!registerSaver && (
+            <button type="button" className="btn btn-small" onClick={save} disabled={saving}>
+              Save
+            </button>
+          )}
           {!fromVw && (
-            <button className="btn btn-small btn-danger" onClick={remove}>
-              Remove
+            <button type="button" className="btn btn-small btn-danger" onClick={remove}>
+              Remove…
             </button>
           )}
         </div>
+        {ipError && (
+          <div className="field-error port-grid-error" id={ipErrorId} role="alert">
+            {ipError}
+          </div>
+        )}
       </div>
       {isSwitch && reflection && (
         <div className="port-reflection muted">
@@ -245,13 +291,16 @@ function PortRow({ port, subnets, isSwitch, reflection, switchPort, onChanged, r
           Tagged VLANs{port.taggedSubnetIds.length ? ` (${port.taggedSubnetIds.length})` : ''}
         </button>
         {!showTags && (
-          <span className="tag-summary muted">{taggedNames.length ? taggedNames.join(', ') : 'none'}</span>
+          <span className="tag-summary muted">
+            {taggedNames.length ? taggedNames.join(', ') : 'none'}
+          </span>
         )}
         {showTags &&
           (taggableSubnets.length === 0 ? (
             <span className="muted">none available</span>
           ) : (
-            <div className="tag-options">
+            // these save as they change: never unsaved edits
+            <div className="tag-options" data-immediate>
               {taggableSubnets.map((s) => (
                 <label key={s.id} className="chk">
                   <input
@@ -292,7 +341,11 @@ function buildEntries(ports: Port[], isSwitch: boolean): PortEntry[] {
     if (k && (counts.get(k) ?? 0) >= 2) {
       if (seen.has(k)) continue
       seen.add(k)
-      out.push({ kind: 'lag', name: lagKey(p), ports: ports.filter((x) => lagKey(x).toLowerCase() === k) })
+      out.push({
+        kind: 'lag',
+        name: lagKey(p),
+        ports: ports.filter((x) => lagKey(x).toLowerCase() === k)
+      })
     } else {
       out.push({ kind: 'port', port: p })
     }
@@ -311,13 +364,21 @@ interface LagRowProps {
 
 /** One LAG = several switch ports edited as a single logical link: set the untagged
  *  network + tagged VLANs once and Save applies them to every member. */
-function LagRow({ name, ports, subnets, reflections, onChanged, registerSaver }: LagRowProps): React.JSX.Element {
+function LagRow({
+  name,
+  ports,
+  subnets,
+  reflections,
+  onChanged,
+  registerSaver
+}: LagRowProps): React.JSX.Element {
   const first = ports[0]
   const [lagName, setLagName] = useState(name)
   const [untagged, setUntagged] = useState<number | null>(first.untaggedSubnetId)
   const [tagged, setTagged] = useState<number[]>(first.taggedSubnetIds)
   const [showTags, setShowTags] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Apply the shared config to every member (each keeps its own jack label).
   async function persist(): Promise<{ ok: boolean; error?: string }> {
@@ -332,13 +393,25 @@ function LagRow({ name, ports, subnets, reflections, onChanged, registerSaver }:
     setSaving(true)
     try {
       for (const p of ports) {
-        await window.api.ports.update(p.id, { label: p.label, ipAddress: null, untaggedSubnetId: untagged })
+        const r = await window.api.ports.update(p.id, {
+          label: p.label,
+          ipAddress: null,
+          untaggedSubnetId: untagged
+        })
+        if (r.error) {
+          const msg = `${p.label}: ${r.error}`
+          setError(msg)
+          return { ok: false, error: msg }
+        }
         await window.api.ports.setTaggedVlans(p.id, tagged)
         if ((p.lagGroup ?? '') !== (nm ?? '')) await window.api.ports.setLag(p.id, nm)
       }
+      setError(null)
       return { ok: true }
     } catch (e) {
-      return { ok: false, error: (e as Error).message }
+      const msg = `Couldn’t save LAG "${name}": ${(e as Error).message}`
+      setError(msg)
+      return { ok: false, error: msg }
     } finally {
       setSaving(false)
     }
@@ -351,8 +424,7 @@ function LagRow({ name, ports, subnets, reflections, onChanged, registerSaver }:
   }, [registerSaver])
 
   async function save(): Promise<void> {
-    await persist()
-    onChanged()
+    if ((await persist()).ok) onChanged()
   }
   async function ungroup(): Promise<void> {
     if (!window.confirm(`Ungroup LAG "${name}" back into separate ports?`)) return
@@ -375,17 +447,17 @@ function LagRow({ name, ports, subnets, reflections, onChanged, registerSaver }:
 
   return (
     <div className="port-row lag-row">
+      {error && <div className="banner banner-error">{error}</div>}
       <div className="lag-head">
         <span className="lag-badge">LAG</span>
         <input
           className="lag-name"
+          aria-label="LAG name"
           value={lagName}
           title="LAG name (clear it, or Ungroup, to split these back into separate ports)"
           onChange={(e) => setLagName(e.target.value)}
         />
-        <span className="muted">
-          {ports.length} ports — one logical link
-        </span>
+        <span className="muted">{ports.length} ports — one logical link</span>
       </div>
       <div className="lag-members-list">
         {ports.map((p) => {
@@ -402,6 +474,7 @@ function LagRow({ name, ports, subnets, reflections, onChanged, registerSaver }:
                 type="button"
                 className="btn btn-small"
                 title="Remove this port from the LAG"
+                aria-label={`Remove ${p.label} from the LAG`}
                 onClick={() => removeMember(p.id)}
               >
                 ✕
@@ -410,9 +483,8 @@ function LagRow({ name, ports, subnets, reflections, onChanged, registerSaver }:
           )
         })}
       </div>
-      <div className="port-fields">
-        <label>
-          Untagged network (all members)
+      <div className="port-grid port-grid-lag">
+        <Field label="Untagged VLAN" hint="Applies to every member">
           <select
             value={untagged ?? ''}
             onChange={(e) => setUntagged(e.target.value ? Number(e.target.value) : null)}
@@ -424,14 +496,17 @@ function LagRow({ name, ports, subnets, reflections, onChanged, registerSaver }:
               </option>
             ))}
           </select>
-        </label>
+        </Field>
         <div className="port-actions">
           <button type="button" className="btn btn-small" onClick={ungroup}>
-            Ungroup
+            Ungroup…
           </button>
-          <button className="btn btn-small btn-primary" onClick={save} disabled={saving}>
-            Save LAG
-          </button>
+          {/* Inside the device editor the footer's save flushes every row. */}
+          {!registerSaver && (
+            <button type="button" className="btn btn-small" onClick={save} disabled={saving}>
+              Save LAG
+            </button>
+          )}
         </div>
       </div>
       <div className="port-tagged">
@@ -440,7 +515,9 @@ function LagRow({ name, ports, subnets, reflections, onChanged, registerSaver }:
           Tagged VLANs{tagged.length ? ` (${tagged.length})` : ''}
         </button>
         {!showTags && (
-          <span className="tag-summary muted">{taggedNames.length ? taggedNames.join(', ') : 'none'}</span>
+          <span className="tag-summary muted">
+            {taggedNames.length ? taggedNames.join(', ') : 'none'}
+          </span>
         )}
         {showTags &&
           (taggable.length === 0 ? (
@@ -480,9 +557,11 @@ function PortsSection({ device, subnets, onChanged, registerSaver }: Props): Rea
   useEffect(() => {
     if (!device.isSwitch) return
     let cancelled = false
-    Promise.all([window.api.circuits.list(), window.api.devices.list()]).then(([circuits, devices]) => {
-      if (!cancelled) setReflections(computeReflections(device.name, circuits, devices))
-    })
+    Promise.all([window.api.circuits.list(), window.api.devices.list()]).then(
+      ([circuits, devices]) => {
+        if (!cancelled) setReflections(computeReflections(device.name, circuits, devices))
+      }
+    )
     return () => {
       cancelled = true
     }
@@ -503,7 +582,9 @@ function PortsSection({ device, subnets, onChanged, registerSaver }: Props): Rea
   return (
     <div className="ports-section">
       {device.isSwitch && (
-        <p className="muted">Switch ports are VLAN-only — set the untagged network and any tagged (trunk) VLANs.</p>
+        <p className="muted">
+          Switch ports are VLAN-only — set the untagged network and any tagged (trunk) VLANs.
+        </p>
       )}
       {device.ports.length === 0 && <p className="muted">No ports yet.</p>}
       {buildEntries(active, device.isSwitch).map((e) =>
@@ -530,7 +611,7 @@ function PortsSection({ device, subnets, onChanged, registerSaver }: Props): Rea
           />
         )
       )}
-      <button className="btn btn-small" onClick={addPort}>
+      <button type="button" className="btn btn-small" onClick={addPort}>
         + Add port
       </button>
 

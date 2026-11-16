@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Subnet, SubnetInput } from '../../../shared/types'
+import PageHeader from '../components/PageHeader'
 
 const EMPTY_FORM: SubnetInput = { name: '', cidr: '', vlan: null, gateway: null, notes: null }
 
@@ -12,6 +13,8 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<SubnetInput>(EMPTY_FORM)
+  // what the form held when it opened, so leaving it can ask before dropping edits
+  const [initial, setInitial] = useState<SubnetInput>(EMPTY_FORM)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -22,15 +25,39 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
     }
   }, [showForm])
 
+  /** True if the open form has no edits, or the user agrees to drop them. */
+  function canDiscard(): boolean {
+    if (!showForm || JSON.stringify(form) === JSON.stringify(initial)) return true
+    return window.confirm('Close without saving your changes?')
+  }
+
+  function closeForm(): void {
+    if (canDiscard()) setShowForm(false)
+  }
+
+  function startAdd(): void {
+    if (!canDiscard()) return
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+    setInitial(EMPTY_FORM)
+    setError(null)
+    setShowForm(true)
+  }
+
   function startEdit(subnet: Subnet): void {
-    setEditingId(subnet.id)
-    setForm({
+    if (subnet.id === editingId && showForm) return
+    if (!canDiscard()) return
+    const next: SubnetInput = {
       name: subnet.name,
       cidr: subnet.cidr,
       vlan: subnet.vlan,
       gateway: subnet.gateway,
       notes: subnet.notes
-    })
+    }
+    setEditingId(subnet.id)
+    setForm(next)
+    setInitial(next)
+    setError(null)
     setShowForm(true)
   }
 
@@ -64,15 +91,19 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h2>Subnets</h2>
-        <button className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Cancel' : '+ Add subnet'}
-        </button>
-      </div>
+      <PageHeader
+        title="Subnets"
+        count={subnets.length}
+        primary={{ label: '+ Add subnet', onClick: startAdd }}
+      />
 
       {showForm && (
-        <form className="panel form-grid" onSubmit={handleSubmit}>
+        <form
+          className="panel form-grid"
+          key={editingId ?? 'new'}
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => e.key === 'Escape' && closeForm()}
+        >
           {error && <div className="banner banner-error">{error}</div>}
           <label>
             Name
@@ -119,8 +150,7 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
             {editingId != null && (
               <button
                 type="button"
-                className="btn btn-danger"
-                style={{ marginRight: 'auto' }}
+                className="btn btn-danger push-left"
                 onClick={() => {
                   const s = subnets.find((x) => x.id === editingId)
                   if (s) handleDelete(s)
@@ -129,6 +159,9 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
                 Delete subnet
               </button>
             )}
+            <button type="button" className="btn" onClick={closeForm}>
+              Cancel
+            </button>
             <button type="submit" className="btn btn-primary">
               {editingId != null ? 'Save changes' : 'Create subnet'}
             </button>
@@ -141,7 +174,7 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
           <tr>
             <th>Name</th>
             <th>CIDR</th>
-            <th>VLAN</th>
+            <th className="num">VLAN</th>
             <th>Gateway</th>
             <th>Notes</th>
           </tr>
@@ -164,10 +197,8 @@ function SubnetsPage({ subnets, onChanged }: Props): React.JSX.Element {
               onKeyDown={(e) => e.key === 'Enter' && startEdit(s)}
             >
               <td>{s.name}</td>
-              <td>
-                <code>{s.cidr}</code>
-              </td>
-              <td className="mono">{s.vlan ?? '—'}</td>
+              <td className="mono">{s.cidr}</td>
+              <td className="num">{s.vlan ?? '—'}</td>
               <td className="mono">{s.gateway ?? '—'}</td>
               <td className="muted">{s.notes ?? '—'}</td>
             </tr>

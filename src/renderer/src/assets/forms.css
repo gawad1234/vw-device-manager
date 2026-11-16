@@ -1,0 +1,102 @@
+/* Forms agent: only what the shared CSS contract (.field, .form-grid, .btn…) doesn't cover. */
+
+/* ---- Repeated rows (ports, LAGs, host-config VLANs) ----------------------
+   One grid per row with a fixed column template per row type, so the columns
+   line up from row to row. Actions and checkboxes sit level with the inputs
+   (pushed down by one label line + the .field gap). */
+.port-grid {
+  display: grid;
+  gap: 8px 12px;
+  align-items: start;
+}
+
+.port-grid + .port-grid {
+  margin-top: 10px;
+}
+
+.port-grid .field > input,
+.port-grid .field > select {
+  width: 100%;
+  min-width: 0;
+}
+
+.port-grid > .port-actions,
+.port-grid > .port-check {
+  font-size: 12.5px;
+  padding-top: calc(1lh + 6px);
+}
+
+.port-grid > .port-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* keep each button's label on one line; the column is sized to fit them all */
+.port-grid > .port-actions > .btn {
+  white-space: nowrap;
+}
+
+/* an error too long for its column: full row width, directly under the inputs */
+.port-grid > .port-grid-error {
+  grid-column: 1 / -1;
+  margin-top: -2px;
+}
+
+.port-grid > .port-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: calc(1lh + 6px + 36px);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+/* device port: Jack · IP · Untagged VLAN · actions */
+.port-grid-device {
+  grid-template-columns: minmax(5rem, 0.8fr) 9.75rem minmax(8rem, 1.2fr) auto; /* IP fits 255.255.255.255 */
+}
+
+/* switch port: Jack · Untagged VLAN · LAG · actions */
+.port-grid-switch {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 0.7fr) 12rem;
+}
+
+/* LAG: Untagged VLAN (all members) · actions */
+.port-grid-lag {
+  grid-template-columns: minmax(0, 1fr) 11rem;
+}
+
+/* host-config VLAN: Name · VLAN ID · Native · DHCP · actions */
+.port-grid-vlan {
+  grid-template-columns: minmax(0, 1fr) 6.5rem 5rem 4.5rem 6rem;
+}
+
+/* host-config VLAN addressing: IP · Prefix · Gateway · DNS */
+.port-grid-vlan-ip {
+  grid-template-columns: minmax(0, 1.2fr) 5rem minmax(0, 1fr) minmax(0, 1.2fr);
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.port-row > .banner {
+  margin-bottom: 10px;
+}
+
+/* ---- Case fields: column heads stand in as small visible labels --------- */
+.case-field-head {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.case-field-head > span:first-child {
+  flex: 0 1 38%;
+}
+
+.case-field-head > span:last-child {
+  flex: 1 1 auto;
+}

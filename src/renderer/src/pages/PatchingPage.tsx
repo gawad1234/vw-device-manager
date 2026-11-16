@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Circuit } from '../../../shared/types'
 import PatchSheetModal from '../components/PatchSheetModal'
+import PageHeader from '../components/PageHeader'
 
 type GroupBy = 'none' | 'device' | 'rack' | 'signal'
 type StatusFilter = 'all' | 'unpatched' | 'patched' | 'untested'
@@ -97,7 +98,12 @@ function PatchingPage(): React.JSX.Element {
   }
 
   async function doClear(): Promise<void> {
-    if (!window.confirm('Remove all imported circuits and their patch status?')) return
+    if (
+      !window.confirm(
+        'Clear all patching? This removes every imported circuit and its patch and test status.'
+      )
+    )
+      return
     await window.api.circuits.clear()
     await refresh()
     setNote(null)
@@ -124,88 +130,114 @@ function PatchingPage(): React.JSX.Element {
       .map(([key, items]) => ({ key, items }))
   }, [filtered, groupBy])
 
+  const hasCircuits = circuits.length > 0
+
   return (
     <div className="page">
-      <div className="page-header">
-        <h2>Patching</h2>
-        <div className="page-header-actions">
-          {circuits.length > 0 && (
-            <button className="btn" onClick={doClear} disabled={busy}>
-              Clear
-            </button>
-          )}
-          {circuits.length > 0 && (
+      <PageHeader
+        title="Patching"
+        count={hasCircuits ? circuits.length : undefined}
+        description={
+          <>
+            Import a ConnectCAD <strong>Circuit Report</strong> (CSV) from Vectorworks, then check
+            off each connection as you <strong>patch</strong> and <strong>test</strong> it.
+            Re-importing updates the list from the drawing and keeps your checkmarks.
+          </>
+        }
+        overflow={
+          hasCircuits
+            ? [{ label: 'Clear all patching…', danger: true, disabled: busy, onClick: doClear }]
+            : undefined
+        }
+        secondary={
+          hasCircuits ? (
             <button className="btn" onClick={() => setSheets(true)}>
               Patch sheets…
             </button>
-          )}
-          <button className="btn btn-primary" onClick={doImport} disabled={busy}>
-            {busy ? 'Importing…' : circuits.length ? 'Re-import report…' : 'Import circuit report…'}
-          </button>
-        </div>
-      </div>
-
-      <p className="muted" style={{ marginBottom: 12, maxWidth: 760 }}>
-        Import a ConnectCAD <strong>Circuit Report</strong> (CSV) from Vectorworks, then check off
-        each connection as you <strong>patch</strong> and <strong>test</strong> it. Re-importing
-        updates the list from the drawing and keeps your checkmarks.
-      </p>
+          ) : undefined
+        }
+        primary={{
+          label: busy ? 'Importing…' : hasCircuits ? 'Re-import report…' : 'Import circuit report…',
+          onClick: doImport,
+          disabled: busy
+        }}
+        filters={
+          hasCircuits ? (
+            <>
+              <input
+                type="search"
+                className="search"
+                placeholder="Filter device / socket / cable #…"
+                aria-label="Filter circuits"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              <select
+                aria-label="Signal"
+                value={signal}
+                onChange={(e) => setSignal(e.target.value)}
+              >
+                <option value="">All signals</option>
+                {signals.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <select aria-label="Rack" value={rack} onChange={(e) => setRack(e.target.value)}>
+                <option value="">All racks</option>
+                {racks.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as StatusFilter)}
+              >
+                <option value="all">All</option>
+                <option value="unpatched">Not patched</option>
+                <option value="patched">Patched</option>
+                <option value="untested">Not tested</option>
+              </select>
+              <select
+                aria-label="Group by"
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as GroupBy)}
+              >
+                <option value="rack">Group by rack</option>
+                <option value="device">Group by device</option>
+                <option value="signal">Group by signal</option>
+                <option value="none">No grouping</option>
+              </select>
+            </>
+          ) : undefined
+        }
+      />
 
       {note && <div className="banner banner-info">{note}</div>}
 
-      {!loading && circuits.length === 0 ? (
-        <div className="empty-cell" style={{ padding: 24 }}>
-          No circuits yet. In Vectorworks, export an <em>All Layers Circuit Report</em> to CSV, then
-          <strong> Import circuit report…</strong>
+      {!loading && !hasCircuits ? (
+        <div className="empty-state">
+          <div className="empty-title">No circuits yet</div>
+          <p className="empty-body">
+            In Vectorworks, export an <em>All Layers Circuit Report</em> to CSV, then use{' '}
+            <strong>Import circuit report…</strong>
+          </p>
         </div>
       ) : (
         <>
           <div className="patch-stats">
             <span className="pill ok">
-              {fullyPatched}/{circuits.length} fully patched
+              ✓ {fullyPatched}/{circuits.length} fully patched
             </span>
-            {partlyPatched > 0 && <span className="pill warn">{partlyPatched} one end only</span>}
+            {partlyPatched > 0 && <span className="pill warn">◐ {partlyPatched} one end only</span>}
             <span className="pill">
               {testedCount}/{circuits.length} tested
             </span>
             <span className="muted">{filtered.length} shown</span>
-          </div>
-
-          <div className="patch-filters">
-            <input
-              type="text"
-              placeholder="Filter device / socket / cable #…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-            <select value={signal} onChange={(e) => setSignal(e.target.value)}>
-              <option value="">All signals</option>
-              {signals.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <select value={rack} onChange={(e) => setRack(e.target.value)}>
-              <option value="">All racks</option>
-              {racks.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-            <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)}>
-              <option value="all">All</option>
-              <option value="unpatched">Not patched</option>
-              <option value="patched">Patched</option>
-              <option value="untested">Not tested</option>
-            </select>
-            <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)}>
-              <option value="rack">Group by rack</option>
-              <option value="device">Group by device</option>
-              <option value="signal">Group by signal</option>
-              <option value="none">No grouping</option>
-            </select>
           </div>
 
           {groups.map((g) => (
@@ -215,7 +247,18 @@ function PatchingPage(): React.JSX.Element {
                   {g.key || '—'} <span className="muted">({g.items.length})</span>
                 </h3>
               )}
-              <table className="table patch-table">
+              <table className="table table-fixed patch-table">
+                <colgroup>
+                  <col style={{ width: 84 }} />
+                  <col style={{ width: 96 }} />
+                  <col style={{ width: 64 }} />
+                  <col />
+                  <col />
+                  <col style={{ width: 64 }} />
+                  <col style={{ width: 64 }} />
+                  <col style={{ width: 124 }} />
+                  <col style={{ width: '18%' }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Cable</th>
@@ -225,6 +268,7 @@ function PatchingPage(): React.JSX.Element {
                     <th>To</th>
                     <th className="chk">To&nbsp;✓</th>
                     <th className="chk">Tested</th>
+                    <th>Status</th>
                     <th>Notes</th>
                   </tr>
                 </thead>
@@ -241,6 +285,7 @@ function PatchingPage(): React.JSX.Element {
                             type="checkbox"
                             checked={c.srcPatched}
                             title="Source end patched"
+                            aria-label={`${c.srcName} end patched`}
                             onChange={(e) => patch(c, { srcPatched: e.target.checked })}
                           />
                         </td>
@@ -269,6 +314,7 @@ function PatchingPage(): React.JSX.Element {
                             type="checkbox"
                             checked={c.dstPatched}
                             title="Destination end patched"
+                            aria-label={`${c.dstName} end patched`}
                             onChange={(e) => patch(c, { dstPatched: e.target.checked })}
                           />
                         </td>
@@ -277,13 +323,24 @@ function PatchingPage(): React.JSX.Element {
                             type="checkbox"
                             checked={c.tested}
                             title="Tested end-to-end (marks both ends patched)"
+                            aria-label="Tested"
                             onChange={(e) => patch(c, { tested: e.target.checked })}
                           />
+                        </td>
+                        <td>
+                          {full ? (
+                            <span className="status-pill status-ok">✓ Patched</span>
+                          ) : partial ? (
+                            <span className="status-pill status-warn">◐ One end</span>
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
                         </td>
                         <td>
                           <input
                             className="patch-note"
                             type="text"
+                            aria-label="Notes"
                             defaultValue={c.notes ?? ''}
                             placeholder="—"
                             onBlur={(e) => {

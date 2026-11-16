@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Fixture, FixtureInput, FixtureType } from '../../../shared/types'
-import Modal from './Modal'
+import Modal, { ModalDismiss, type ModalControl } from './Modal'
+import Field from './Field'
 
 interface Props {
   fixture: Fixture
@@ -31,26 +32,58 @@ const num = (v: string): number | null => (v.trim() && Number(v) > 0 ? Math.floo
 /** Edit one fixture. Changes go to Vectorworks through the exchange file when sync is on. */
 function FixtureModal({ fixture, types, onClose, onSaved }: Props): React.JSX.Element {
   const [d, setD] = useState<Fixture>({ ...fixture, userFields: [...fixture.userFields] })
+  /** save failed (not about one field) */
   const [error, setError] = useState('')
+  const [patchError, setPatchError] = useState<{
+    field: 'universe' | 'address'
+    message: string
+  } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const modal = useRef<ModalControl>(null)
   const modes = types.find((t) => t.name === d.instType)?.modes ?? []
   const fromVw = !!fixture.vw?.Fixture_Mode
   const set = (k: keyof FixtureInput, v: string): void => setD({ ...d, [k]: v })
 
   async function save(e?: React.FormEvent): Promise<void> {
     e?.preventDefault()
-    if ((d.universe == null) !== (d.address == null))
-      return setError('Set both universe and address, or neither.')
-    if (d.address != null && d.address > 512) return setError('Addresses run 1–512.')
-    // Vectorworks may have changed this fixture while the window was open: start
-    // from the current row and lay on only what was edited here.
-    const current = (await window.api.fixtures.list()).find((f) => f.id === d.id) ?? fixture
-    const edited = Object.fromEntries(
-      Object.entries(d).filter(
-        ([k, v]) => JSON.stringify(v) !== JSON.stringify(fixture[k as keyof Fixture])
+    if (saving) return
+    setError('')
+    if (d.universe != null && d.address == null)
+      return setPatchError({
+        field: 'address',
+        message: `Universe ${d.universe} needs an address (1–512) — or clear the universe.`
+      })
+    if (d.address != null && d.universe == null)
+      return setPatchError({
+        field: 'universe',
+        message: `Address ${d.address} needs a universe — or clear the address.`
+      })
+    if (d.address != null && d.address > 512)
+      return setPatchError({
+        field: 'address',
+        message: `${d.address} is past the end of the universe. Addresses run 1–512.`
+      })
+    setPatchError(null)
+    setSaving(true)
+    try {
+      // Vectorworks may have changed this fixture while the window was open: start
+      // from the current row and lay on only what was edited here.
+      const current = (await window.api.fixtures.list()).find((f) => f.id === d.id) ?? fixture
+      const edited = Object.fromEntries(
+        Object.entries(d).filter(
+          ([k, v]) => JSON.stringify(v) !== JSON.stringify(fixture[k as keyof Fixture])
+        )
       )
-    )
-    const { id, ...input } = { ...current, ...edited }
-    await window.api.fixtures.save(id, input)
+      const { id, ...input } = { ...current, ...edited }
+      await window.api.fixtures.save(id, input)
+    } catch (err) {
+      // stay open so nothing typed is lost
+      setError(`Couldn’t save the fixture: ${(err as Error).message}`)
+      return
+    } finally {
+      setSaving(false)
+    }
+    modal.current?.markClean()
     onSaved()
     onClose()
   }
@@ -60,14 +93,18 @@ function FixtureModal({ fixture, types, onClose, onSaved }: Props): React.JSX.El
       title={`${d.position || 'Fixture'}${d.unit ? ` #${d.unit}` : ''}`}
       onClose={onClose}
       wide
+      controlRef={modal}
       footer={
         <>
           <span className="footer-spacer" />
-          <button className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn btn-primary" onClick={() => save()}>
-            Save
+          <ModalDismiss />
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={saving}
+            onClick={() => save()}
+          >
+            {saving ? 'Saving…' : 'Save fixture'}
           </button>
         </>
       }
@@ -94,25 +131,35 @@ function FixtureModal({ fixture, types, onClose, onSaved }: Props): React.JSX.El
             ))}
           </datalist>
         </label>
-        <label>
-          Universe / address
-          <span style={{ display: 'flex', gap: 6 }}>
-            <input
-              className="mono"
-              inputMode="numeric"
-              placeholder="U"
-              value={d.universe ?? ''}
-              onChange={(e) => setD({ ...d, universe: num(e.target.value) })}
-            />
-            <input
-              className="mono"
-              inputMode="numeric"
-              placeholder="Address"
-              value={d.address ?? ''}
-              onChange={(e) => setD({ ...d, address: num(e.target.value) })}
-            />
-          </span>
-        </label>
+        <Field
+          label="Universe"
+          error={patchError?.field === 'universe' ? patchError.message : null}
+        >
+          <input
+            className="mono"
+            inputMode="numeric"
+            value={d.universe ?? ''}
+            onChange={(e) => {
+              setD({ ...d, universe: num(e.target.value) })
+              setPatchError(null)
+            }}
+          />
+        </Field>
+        <Field
+          label="Address"
+          hint="1–512; set with a universe, or leave both empty"
+          error={patchError?.field === 'address' ? patchError.message : null}
+        >
+          <input
+            className="mono"
+            inputMode="numeric"
+            value={d.address ?? ''}
+            onChange={(e) => {
+              setD({ ...d, address: num(e.target.value) })
+              setPatchError(null)
+            }}
+          />
+        </Field>
         {d.userFields.map((v, i) => (
           <label key={i}>
             User field {i + 1}

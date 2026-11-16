@@ -1,0 +1,169 @@
+/* Pages: page header, filter bar, overflow positioning, table helpers.
+   Owned by the PAGES agent. Colours come from the role tokens in main.css. */
+
+/* ---- Page header ---------------------------------------------------- */
+.page-head {
+  margin-bottom: 20px;
+}
+.page-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.page-head-text {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.page-head-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 32px;
+  margin: 0;
+}
+.page-count {
+  display: inline-block;
+  padding: 1px 9px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--surface-2, #1c232c);
+  color: var(--text-2, var(--ev-c-text-2));
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.page-head-desc {
+  margin: 4px 0 0;
+  color: var(--text-2, var(--ev-c-text-2));
+  font-size: 13.5px;
+  max-width: 760px;
+}
+.page-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---- Filter bar (search + selects + view switch) -------------------- */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.filter-bar .search,
+.filter-bar input[type='search'],
+.filter-bar input[type='text'] {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 360px;
+}
+.filter-bar .filter-end {
+  margin-left: auto;
+}
+
+/* ---- Overflow (⋯) menu: positioning only; look comes from main.css --- */
+.overflow-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.overflow-btn {
+  min-width: 34px;
+  padding-left: 9px;
+  padding-right: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.overflow-wrap > .overflow-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+}
+.overflow-wrap .overflow-item {
+  text-align: left;
+}
+
+/* ---- Tables --------------------------------------------------------- */
+/* grouped tables share a <colgroup> so columns line up between groups */
+.table.table-fixed {
+  table-layout: fixed;
+  width: 100%;
+}
+.table.table-fixed td {
+  overflow-wrap: anywhere;
+}
+.table th.col-check,
+.table td.col-check {
+  width: 36px;
+}
+.table th.col-copies {
+  width: 90px;
+}
+.table tr.cat-header > td:focus-visible,
+.table tr.cat-header:focus-visible > td {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Patching */
+.patch-group .patch-table.table-fixed {
+  min-width: 820px;
+}
+.patch-stats {
+  flex-wrap: wrap;
+}
+
+/* IP sheet: warnings mark the VLAN select too, in warn (not danger) */
+.ipsheet tr.ipsheet-warning td.ipsheet-cell select {
+  border-color: var(--warn-ink, #ffcf8a);
+}
+.ipsheet tr.ipsheet-error td.ipsheet-cell select {
+  border-color: var(--danger);
+}
+.ipsheet tr.ipsheet-warning td.ipsheet-msg {
+  color: var(--warn-ink, #ffcf8a);
+}
+.ipsheet tr.ipsheet-error td.ipsheet-msg {
+  color: var(--error-ink, #ff9a91);
+}
+.ipsheet td.ipsheet-msg .status-pill {
+  margin-right: 6px;
+}
+.ipsheet-bar .status-pill {
+  font-size: 12px;
+}
+
+/* Fixtures */
+.lx-sync .toggle-field {
+  margin: 0;
+}
+.lx-group .table.table-fixed td.num .lx-warn {
+  margin: 0 6px 0 0;
+}
+
+/* small layout helpers that replace inline styles */
+.page-prose {
+  max-width: 620px;
+}
+.section-gap {
+  margin-top: 26px;
+}
+.after-table {
+  margin-top: 14px;
+}
+.push-left {
+  margin-right: auto;
+}
+.page .form-actions {
+  gap: 8px;
+}

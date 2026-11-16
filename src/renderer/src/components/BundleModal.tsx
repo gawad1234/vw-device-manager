@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Bundle, BundleInput, CableType, Device, RowSaver } from '../../../shared/types'
-import Modal from './Modal'
+import Modal, { ModalDismiss, type ModalControl } from './Modal'
+import Field from './Field'
 import BundleCables from './BundleCables'
 import ExportMenu from './ExportMenu'
 
@@ -54,7 +55,11 @@ function BundleModal({
   onCreated
 }: Props): React.JSX.Element {
   const [form, setForm] = useState<BundleInput>(bundle ? toForm(bundle) : EMPTY_FORM)
+  /** save failed / a cable didn't save (not about one field) */
   const [error, setError] = useState<string | null>(null)
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const modal = useRef<ModalControl>(null)
 
   // Cable rows register their save so "Save changes" flushes them too.
   const saversRef = useRef(new Set<RowSaver>())
@@ -68,21 +73,54 @@ function BundleModal({
   useEffect(() => {
     setForm(bundle ? toForm(bundle) : EMPTY_FORM)
     setError(null)
+    setNameError(null)
   }, [bundle?.id])
 
   async function save(e: React.FormEvent): Promise<void> {
     e.preventDefault()
+    if (saving) return
+    setError(null)
     if (!form.name.trim()) {
-      setError('Bundle name is required.')
+      setNameError('Give the bundle a name, e.g. Stage → Rack A conduit.')
       return
     }
-    const result = bundle
-      ? await window.api.bundles.update(bundle.id, form)
-      : await window.api.bundles.create(form)
-    // Flush the cables sub-section so "Save changes" saves everything.
-    for (const saver of saversRef.current) await saver()
-    setError(null)
+    setNameError(null)
+    setSaving(true)
+    let result: Bundle
+    try {
+      result = bundle
+        ? await window.api.bundles.update(bundle.id, form)
+        : await window.api.bundles.create(form)
+    } catch (err) {
+      setError(`Couldn’t save the bundle: ${(err as Error).message}`)
+      setSaving(false)
+      return
+    }
+    modal.current?.markClean('') // the bundle's own fields are saved
+    // Flush the cables sub-section so "Save changes" saves everything. Every row
+    // is tried even if one fails; a failing row shows its own error inline.
+    const failed: string[] = []
+    for (const saver of saversRef.current) {
+      let r: { ok: boolean; error?: string }
+      try {
+        r = await saver()
+      } catch (err) {
+        r = { ok: false, error: (err as Error).message }
+      }
+      if (!r.ok) failed.push(r.error ?? 'unknown error')
+    }
+    setSaving(false)
     onChanged()
+    if (failed.length) {
+      // stay open so the failing cable can be fixed
+      setError(
+        failed.length === 1
+          ? `The bundle saved, but a cable didn’t — ${failed[0]} Fix it below, then save again.`
+          : `The bundle saved, but ${failed.length} cables didn’t. Fix the ones marked below, then save again.`
+      )
+      return
+    }
+    modal.current?.markClean()
     // New bundle: reopen in edit mode to add cables. Existing: close on save.
     if (!bundle) onCreated(result.id)
     else onClose()
@@ -115,45 +153,54 @@ function BundleModal({
     <>
       {bundle && (
         <>
-          <button className="btn btn-danger" onClick={handleDelete}>
-            Delete
+          <button type="button" className="btn btn-danger" onClick={handleDelete}>
+            Delete…
           </button>
-          <button className="btn" onClick={handleDuplicate}>
+        </>
+      )}
+      <span className="footer-spacer" />
+      {bundle && (
+        <>
+          <button type="button" className="btn" onClick={handleDuplicate}>
             Duplicate
           </button>
           <ExportMenu scope="bundle" bundleId={bundle.id} dropUp />
         </>
       )}
-      <span className="footer-spacer" />
-      <button className="btn" onClick={onClose}>
-        Close
-      </button>
-      <button className="btn btn-primary" type="submit" form="bundle-form">
-        {bundle ? 'Save changes' : 'Create bundle'}
+      <ModalDismiss />
+      <button className="btn btn-primary" type="submit" form="bundle-form" disabled={saving}>
+        {saving ? 'Saving…' : bundle ? 'Save bundle' : 'Create bundle'}
       </button>
     </>
   )
 
   return (
-    <Modal title={title} onClose={onClose} footer={footer}>
+    <Modal title={title} onClose={onClose} footer={footer} controlRef={modal}>
       <form id="bundle-form" className="form-grid" onSubmit={save}>
-        {error && <div className="banner banner-error">{error}</div>}
-        <label>
-          Name
+        {error && <div className="banner banner-error span-2">{error}</div>}
+        <Field label="Name" error={nameError}>
           <input
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            onChange={(e) => {
+              setForm({ ...form, name: e.target.value })
+              if (nameError) setNameError(null)
+            }}
             placeholder="Stage → Rack A conduit"
             autoFocus
           />
-        </label>
+        </Field>
         <label>
           Color
           <div className="swatch-picker">
             <button
               type="button"
               className={`swatch-option none ${form.color == null ? 'selected' : ''}`}
-              onClick={() => setForm({ ...form, color: null })}
+              onClick={() => {
+                setForm({ ...form, color: null })
+                modal.current?.markDirty()
+              }}
+              aria-pressed={form.color == null}
+              aria-label="No color"
               title="No color"
             />
             {BUNDLE_COLORS.map((c) => (
@@ -162,7 +209,12 @@ function BundleModal({
                 key={c}
                 className={`swatch-option ${form.color === c ? 'selected' : ''}`}
                 style={{ background: c }}
-                onClick={() => setForm({ ...form, color: c })}
+                onClick={() => {
+                  setForm({ ...form, color: c })
+                  modal.current?.markDirty()
+                }}
+                aria-pressed={form.color === c}
+                aria-label={`Color ${c}`}
                 title={c}
               />
             ))}

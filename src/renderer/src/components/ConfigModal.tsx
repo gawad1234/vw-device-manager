@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { HostConfig, HostConfigInput, Subnet, VlanEntry } from '../../../shared/types'
-import Modal from './Modal'
+import { isValidIpv4 } from '../../../shared/ip-utils'
+import Modal, { ModalDismiss, type ModalControl } from './Modal'
+import Field from './Field'
 
 function prefixFromCidr(cidr: string | null): number {
   const m = /\/(\d{1,2})\s*$/.exec(cidr ?? '')
@@ -32,6 +34,39 @@ const BLANK: VlanEntry = {
   dnsServers: []
 }
 
+type VlanErrors = Partial<
+  Record<'vlanId' | 'ipAddress' | 'prefixLength' | 'gateway' | 'dns', string>
+>
+
+/** Per-row problems. `forScript` also needs an address on every non-DHCP VLAN
+ *  (a saved draft may leave it blank; a generated script can't). */
+function checkVlans(vlans: VlanEntry[], forScript: boolean): VlanErrors[] {
+  return vlans.map((v, i) => {
+    const e: VlanErrors = {}
+    const label = v.name.trim() || `VLAN ${v.vlanId}`
+    if (!Number.isInteger(v.vlanId) || v.vlanId < 1 || v.vlanId > 4094) {
+      e.vlanId = 'VLAN IDs run 1–4094.'
+    } else {
+      const other = vlans.findIndex((o, j) => j !== i && o.vlanId === v.vlanId)
+      if (other !== -1 && other < i)
+        e.vlanId = `VLAN ${v.vlanId} is already used by "${vlans[other].name.trim() || `row ${other + 1}`}". Pick another ID.`
+    }
+    if (v.dhcp) return e
+    const ip = (v.ipAddress ?? '').trim()
+    if (ip && !isValidIpv4(ip))
+      e.ipAddress = `"${ip}" isn’t an IPv4 address. Use the form 10.134.10.61.`
+    else if (!ip && forScript) e.ipAddress = `Give ${label} an IP address, or tick DHCP.`
+    if (!Number.isInteger(v.prefixLength) || v.prefixLength < 0 || v.prefixLength > 32)
+      e.prefixLength = 'Prefix runs 0–32 (24 = 255.255.255.0).'
+    const gw = (v.gateway ?? '').trim()
+    if (gw && !isValidIpv4(gw))
+      e.gateway = `"${gw}" isn’t an IPv4 address. Fix it or leave it empty.`
+    const badDns = (v.dnsServers ?? []).find((d) => !isValidIpv4(d))
+    if (badDns) e.dns = `"${badDns}" isn’t an IPv4 address. List servers like 10.0.0.1, 1.1.1.1.`
+    return e
+  })
+}
+
 interface Props {
   config: HostConfig | null
   subnets: Subnet[]
@@ -44,14 +79,22 @@ function ConfigModal({ config, subnets, onClose, onChanged, onCreated }: Props):
   const [name, setName] = useState(config?.name ?? '')
   const [switchName, setSwitchName] = useState(config?.switchName ?? 'VLAN-Trunk')
   const [vlans, setVlans] = useState<VlanEntry[]>(config?.vlans ?? [])
+  /** not about one field (save failed, no VLANs to export) */
   const [error, setError] = useState<string | null>(null)
+  const [nameError, setNameError] = useState<string | null>(null)
+  /** after a save/script attempt, VLAN problems show live until fixed */
+  const [check, setCheck] = useState<null | 'save' | 'script'>(null)
   const [addSubnetId, setAddSubnetId] = useState('')
+  const modal = useRef<ModalControl>(null)
+  const vlanErrors = check ? checkVlans(vlans, check === 'script') : []
 
   useEffect(() => {
     setName(config?.name ?? '')
     setSwitchName(config?.switchName ?? 'VLAN-Trunk')
     setVlans(config?.vlans ?? [])
     setError(null)
+    setNameError(null)
+    setCheck(null)
   }, [config?.id])
 
   function patchVlan(i: number, patch: Partial<VlanEntry>): void {
@@ -71,13 +114,18 @@ function ConfigModal({ config, subnets, onClose, onChanged, onCreated }: Props):
 
   function removeVlan(i: number): void {
     setVlans((prev) => prev.filter((_, idx) => idx !== i))
+    modal.current?.markDirty()
   }
   function addBlank(): void {
     setVlans((prev) => [...prev, { ...BLANK }])
+    modal.current?.markDirty()
   }
   function addFromSubnet(): void {
     const s = subnets.find((x) => x.id === Number(addSubnetId))
-    if (s) setVlans((prev) => [...prev, entryFromSubnet(s)])
+    if (s) {
+      setVlans((prev) => [...prev, entryFromSubnet(s)])
+      modal.current?.markDirty()
+    }
     setAddSubnetId('')
   }
 
@@ -85,15 +133,31 @@ function ConfigModal({ config, subnets, onClose, onChanged, onCreated }: Props):
     return { name: name.trim(), switchName: switchName.trim() || 'VLAN-Trunk', vlans }
   }
 
-  async function persist(): Promise<HostConfig | null> {
+  /** Validate, then save. `forScript` = the save is for Generate / Export. */
+  async function persist(forScript = false): Promise<HostConfig | null> {
+    setError(null)
+    setCheck(forScript ? 'script' : 'save')
+    let ok = true
     if (!name.trim()) {
-      setError('Config name is required.')
+      setNameError('Give the config a name, e.g. MGR61 — it becomes the script filename.')
+      ok = false
+    } else setNameError(null)
+    if (forScript && vlans.length === 0) {
+      setError('Add at least one VLAN before generating or exporting.')
+      ok = false
+    }
+    if (checkVlans(vlans, forScript).some((e) => Object.keys(e).length > 0)) ok = false
+    if (!ok) return null
+    try {
+      const saved = config
+        ? await window.api.configs.update(config.id, currentInput())
+        : await window.api.configs.create(currentInput())
+      modal.current?.markClean()
+      return saved
+    } catch (err) {
+      setError(`Couldn’t save the config: ${(err as Error).message}`)
       return null
     }
-    setError(null)
-    return config
-      ? window.api.configs.update(config.id, currentInput())
-      : window.api.configs.create(currentInput())
   }
 
   async function save(e: React.FormEvent): Promise<void> {
@@ -106,19 +170,27 @@ function ConfigModal({ config, subnets, onClose, onChanged, onCreated }: Props):
   }
 
   async function generate(): Promise<void> {
-    const saved = await persist()
+    const saved = await persist(true)
     if (!saved) return
     onChanged()
     if (!config) onCreated(saved.id)
-    await window.api.configs.generate(saved.id)
+    try {
+      await window.api.configs.generate(saved.id)
+    } catch (err) {
+      setError(`Saved, but the script couldn’t be written: ${(err as Error).message}`)
+    }
   }
 
   async function exportJson(): Promise<void> {
-    const saved = await persist()
+    const saved = await persist(true)
     if (!saved) return
     onChanged()
     if (!config) onCreated(saved.id)
-    await window.api.configs.exportJson(saved.id)
+    try {
+      await window.api.configs.exportJson(saved.id)
+    } catch (err) {
+      setError(`Saved, but the JSON couldn’t be written: ${(err as Error).message}`)
+    }
   }
 
   async function handleDelete(): Promise<void> {
@@ -132,20 +204,16 @@ function ConfigModal({ config, subnets, onClose, onChanged, onCreated }: Props):
   const footer = (
     <>
       {config && (
-        <button className="btn btn-danger" onClick={handleDelete}>
-          Delete
+        <button type="button" className="btn btn-danger" onClick={handleDelete}>
+          Delete…
         </button>
       )}
       <span className="footer-spacer" />
-      <button className="btn" type="button" onClick={onClose}>
-        Close
-      </button>
       <button
         className="btn"
         type="button"
         onClick={exportJson}
-        disabled={!name.trim() || vlans.length === 0}
-        title="Export the VLAN list as JSON for the host VLAN Manager tool"
+        title="Save, then export the VLAN list as JSON for the host VLAN Manager tool"
       >
         Export JSON…
       </button>
@@ -153,30 +221,37 @@ function ConfigModal({ config, subnets, onClose, onChanged, onCreated }: Props):
         className="btn"
         type="button"
         onClick={generate}
-        disabled={!name.trim() || vlans.length === 0}
+        title="Save, then write the PowerShell script"
       >
         Generate script…
       </button>
+      <ModalDismiss />
       <button className="btn btn-primary" type="submit" form="config-form">
-        {config ? 'Save changes' : 'Create config'}
+        {config ? 'Save config' : 'Create config'}
       </button>
     </>
   )
 
   return (
-    <Modal title={config ? config.name : 'New config'} onClose={onClose} footer={footer}>
+    <Modal
+      title={config ? config.name : 'New config'}
+      onClose={onClose}
+      footer={footer}
+      controlRef={modal}
+    >
       <form id="config-form" className="form-grid" onSubmit={save}>
-        {error && <div className="banner banner-error">{error}</div>}
-        <label>
-          Config name
+        {error && <div className="banner banner-error span-2">{error}</div>}
+        <Field label="Config name" hint="Used as the script filename." error={nameError}>
           <input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value)
+              if (nameError) setNameError(null)
+            }}
             placeholder="e.g. MGR61"
             autoFocus
           />
-          <small className="muted">Used as the script filename.</small>
-        </label>
+        </Field>
         <label>
           Hyper-V switch name
           <input
@@ -196,97 +271,97 @@ function ConfigModal({ config, subnets, onClose, onChanged, onCreated }: Props):
 
         {vlans.length === 0 && <p className="muted">No VLANs yet — add one below.</p>}
 
-        {vlans.map((v, i) => (
-          <div className="port-row" key={i}>
-            <div className="port-fields">
-              <label>
-                Name
-                <input
-                  value={v.name}
-                  onChange={(e) => patchVlan(i, { name: e.target.value })}
-                  placeholder="VLAN 10 - Device Net"
-                />
-              </label>
-              <label>
-                VLAN ID
-                <input
-                  type="number"
-                  min={1}
-                  max={4094}
-                  value={v.vlanId}
-                  onChange={(e) => patchVlan(i, { vlanId: Number(e.target.value) })}
-                  style={{ minWidth: 80 }}
-                />
-              </label>
-              <label className="chk">
-                <input type="checkbox" checked={!v.tagged} onChange={() => toggleNative(i)} />
-                Native
-              </label>
-              <label className="chk">
-                <input
-                  type="checkbox"
-                  checked={v.dhcp}
-                  onChange={(e) => patchVlan(i, { dhcp: e.target.checked })}
-                />
-                DHCP
-              </label>
-              <div className="port-actions">
-                <button
-                  type="button"
-                  className="btn btn-small btn-danger"
-                  onClick={() => removeVlan(i)}
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-            {!v.dhcp && (
-              <div className="endpoint-row">
-                <label className="endpoint-field" style={{ flex: '1 1 160px' }}>
-                  IP address
+        {vlans.map((v, i) => {
+          const err = vlanErrors[i] ?? {}
+          return (
+            <div className="port-row" key={i}>
+              <div className="port-grid port-grid-vlan">
+                <Field label="Name">
                   <input
-                    value={v.ipAddress ?? ''}
-                    onChange={(e) => patchVlan(i, { ipAddress: e.target.value })}
-                    placeholder="10.134.10.61"
+                    value={v.name}
+                    onChange={(e) => patchVlan(i, { name: e.target.value })}
+                    placeholder="VLAN 10 - Device Net"
                   />
-                </label>
-                <label className="endpoint-field" style={{ flex: '0 1 90px' }}>
-                  Prefix
+                </Field>
+                <Field label="VLAN ID" error={err.vlanId}>
                   <input
                     type="number"
-                    min={0}
-                    max={32}
-                    value={v.prefixLength}
-                    onChange={(e) => patchVlan(i, { prefixLength: Number(e.target.value) })}
+                    className="mono"
+                    min={1}
+                    max={4094}
+                    value={v.vlanId}
+                    onChange={(e) => patchVlan(i, { vlanId: Number(e.target.value) })}
                   />
+                </Field>
+                <label className="port-check">
+                  <input type="checkbox" checked={!v.tagged} onChange={() => toggleNative(i)} />
+                  Native
                 </label>
-                <label className="endpoint-field" style={{ flex: '1 1 150px' }}>
-                  Gateway
+                <label className="port-check">
                   <input
-                    value={v.gateway ?? ''}
-                    onChange={(e) => patchVlan(i, { gateway: e.target.value })}
-                    placeholder="(optional)"
+                    type="checkbox"
+                    checked={v.dhcp}
+                    onChange={(e) => patchVlan(i, { dhcp: e.target.checked })}
                   />
+                  DHCP
                 </label>
-                <label className="endpoint-field" style={{ flex: '1 1 170px' }}>
-                  DNS (comma-sep)
-                  <input
-                    value={(v.dnsServers ?? []).join(', ')}
-                    onChange={(e) =>
-                      patchVlan(i, {
-                        dnsServers: e.target.value
-                          .split(',')
-                          .map((s) => s.trim())
-                          .filter(Boolean)
-                      })
-                    }
-                    placeholder="(optional)"
-                  />
-                </label>
+                <div className="port-actions">
+                  <button
+                    type="button"
+                    className="btn btn-small btn-danger"
+                    aria-label={`Remove ${v.name.trim() || `VLAN ${v.vlanId}`}`}
+                    onClick={() => removeVlan(i)}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
-            )}
-          </div>
-        ))}
+              {!v.dhcp && (
+                <div className="port-grid port-grid-vlan-ip">
+                  <Field label="IP" error={err.ipAddress}>
+                    <input
+                      className="mono"
+                      value={v.ipAddress ?? ''}
+                      onChange={(e) => patchVlan(i, { ipAddress: e.target.value })}
+                      placeholder="10.134.10.61"
+                    />
+                  </Field>
+                  <Field label="Prefix" error={err.prefixLength}>
+                    <input
+                      type="number"
+                      className="mono"
+                      min={0}
+                      max={32}
+                      value={v.prefixLength}
+                      onChange={(e) => patchVlan(i, { prefixLength: Number(e.target.value) })}
+                    />
+                  </Field>
+                  <Field label="Gateway" hint="Optional" error={err.gateway}>
+                    <input
+                      className="mono"
+                      value={v.gateway ?? ''}
+                      onChange={(e) => patchVlan(i, { gateway: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="DNS" hint="Optional; comma-separated" error={err.dns}>
+                    <input
+                      className="mono"
+                      value={(v.dnsServers ?? []).join(', ')}
+                      onChange={(e) =>
+                        patchVlan(i, {
+                          dnsServers: e.target.value
+                            .split(',')
+                            .map((s) => s.trim())
+                            .filter(Boolean)
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
+          )
+        })}
 
         <div className="signal-add" style={{ marginTop: 14 }}>
           <button type="button" className="btn btn-small" onClick={addBlank}>

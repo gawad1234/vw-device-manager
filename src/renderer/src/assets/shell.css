@@ -1,0 +1,379 @@
+/* App shell: sidebar (mode switch, nav, server/update cards, project footer).
+   Overrides the .sidebar / .side-* rules in main.css. Loaded after main.css. */
+
+.sidebar {
+  width: 240px;
+  padding: 16px;
+  gap: 0;
+  background: var(--surface-0, var(--ev-c-black));
+  /* the project menu opens past the sidebar's edge, so only the nav list scrolls */
+  overflow: visible;
+  position: relative;
+  z-index: 20;
+  transition: width 0.15s ease;
+}
+
+.sidebar.is-collapsed {
+  width: 80px;
+}
+
+/* App title + collapse. This row is the window's drag handle (the header is gone). */
+.side-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  margin-bottom: 14px;
+  -webkit-app-region: drag;
+}
+
+.sidebar.is-collapsed .side-brand {
+  justify-content: center;
+}
+
+.side-brand h1 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-1, var(--ev-c-text-1));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.side-collapse,
+.side-settings {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-control, 7px);
+  background: transparent;
+  color: var(--text-2, var(--ev-c-text-2));
+  cursor: pointer;
+}
+
+.side-collapse:hover,
+.side-settings:hover {
+  background: var(--hover);
+  color: var(--text-1, var(--ev-c-text-1));
+}
+
+.side-settings.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* ---- Mode switch (segmented) ---- */
+
+.side-modes {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 16px;
+  background: var(--surface-2, var(--ev-c-black-mute));
+  border: 1px solid var(--line-soft, var(--line));
+  border-radius: var(--radius-control, 7px);
+}
+
+.side-modes button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--radius-chip, 5px);
+  background: transparent;
+  color: var(--text-2, var(--ev-c-text-2));
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.side-modes button:hover {
+  color: var(--text-1, var(--ev-c-text-1));
+}
+
+.side-modes button.is-on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sidebar.is-collapsed .side-modes {
+  flex-direction: column;
+}
+
+.side-mode-badge {
+  font-size: 9px;
+  line-height: 1;
+  color: var(--ok-ink, #7fe0a1);
+}
+
+/* ---- Nav ---- */
+
+.side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* room for focus rings */
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.side-group {
+  gap: 4px;
+}
+
+.side-group + .side-group {
+  margin-top: 12px;
+}
+
+.side-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2, var(--ev-c-text-2));
+  padding: 0 10px 2px;
+  user-select: none;
+}
+
+.side-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 2px 8px 4px;
+}
+
+.side-group:first-child .side-divider {
+  display: none;
+}
+
+.side-item {
+  justify-content: flex-start;
+  gap: 10px;
+  height: var(--row-h, 36px);
+  padding: 0 10px;
+  font-size: 13.5px;
+  border-radius: var(--radius-control, 7px);
+  flex: none;
+}
+
+.side-item .icon {
+  flex: none;
+}
+
+.side-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-count {
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2, var(--ev-c-text-2));
+}
+
+.side-item.active .side-count {
+  color: var(--accent);
+}
+
+.sidebar.is-collapsed .side-item {
+  justify-content: center;
+  padding: 0;
+}
+
+/* ---- Bottom: cards + footer ---- */
+
+.side-bottom {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.side-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-1, var(--ev-c-black-soft));
+  border: 1px solid var(--line-soft, var(--line));
+  border-radius: var(--radius-card, 10px);
+  font-size: 12.5px;
+}
+
+.side-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.side-card-main:hover .side-card-title {
+  color: var(--text-1, var(--ev-c-text-1));
+  text-decoration: underline;
+}
+
+.side-card-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.side-card-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-1, var(--ev-c-text-1));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.side-card:not(.is-live) .side-card-main .side-card-title {
+  color: var(--text-2, var(--ev-c-text-2));
+}
+
+.side-card-sub {
+  font-size: 12px;
+  color: var(--text-2, var(--ev-c-text-2));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.side-card-err {
+  color: var(--error-ink, #ff9a91);
+}
+
+.side-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-2, var(--ev-c-text-2));
+}
+
+.side-dot.on {
+  border-color: var(--ok-ink, #7fe0a1);
+  background: var(--ok-ink, #7fe0a1);
+}
+
+.side-card-icon {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.sidebar.is-collapsed .side-card {
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.sidebar.is-collapsed .side-card-main {
+  flex: none;
+  justify-content: center;
+}
+
+.side-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 0;
+}
+
+.side-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar.is-collapsed .side-footer {
+  flex-direction: column;
+}
+
+.side-footer .project-menu {
+  flex: 1;
+  min-width: 0;
+}
+
+.side-footer .project-btn {
+  width: 100%;
+  height: 32px;
+  justify-content: flex-start;
+  background: transparent;
+  border-color: var(--line-soft, var(--line));
+}
+
+.side-footer .project-btn:hover {
+  background: var(--hover);
+}
+
+.side-footer .project-icon {
+  display: inline-flex;
+  color: var(--text-2, var(--ev-c-text-2));
+}
+
+.side-footer .project-name {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  text-align: left;
+}
+
+.sidebar.is-collapsed .side-footer .project-menu {
+  flex: none;
+  width: 32px;
+}
+
+.sidebar.is-collapsed .side-footer .project-btn {
+  justify-content: center;
+  padding: 0;
+}
+
+.project-dropdown.drop-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+/* ---- Content: "Switched to Prep to show Paperwork." ---- */
+
+.mode-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 1080px;
+  margin: -12px auto 16px;
+  padding: 6px 8px 6px 12px;
+  font-size: 13px;
+  color: var(--text-2, var(--ev-c-text-2));
+  background: var(--surface-1, var(--ev-c-black-soft));
+  border: 1px solid var(--line-soft, var(--line));
+  border-radius: var(--radius-control, 7px);
+}

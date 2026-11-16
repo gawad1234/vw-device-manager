@@ -3,6 +3,7 @@ import type { Device, Subnet } from '../../../shared/types'
 import DeviceModal from '../components/DeviceModal'
 import ExportMenu, { type ExportSection } from '../components/ExportMenu'
 import IpSheet from '../components/IpSheet'
+import PageHeader from '../components/PageHeader'
 import { mainRoute } from '../../../shared/ip-utils'
 
 const EXPORT_SECTIONS: ExportSection[] = [
@@ -133,61 +134,83 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
 
   const showFilter = categories.length > 0 || devices.some((d) => d.category)
 
+  const filters = (
+    <>
+      <input
+        className="search"
+        type="search"
+        placeholder="Search devices…"
+        aria-label="Search devices"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+      {showFilter && (
+        <select
+          className="cat-filter"
+          aria-label="Category"
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+        >
+          <option value="all">All categories</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+          <option value={UNCATEGORIZED}>{UNCATEGORIZED}</option>
+        </select>
+      )}
+      <div className="seg filter-end" role="group" aria-label="View">
+        <button
+          className={view === 'list' ? 'is-on' : ''}
+          aria-pressed={view === 'list'}
+          onClick={() => setView('list')}
+        >
+          List
+        </button>
+        <button
+          className={view === 'sheet' ? 'is-on' : ''}
+          aria-pressed={view === 'sheet'}
+          title="Edit every IP and VLAN in one spreadsheet"
+          onClick={() => setView('sheet')}
+        >
+          IP sheet
+        </button>
+      </div>
+    </>
+  )
+
   return (
     <div className="page">
-      <div className="page-header">
-        <h2>Devices</h2>
-        <div className="page-header-actions">
-          <input
-            className="search"
-            placeholder="Search devices…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {showFilter && (
-            <select
-              className="cat-filter"
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-            >
-              <option value="all">All categories</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-              <option value={UNCATEGORIZED}>{UNCATEGORIZED}</option>
-            </select>
-          )}
-          <div className="seg" role="group" aria-label="View">
-            <button className={view === 'list' ? 'is-on' : ''} onClick={() => setView('list')}>
-              List
-            </button>
-            <button
-              className={view === 'sheet' ? 'is-on' : ''}
-              title="Edit every IP and VLAN in one spreadsheet"
-              onClick={() => setView('sheet')}
-            >
-              IP sheet
-            </button>
-          </div>
-          {devices.length > 0 && (
+      <PageHeader
+        title="Devices"
+        count={devices.length}
+        overflow={[
+          {
+            label: 'Import ShowSandbox…',
+            title:
+              'Add the devices, network ports, IPs, cables and patching circuits from a ShowSandbox show. Rows already here are matched by name and only their empty fields are filled.',
+            onClick: importShowSandbox
+          }
+        ]}
+        secondary={
+          devices.length > 0 ? (
             <ExportMenu scope="all" label="Export" sections={EXPORT_SECTIONS} />
-          )}
-          <button
-            className="btn"
-            title="Add the devices, network ports, IPs, cables and patching circuits from a ShowSandbox show. Rows already here are matched by name and only their empty fields are filled."
-            onClick={importShowSandbox}
-          >
+          ) : undefined
+        }
+        primary={{ label: '+ Add device', onClick: () => setOpenId('new') }}
+        filters={devices.length > 0 ? filters : undefined}
+      />
+
+      {devices.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-title">No devices yet</div>
+          <p className="empty-body">Add one, or import a ShowSandbox show.</p>
+          <button className="btn" onClick={importShowSandbox}>
             Import ShowSandbox…
           </button>
-          <button className="btn btn-primary" onClick={() => setOpenId('new')}>
-            + Add device
-          </button>
         </div>
-      </div>
-
-      {view === 'sheet' ? (
+      ) : view === 'sheet' ? (
         <IpSheet groups={groups} subnets={subnets} onChanged={onChanged} onOpenDevice={setOpenId} />
       ) : (
         <table className="table">
@@ -196,16 +219,16 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
               <th>Name</th>
               <th>Type</th>
               <th>Location</th>
-              <th>VLAN</th>
+              <th className="num">VLAN</th>
               <th>Main IP</th>
-              <th>Ports</th>
+              <th className="num">Ports</th>
             </tr>
           </thead>
           {groups.length === 0 && (
             <tbody>
               <tr>
                 <td colSpan={6} className="empty-cell">
-                  {devices.length === 0 ? 'No devices yet.' : 'No devices match your search.'}
+                  No devices match your search.
                 </td>
               </tr>
             </tbody>
@@ -215,9 +238,22 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
             return (
               <tbody key={cat}>
                 {showHeaders && (
-                  <tr className="cat-header" onClick={() => toggle(cat)}>
+                  <tr
+                    className="cat-header"
+                    tabIndex={0}
+                    aria-expanded={!isCollapsed}
+                    onClick={() => toggle(cat)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggle(cat)
+                      }
+                    }}
+                  >
                     <td colSpan={6}>
-                      <span className="caret">{isCollapsed ? '▸' : '▾'}</span>
+                      <span className="caret" aria-hidden>
+                        {isCollapsed ? '▸' : '▾'}
+                      </span>
                       {cat}
                       <span className="cat-count">{list.length}</span>
                     </td>
@@ -238,9 +274,9 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
                       </td>
                       <td className="muted">{d.deviceType ?? '—'}</td>
                       <td className="muted">{d.location ?? '—'}</td>
-                      <td className="muted mono">{routes.get(d.id)?.vlan || '—'}</td>
+                      <td className="muted num">{routes.get(d.id)?.vlan || '—'}</td>
                       <td className="mono">{routes.get(d.id)?.ip || '—'}</td>
-                      <td className="muted">{d.ports.length}</td>
+                      <td className="muted num">{d.ports.length}</td>
                     </tr>
                   ))}
               </tbody>

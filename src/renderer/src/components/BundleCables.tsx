@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Bundle, Cable, CableEndpoint, CableType, Device, RowSaver } from '../../../shared/types'
+import type {
+  Bundle,
+  Cable,
+  CableEndpoint,
+  CableType,
+  Device,
+  RowSaver
+} from '../../../shared/types'
+import { useModal } from './Modal'
 
 /** Source/destination editor: pick a device (and optionally a specific port),
  *  or fall back to free text when the device isn't in the app. */
@@ -54,7 +62,9 @@ function EndpointField({ label, value, devices, onChange }: EndpointFieldProps):
           <input
             value={value.text ?? ''}
             placeholder="e.g. Patch panel A-12"
-            onChange={(e) => onChange({ deviceId: null, portId: null, text: e.target.value || null })}
+            onChange={(e) =>
+              onChange({ deviceId: null, portId: null, text: e.target.value || null })
+            }
           />
         )}
       </div>
@@ -85,10 +95,16 @@ function CableRow({
   const [pulled, setPulled] = useState(cable.pulled)
   const [labeled, setLabeled] = useState(cable.labeled)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const modal = useModal()
+  const scope = `cable-${cable.id}`
 
   // `patch` lets the check sheet persist a single toggle immediately while still
   // carrying along any edits in progress in this row.
-  async function persist(patch?: { pulled?: boolean; labeled?: boolean }): Promise<{ ok: boolean }> {
+  async function persist(patch?: {
+    pulled?: boolean
+    labeled?: boolean
+  }): Promise<{ ok: boolean; error?: string }> {
     setSaving(true)
     try {
       await window.api.cables.update(cable.id, {
@@ -100,20 +116,23 @@ function CableRow({
         labeled: patch?.labeled ?? labeled,
         notes: cable.notes
       })
+      setError(null)
+      modal?.markClean(scope) // this row's edits are on disk now
       return { ok: true }
     } catch (e) {
       // Put the box back: the saved value didn't change.
       if (patch?.pulled !== undefined) setPulled(cable.pulled)
       if (patch?.labeled !== undefined) setLabeled(cable.labeled)
-      throw e
+      const msg = `${name.trim() || cable.name}: ${(e as Error).message}`
+      setError(msg)
+      return { ok: false, error: msg }
     } finally {
       setSaving(false)
     }
   }
 
   async function save(patch?: { pulled?: boolean; labeled?: boolean }): Promise<void> {
-    await persist(patch)
-    onChanged()
+    if ((await persist(patch)).ok) onChanged()
   }
 
   // Keep a ref to the latest persist so the bulk flush runs current state.
@@ -141,7 +160,12 @@ function CableRow({
   }
 
   return (
-    <div className="port-row">
+    <div className="port-row" data-dirty-scope={scope}>
+      {error && (
+        <div className="banner banner-error" role="alert">
+          Couldn’t save {error}
+        </div>
+      )}
       <div className="port-fields">
         <label>
           Cable
@@ -162,7 +186,8 @@ function CableRow({
             ))}
           </select>
         </label>
-        <label className="chk">
+        {/* these two save as they change: they never count as unsaved edits */}
+        <label className="chk" data-immediate>
           <input
             type="checkbox"
             checked={pulled}
@@ -170,7 +195,7 @@ function CableRow({
           />
           Pulled
         </label>
-        <label className="chk">
+        <label className="chk" data-immediate>
           <input
             type="checkbox"
             checked={labeled}
@@ -179,7 +204,7 @@ function CableRow({
           Labeled
         </label>
         <div className="port-actions">
-          <button className="btn btn-small btn-primary" onClick={() => save()} disabled={saving}>
+          <button className="btn btn-small" onClick={() => save()} disabled={saving}>
             Save
           </button>
           <button className="btn btn-small btn-danger" onClick={remove}>
@@ -239,7 +264,14 @@ function BundleCables({
           Pulled {pulledCount}/{total} · Labeled {labeledCount}/{total}
         </p>
       )}
-      {bundle.cables.length === 0 && <p className="muted">No cables in this bundle yet.</p>}
+      {bundle.cables.length === 0 && (
+        <div className="empty-state">
+          <div className="empty-title">No cables in this bundle yet</div>
+          <p className="empty-body">
+            Add each cable that runs in it, then tick them off as they are pulled and labeled.
+          </p>
+        </div>
+      )}
       {bundle.cables.map((c) => (
         <CableRow
           key={c.id}

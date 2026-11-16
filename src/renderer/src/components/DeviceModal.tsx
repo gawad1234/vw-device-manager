@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Device, DeviceInput, DeviceWarning, RowSaver, Subnet } from '../../../shared/types'
-import Modal from './Modal'
+import Modal, { ModalDismiss, type ModalControl } from './Modal'
+import Field, { withFix } from './Field'
 import PortsSection from './PortsSection'
 import DeviceConnections from './DeviceConnections'
 import CategoryInput from './CategoryInput'
@@ -52,7 +53,12 @@ function DeviceModal({
   onCreated
 }: Props): React.JSX.Element {
   const [form, setForm] = useState<DeviceInput>(device ? toForm(device) : EMPTY_FORM)
+  /** errors that aren't about one field (save failed, a port didn't save) */
   const [error, setError] = useState<string | null>(null)
+  const [nameError, setNameError] = useState<string | null>(null)
+  /** a switch-IP conflict from the main process, shown under the field it names */
+  const [ipError, setIpError] = useState<{ field: 'mgmt' | 'oob'; message: string } | null>(null)
+  const modal = useRef<ModalControl>(null)
   const [warnings, setWarnings] = useState<DeviceWarning[]>([])
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'details' | 'ports' | 'connections'>('details')
@@ -75,15 +81,21 @@ function DeviceModal({
     setForm(device ? toForm(device) : EMPTY_FORM)
     opened.current = device
     setError(null)
+    setNameError(null)
+    setIpError(null)
     setWarnings([])
   }, [device?.id])
 
   async function save(e: React.FormEvent): Promise<void> {
     e.preventDefault()
+    setError(null)
+    setIpError(null)
     if (!form.name.trim()) {
-      setError('Device name is required.')
+      setNameError('Give the device a name, e.g. STAGE-CAM-01.')
+      setTab('details')
       return
     }
+    setNameError(null)
     setSaving(true)
     try {
       // Type and location belong to the drawing and a sync may have moved them
@@ -91,7 +103,8 @@ function DeviceModal({
       const input = device
         ? {
             ...form,
-            deviceType: form.deviceType === opened.current?.deviceType ? device.deviceType : form.deviceType,
+            deviceType:
+              form.deviceType === opened.current?.deviceType ? device.deviceType : form.deviceType,
             location: form.location === opened.current?.location ? device.location : form.location
           }
         : form
@@ -99,8 +112,15 @@ function DeviceModal({
         ? await window.api.devices.update(device.id, input)
         : await window.api.devices.create(input)
       if (result.error) {
-        setError(result.error)
+        // Switch-IP conflicts name their field: show them there.
+        const msg = withFix(result.error)
+        if (/^Management IP and Out-of-band IP/.test(result.error))
+          setIpError({ field: 'oob', message: msg })
+        else if (/^Management IP/.test(result.error)) setIpError({ field: 'mgmt', message: msg })
+        else if (/^Out-of-band IP/.test(result.error)) setIpError({ field: 'oob', message: msg })
+        else setError(`Couldn’t save the device: ${result.error}`)
         setWarnings([])
+        setTab('details')
         return
       }
       // Flush the ports sub-section so "Save changes" saves everything, not just
@@ -110,7 +130,17 @@ function DeviceModal({
         const r = await saver()
         if (!r.ok && !childError) childError = r.error
       }
-      setError(childError ?? null)
+      // The failing port shows its own error in its row; point there.
+      if (childError) {
+        modal.current?.markClean('') // the device's own fields did save
+        setError(
+          'The device saved, but a port didn’t — fix the port marked on the Ports tab, then save again.'
+        )
+        setTab('ports')
+      } else {
+        setError(null)
+        modal.current?.markClean()
+      }
       setWarnings(result.warnings)
       onChanged()
       if (!device && result.device) {
@@ -122,7 +152,7 @@ function DeviceModal({
         onClose()
       }
     } catch (e) {
-      setError((e as Error).message)
+      setError(`Couldn’t save the device: ${(e as Error).message}`)
     } finally {
       setSaving(false)
     }
@@ -147,22 +177,20 @@ function DeviceModal({
   const footer = (
     <>
       {device && (
-        <button className="btn btn-danger" onClick={handleDelete}>
-          Delete
+        <button type="button" className="btn btn-danger" onClick={handleDelete}>
+          Delete…
         </button>
       )}
       <span className="footer-spacer" />
-      <button className="btn" onClick={onClose}>
-        Close
-      </button>
+      <ModalDismiss />
       <button className="btn btn-primary" type="submit" form="device-form" disabled={saving}>
-        {device ? 'Save changes' : 'Create device'}
+        {saving ? 'Saving…' : device ? 'Save device' : 'Create device'}
       </button>
     </>
   )
 
   return (
-    <Modal title={title} onClose={onClose} footer={footer}>
+    <Modal title={title} onClose={onClose} footer={footer} controlRef={modal}>
       {error && <div className="banner banner-error">{error}</div>}
       {warnings.map((w, i) => (
         <div className="banner banner-warning" key={i}>
@@ -194,15 +222,17 @@ function DeviceModal({
       {/* min height: the window keeps its size when switching tabs */}
       <div style={{ minHeight: device ? 420 : undefined }}>
         <form id="device-form" className="form-grid" onSubmit={save} hidden={tab !== 'details'}>
-          <label>
-            Name
+          <Field label="Name" error={nameError}>
             <input
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, name: e.target.value })
+                if (nameError) setNameError(null)
+              }}
               placeholder="STAGE-CAM-01"
               autoFocus
             />
-          </label>
+          </Field>
           <label>
             Type
             <input
@@ -254,22 +284,34 @@ function DeviceModal({
           </label>
           {form.isSwitch && (
             <>
-              <label>
-                Management IP
+              <Field
+                label="Management IP"
+                error={ipError?.field === 'mgmt' ? ipError.message : null}
+              >
                 <input
+                  className="mono"
                   value={form.managementIp ?? ''}
-                  onChange={(e) => setForm({ ...form, managementIp: e.target.value || null })}
+                  onChange={(e) => {
+                    setForm({ ...form, managementIp: e.target.value || null })
+                    if (ipError) setIpError(null)
+                  }}
                   placeholder="10.0.10.2"
                 />
-              </label>
-              <label>
-                Out-of-band (OOB) IP
+              </Field>
+              <Field
+                label="Out-of-band (OOB) IP"
+                error={ipError?.field === 'oob' ? ipError.message : null}
+              >
                 <input
+                  className="mono"
                   value={form.oobIp ?? ''}
-                  onChange={(e) => setForm({ ...form, oobIp: e.target.value || null })}
+                  onChange={(e) => {
+                    setForm({ ...form, oobIp: e.target.value || null })
+                    if (ipError) setIpError(null)
+                  }}
                   placeholder="192.168.100.2"
                 />
-              </label>
+              </Field>
             </>
           )}
           <label className="span-2">

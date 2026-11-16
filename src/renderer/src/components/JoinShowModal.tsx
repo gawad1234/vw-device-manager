@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
+import Field from './Field'
 import type { DiscoveredShow, ProjectInfo } from '../../../shared/types'
 
 interface Props {
@@ -12,7 +13,10 @@ function JoinShowModal({ onClose, onJoined }: Props): React.JSX.Element {
   const [address, setAddress] = useState('')
   const [pin, setPin] = useState('')
   const [busy, setBusy] = useState(false)
+  /** not about one field (e.g. the host has no Manager PIN set) */
   const [error, setError] = useState<string | null>(null)
+  const [addressError, setAddressError] = useState<string | null>(null)
+  const [pinError, setPinError] = useState<string | null>(null)
   const [found, setFound] = useState<DiscoveredShow[]>([])
 
   // list the shows announcing themselves on the LAN while this dialog is open
@@ -35,35 +39,54 @@ function JoinShowModal({ onClose, onJoined }: Props): React.JSX.Element {
 
   function pick(show: DiscoveredShow): void {
     setAddress(show.address)
+    setAddressError(null)
     document.getElementById('join-pin')?.focus()
   }
 
   async function join(e?: React.FormEvent): Promise<void> {
     e?.preventDefault()
-    setBusy(true)
+    if (busy) return
     setError(null)
-    const res = await window.api.projects.join(address, pin)
-    setBusy(false)
-    if ('error' in res) setError(res.error)
-    else onJoined(res)
+    setAddressError(null)
+    setPinError(null)
+    if (!address.trim()) {
+      setAddressError(
+        'Pick a show above, or type the host address shown on the host, e.g. 192.168.1.20:8787.'
+      )
+      document.getElementById('join-address')?.focus()
+      return
+    }
+    setBusy(true)
+    let res: Awaited<ReturnType<typeof window.api.projects.join>>
+    try {
+      res = await window.api.projects.join(address, pin)
+    } catch (err) {
+      setError(`Couldn’t join: ${(err as Error).message}`)
+      return
+    } finally {
+      setBusy(false)
+    }
+    if (!('error' in res)) return onJoined(res)
+    // Put the answer under the field it's about; the rest goes in the banner.
+    if (/Set a Manager PIN/.test(res.error)) setError(res.error)
+    else if (/PIN/.test(res.error)) setPinError(res.error)
+    else if (/address|reach/i.test(res.error)) setAddressError(res.error)
+    else setError(res.error)
   }
 
   return (
     <Modal
       title="Join a show on the network"
       onClose={onClose}
+      trackChanges={false}
       footer={
         <>
           <span className="footer-spacer" />
-          <button className="btn" onClick={onClose}>
+          <button type="button" className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button
-            className="btn btn-primary"
-            disabled={busy || !address.trim()}
-            onClick={() => join()}
-          >
-            {busy ? 'Joining…' : 'Join'}
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => join()}>
+            {busy ? 'Joining…' : 'Join show'}
           </button>
         </>
       }
@@ -74,7 +97,7 @@ function JoinShowModal({ onClose, onJoined }: Props): React.JSX.Element {
           host under Settings → Show Server). Not listed? Type the address shown there. For now a
           joined computer can view everything but not change it.
         </p>
-        {error && <div className="banner banner-error">{error}</div>}
+        {error && <div className="banner banner-error span-2">{error}</div>}
         <div style={{ gridColumn: 'span 2' }}>
           <strong>On this network</strong>
           {found.length === 0 ? (
@@ -87,7 +110,8 @@ function JoinShowModal({ onClose, onJoined }: Props): React.JSX.Element {
                 <button
                   key={f.address}
                   type="button"
-                  className={`btn${f.address === address ? ' btn-primary' : ''}`}
+                  className={`btn${f.address === address ? ' is-selected' : ''}`}
+                  aria-pressed={f.address === address}
                   style={{ justifyContent: 'space-between', display: 'flex' }}
                   onClick={() => pick(f)}
                 >
@@ -100,28 +124,32 @@ function JoinShowModal({ onClose, onJoined }: Props): React.JSX.Element {
             </div>
           )}
         </div>
-        <label>
-          Host address
+        <Field label="Host address" error={addressError}>
           <input
             id="join-address"
             className="mono"
             value={address}
             placeholder="192.168.1.20:8787"
             autoFocus
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={(e) => {
+              setAddress(e.target.value)
+              setAddressError(null)
+            }}
           />
-        </label>
-        <label>
-          Manager PIN
+        </Field>
+        <Field label="Manager PIN" hint="On the host under Settings → Show Server" error={pinError}>
           <input
             id="join-pin"
             type="password"
             inputMode="numeric"
             autoComplete="off"
             value={pin}
-            onChange={(e) => setPin(e.target.value)}
+            onChange={(e) => {
+              setPin(e.target.value)
+              setPinError(null)
+            }}
           />
-        </label>
+        </Field>
         <button type="submit" hidden />
       </form>
     </Modal>

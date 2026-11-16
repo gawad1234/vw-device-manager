@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Bundle, CableType, Device } from '../../../shared/types'
 import BundleModal from '../components/BundleModal'
 import ExportMenu from '../components/ExportMenu'
+import PageHeader from '../components/PageHeader'
 
 interface Props {
   bundles: Bundle[]
@@ -30,60 +31,86 @@ function CablesPage({ bundles, devices, cableTypes, onChanged }: Props): React.J
   }, [bundles, openId])
 
   const openBundle =
-    openId === 'new' ? null : typeof openId === 'number' ? bundles.find((b) => b.id === openId) ?? null : null
+    openId === 'new'
+      ? null
+      : typeof openId === 'number'
+        ? (bundles.find((b) => b.id === openId) ?? null)
+        : null
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h2>Cables</h2>
-        <div className="page-header-actions">
-          <input
-            className="search"
-            placeholder="Search bundles & cables…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {bundles.length > 0 && <ExportMenu scope="all" label="Export all" />}
-          <button className="btn btn-primary" onClick={() => setOpenId('new')}>
+      <PageHeader
+        title="Cables"
+        count={bundles.length}
+        secondary={bundles.length > 0 ? <ExportMenu scope="all" label="Export" /> : undefined}
+        primary={{ label: '+ Add bundle', onClick: () => setOpenId('new') }}
+        filters={
+          bundles.length > 0 ? (
+            <input
+              className="search"
+              type="search"
+              placeholder="Search bundles & cables…"
+              aria-label="Search bundles and cables"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          ) : undefined
+        }
+      />
+
+      {bundles.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-title">No bundles yet</div>
+          <p className="empty-body">
+            A bundle is a group of cables that run together between two places, like a snake or a
+            loom. Add one, then add its cables to get pull sheets, schedules and labels.
+          </p>
+          <button className="btn" onClick={() => setOpenId('new')}>
             + Add bundle
           </button>
         </div>
-      </div>
-
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Length</th>
-            <th>Cables</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.length === 0 && (
+      ) : (
+        <table className="table">
+          <thead>
             <tr>
-              <td colSpan={5} className="empty-cell">
-                {bundles.length === 0 ? 'No bundles yet.' : 'No bundles match your search.'}
-              </td>
+              <th>Name</th>
+              <th>From</th>
+              <th>To</th>
+              <th className="num">Length</th>
+              <th className="num">Cables</th>
             </tr>
-          )}
-          {filtered.map((b) => (
-            <tr key={b.id} className="clickable" tabIndex={0} onClick={() => setOpenId(b.id)}>
-              <td>
-                {b.color && (
-                  <span className="bundle-dot" style={{ background: b.color }} aria-hidden />
-                )}
-                {b.name}
-              </td>
-              <td className="muted">{b.fromLocation ?? '—'}</td>
-              <td className="muted">{b.toLocation ?? '—'}</td>
-              <td className="muted">{b.length ?? '—'}</td>
-              <td className="muted">{b.cables.length}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={5} className="empty-cell">
+                  No bundles match your search.
+                </td>
+              </tr>
+            )}
+            {filtered.map((b) => (
+              <tr
+                key={b.id}
+                className="clickable"
+                tabIndex={0}
+                onClick={() => setOpenId(b.id)}
+                onKeyDown={(e) => e.key === 'Enter' && setOpenId(b.id)}
+              >
+                <td>
+                  {b.color && (
+                    <span className="bundle-dot" style={{ background: b.color }} aria-hidden />
+                  )}
+                  {b.name}
+                </td>
+                <td className="muted">{b.fromLocation ?? '—'}</td>
+                <td className="muted">{b.toLocation ?? '—'}</td>
+                <td className="muted num">{b.length ?? '—'}</td>
+                <td className="muted num">{b.cables.length}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
       {openId != null && (
         <BundleModal

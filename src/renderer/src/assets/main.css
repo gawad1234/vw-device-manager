@@ -8,17 +8,8 @@
  */
 
 :root {
-  --line: rgba(150, 178, 205, 0.14);
-  --line-soft: rgba(150, 178, 205, 0.08);
-  --hover: rgba(150, 190, 215, 0.06);
-  --accent: #22c7b8;
-  --accent-hover: #37d6c7;
-  --accent-ink: #052421; /* dark text that sits legibly on the teal accent */
-  --accent-soft: rgba(34, 199, 184, 0.14);
-  --danger: #ef7067;
+  /* Role tokens (surfaces, text, line, accent, status, radii, --row-h) live in base.css. */
   /* Technical data (IPs, MACs, VLANs, cable #s) — reliable system mono, no webfont. */
-  /* dark scrollbars, date pickers and other built-in controls */
-  color-scheme: dark;
   --mono:
     ui-monospace, SFMono-Regular, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, Consolas,
     monospace;
@@ -202,9 +193,9 @@ code {
   display: flex;
   gap: 1px;
   padding: 3px;
-  background: var(--ev-c-black-mute);
+  background: var(--surface-2);
   border: 1px solid var(--line-soft);
-  border-radius: 9px;
+  border-radius: var(--radius-card);
   -webkit-app-region: no-drag;
 }
 
@@ -212,7 +203,7 @@ code {
   position: relative;
   background: transparent;
   border: none;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   padding: 6px 13px;
   border-radius: 6px;
   font-size: 13.5px;
@@ -224,11 +215,11 @@ code {
 }
 
 .tab:hover {
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
 }
 
 .tab.active {
-  background: var(--ev-c-black-soft);
+  background: var(--surface-1);
   color: var(--accent);
   font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--line);
@@ -253,8 +244,8 @@ code {
   gap: 7px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--ev-c-text-1);
+  border-radius: var(--radius-control);
+  color: var(--text-1);
   padding: 5px 10px;
   font-size: 13px;
   cursor: pointer;
@@ -273,8 +264,8 @@ code {
 }
 
 .project-btn .caret {
-  color: var(--ev-c-text-3);
-  font-size: 10px;
+  color: var(--text-2);
+  font-size: 11px;
 }
 
 .project-dropdown {
@@ -284,9 +275,9 @@ code {
   min-width: 230px;
   max-height: 70vh;
   overflow-y: auto;
-  background: var(--ev-c-black-soft);
+  background: var(--surface-1);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   padding: 6px;
   z-index: 50;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
@@ -299,7 +290,7 @@ code {
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
   padding: 8px 10px;
   font-size: 13px;
   cursor: pointer;
@@ -310,7 +301,7 @@ code {
 }
 
 .menu-recent {
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -323,10 +314,10 @@ code {
 }
 
 .menu-label {
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--ev-c-text-3);
+  color: var(--text-2);
   padding: 4px 10px 2px;
 }
 
@@ -388,7 +379,7 @@ code {
   flex-direction: column;
   gap: 6px;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 
 .label-preview-col {
@@ -416,7 +407,7 @@ code {
   align-items: center;
   gap: 6px;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 
 .copies-field input {
@@ -515,7 +506,7 @@ code {
   flex-direction: column;
   gap: 6px;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 
 .lc-toolbar {
@@ -532,10 +523,10 @@ code {
   border-bottom: 1px solid var(--line);
 }
 .lc-tool-label {
-  font-size: 11.5px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 .lc-tool-sep {
   width: 1px;
@@ -600,7 +591,7 @@ code {
   flex-direction: column;
   gap: 5px;
   font-size: 12px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 
 .lc-prop-row {
@@ -616,7 +607,7 @@ code {
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
 }
 
 .lc-props input[type='color'] {
@@ -649,7 +640,7 @@ code {
 }
 
 .update-ok {
-  color: #7fce9a;
+  color: var(--ok-ink);
   font-size: 13px;
 }
 
@@ -658,7 +649,7 @@ code {
   padding: 16px;
   border: 1px solid rgba(59, 111, 224, 0.32);
   background: rgba(59, 111, 224, 0.09);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
 }
 
 .update-available-head {
@@ -683,7 +674,7 @@ code {
   overflow-y: auto;
   font-size: 13.5px;
   line-height: 1.5;
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
   user-select: text;
 }
 
@@ -718,7 +709,7 @@ code {
   gap: 9px;
   margin-top: 18px;
   font-size: 13.5px;
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
   cursor: pointer;
   max-width: 520px;
 }
@@ -749,7 +740,7 @@ code {
   flex-direction: column;
   gap: 6px;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   max-width: 380px;
   margin: 12px 0 4px;
 }
@@ -822,18 +813,20 @@ code {
 input,
 select,
 textarea {
-  background: var(--ev-c-black-soft);
+  background: var(--surface-1);
   border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--ev-c-text-1);
+  border-radius: var(--radius-control);
+  color: var(--text-1);
   padding: 8px 11px;
   font-size: 14px;
   font-family: inherit;
 }
 
+/* Placeholders sit between text-2 and text-3 so an empty field never reads as
+   filled in; the label above always carries the meaning. */
 input::placeholder,
 textarea::placeholder {
-  color: var(--ev-c-text-3);
+  color: var(--text-placeholder, rgba(196, 212, 227, 0.42));
 }
 
 input:focus,
@@ -852,11 +845,37 @@ textarea {
   resize: vertical;
 }
 
-/* Read-only fields (drawing-owned type/location) read as quiet static text. */
-input[readonly] {
+/* Read-only fields (drawing-owned type/location) read as quiet static text;
+   disabled controls look the same, just not interactive. */
+input[readonly],
+input:disabled,
+select:disabled,
+textarea:disabled {
   background: transparent;
   border-color: var(--line-soft);
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+/* Invalid controls: red border (focus ring stays teal-free so the error reads). */
+.field[data-invalid] input,
+.field[data-invalid] select,
+.field[data-invalid] textarea,
+[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.field[data-invalid] input:focus,
+.field[data-invalid] select:focus,
+.field[data-invalid] textarea:focus,
+[aria-invalid='true']:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
 }
 
 input[type='checkbox'] {
@@ -875,9 +894,9 @@ input[type='checkbox'] {
 
 .btn {
   background: transparent;
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   padding: 7px 15px;
   font-size: 14px;
   font-weight: 500;
@@ -906,28 +925,55 @@ input[type='checkbox'] {
   font-size: 12.5px;
 }
 
-/* "Main port" toggle: quiet when off, accent-filled when it's the chosen route. */
+/* Selected / toggled-on state: soft teal, never the primary fill.
+   "Main port" toggle uses the same look when it's the chosen route. */
+.btn[aria-pressed='true'],
+.btn.is-selected,
 .primary-toggle.is-on {
-  background: var(--accent);
-  border-color: transparent;
-  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
   font-weight: 600;
+}
+
+.btn[aria-pressed='true']:hover,
+.btn.is-selected:hover,
+.primary-toggle.is-on:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .btn-danger {
   color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
 .btn-danger:hover {
-  background: rgba(239, 112, 103, 0.12);
+  background: var(--danger-soft);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: saturate(0.3);
+}
+
+.btn:disabled:hover,
+.btn[aria-disabled='true']:hover {
+  background: transparent;
+}
+
+.btn-primary:disabled:hover,
+.btn-primary[aria-disabled='true']:hover {
+  background: var(--accent);
 }
 
 /* ---- Panels / forms -------------------------------------------------- */
 
 .panel {
-  background: var(--ev-c-black-soft);
+  background: var(--surface-1);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
   padding: 22px;
   margin-bottom: 22px;
 }
@@ -949,7 +995,7 @@ input[type='checkbox'] {
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px 20px;
+  gap: 20px 20px;
 }
 
 .form-grid label {
@@ -957,7 +1003,7 @@ input[type='checkbox'] {
   flex-direction: column;
   gap: 6px;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 
 .form-grid label small {
@@ -966,6 +1012,33 @@ input[type='checkbox'] {
 
 .span-2 {
   grid-column: span 2;
+}
+
+/* Field: <label>, the control, then an optional hint or error. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field > label {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.field-error {
+  font-size: 12.5px;
+  color: var(--error-ink);
+}
+
+.field-error::before {
+  content: '⚠ ';
 }
 
 /* Order window: name, vendor and date on one row; notes fold away so the
@@ -983,7 +1056,7 @@ input[type='checkbox'] {
 .order-notes summary {
   cursor: pointer;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1012,7 +1085,7 @@ input[type='checkbox'] {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
   cursor: pointer;
 }
 
@@ -1020,24 +1093,33 @@ input[type='checkbox'] {
   flex-basis: 100%;
 }
 
+/* .form-grid label is a column; a checkbox row stays a row */
+.form-grid label.checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-1);
+}
+
 /* ---- Banners --------------------------------------------------------- */
 
 .banner {
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-control); /* nested inside cards/modals */
   font-size: 13px;
   grid-column: span 2;
 }
 
 .banner-error {
-  background: rgba(224, 104, 95, 0.14);
-  color: #ff9a91;
+  background: var(--error-soft);
+  color: var(--error-ink);
   border: 1px solid rgba(224, 104, 95, 0.28);
 }
 
 .banner-warning {
-  background: rgba(224, 184, 95, 0.14);
-  color: #ffcf8a;
+  background: var(--warn-soft);
+  color: var(--warn-ink);
   border: 1px solid rgba(224, 184, 95, 0.28);
 }
 
@@ -1051,18 +1133,38 @@ input[type='checkbox'] {
 
 .table th {
   text-align: left;
-  color: var(--ev-c-text-3);
+  color: var(--text-2);
   font-weight: 600;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0 14px 10px;
+  padding: 0 12px 8px;
   border-bottom: 1px solid var(--line);
 }
 
+/* Rows are --row-h tall; height on a cell acts as a minimum, content still grows. */
 .table td {
-  padding: 13px 14px;
+  height: var(--row-h);
+  padding: 0 12px;
+  vertical-align: middle;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.table th.num,
+.table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.table td.mono {
+  font-family: var(--mono);
+  font-variant-ligatures: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pages opt in when columns should hold their widths. */
+.table-fixed {
+  table-layout: fixed;
 }
 
 .table tbody tr:hover > td {
@@ -1079,10 +1181,10 @@ input[type='checkbox'] {
   background: var(--accent-soft);
 }
 
-.empty-cell {
+.table td.empty-cell {
   text-align: center;
-  color: var(--ev-c-text-3);
-  padding: 36px 12px;
+  color: var(--text-2);
+  padding: 28px 12px;
 }
 
 /* Device category section headers + filter */
@@ -1094,7 +1196,7 @@ input[type='checkbox'] {
   background: rgba(255, 255, 255, 0.045);
   font-weight: 600;
   cursor: pointer;
-  padding: 9px 14px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -1103,28 +1205,28 @@ input[type='checkbox'] {
 }
 
 .cat-header .caret {
-  color: var(--ev-c-text-3);
+  color: var(--text-2);
   margin-right: 8px;
   font-size: 11px;
 }
 
 .cat-count {
-  color: var(--ev-c-text-3);
+  color: var(--text-2);
   font-weight: 500;
   font-size: 12px;
   margin-left: 8px;
 }
 
 .muted {
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 
 .badge {
   display: inline-block;
   margin-left: 8px;
   padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 10.5px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1181,7 +1283,7 @@ input[type='checkbox'] {
 .sheet-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 
 .sheet {
@@ -1192,10 +1294,10 @@ input[type='checkbox'] {
 
 .sheet th {
   text-align: left;
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--ev-c-text-3);
+  color: var(--text-2);
   font-weight: 600;
   padding: 6px 8px;
   border: 1px solid var(--line);
@@ -1229,7 +1331,7 @@ input[type='checkbox'] {
 .sheet td select:focus {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
-  background: var(--ev-c-black-soft);
+  background: var(--surface-1);
 }
 
 .sheet td.num {
@@ -1244,14 +1346,14 @@ input[type='checkbox'] {
 
 .sheet td.waiting-cell {
   text-align: center;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   cursor: pointer;
   font-variant-numeric: tabular-nums;
 }
 
 .sheet td.waiting-cell:hover {
   background: var(--hover);
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
 }
 
 .sheet td.rm {
@@ -1262,7 +1364,7 @@ input[type='checkbox'] {
 .sheet td.rm button {
   background: transparent;
   border: none;
-  color: var(--ev-c-text-3);
+  color: var(--text-2);
   cursor: pointer;
   font-size: 17px;
   line-height: 1;
@@ -1276,11 +1378,11 @@ input[type='checkbox'] {
 .sheet-empty {
   padding: 18px 10px !important;
   text-align: center;
-  color: var(--ev-c-text-3);
+  color: var(--text-2);
 }
 
 .sheet tr.item-received td input {
-  color: var(--ev-c-text-3);
+  color: var(--text-2);
 }
 
 /* ---- Expanded editor (ports & cables share this) --------------------- */
@@ -1298,9 +1400,9 @@ input[type='checkbox'] {
 
 .port-row {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   padding: 11px 14px;
-  background: var(--ev-c-black);
+  background: var(--surface-0);
 }
 
 /* A jack flagged "not needed" — dimmed, and collapsed into its own section. */
@@ -1329,7 +1431,7 @@ input[type='checkbox'] {
   flex-direction: column;
   gap: 5px;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 
 .port-fields input,
@@ -1416,16 +1518,16 @@ input[type='checkbox'] {
   border: none;
   padding: 0;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   cursor: pointer;
 }
 
 .tag-toggle:hover {
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
 }
 
 .tag-toggle .caret {
-  color: var(--ev-c-text-3);
+  color: var(--text-2);
 }
 
 .tag-summary {
@@ -1445,7 +1547,7 @@ input[type='checkbox'] {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
 }
 
 .chk input {
@@ -1468,7 +1570,7 @@ input[type='checkbox'] {
   flex-direction: column;
   gap: 5px;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   flex: 1 1 280px;
 }
 
@@ -1512,7 +1614,7 @@ input[type='checkbox'] {
   gap: 12px;
   padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 
 /* "Still waiting on": let the label fill the row so every quantity box + Receive
@@ -1546,14 +1648,14 @@ input[type='checkbox'] {
 }
 
 .swatch-option.selected {
-  border-color: var(--ev-c-text-1);
-  box-shadow: 0 0 0 2px var(--ev-c-black-soft);
+  border-color: var(--text-1);
+  box-shadow: 0 0 0 2px var(--surface-1);
 }
 
 .swatch-option.none {
   background:
     linear-gradient(to top left, transparent calc(50% - 1px), #e0685f, transparent calc(50% + 1px)),
-    var(--ev-c-black);
+    var(--surface-0);
   border: 1px solid var(--line);
 }
 
@@ -1572,6 +1674,121 @@ input[type='checkbox'] {
   cursor: pointer;
 }
 
+/* ---- Empty state ----------------------------------------------------- */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.empty-body {
+  max-width: 420px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.empty-state .btn {
+  margin-top: 8px;
+}
+
+/* ---- Status pill (always carries an icon/word, never colour alone) --- */
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--text-2);
+  background: transparent;
+}
+
+.status-ok {
+  color: var(--ok-ink);
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok-ink) 32%, transparent);
+}
+
+.status-warn {
+  color: var(--warn-ink);
+  background: var(--warn-soft);
+  border-color: color-mix(in srgb, var(--warn-ink) 32%, transparent);
+}
+
+.status-error {
+  color: var(--error-ink);
+  background: var(--error-soft);
+  border-color: color-mix(in srgb, var(--error-ink) 32%, transparent);
+}
+
+/* ---- Overflow menu (⋯ dropdown) -------------------------------------- */
+
+.overflow-menu {
+  min-width: 180px;
+  padding: 4px;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  z-index: 50;
+}
+
+.overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-chip);
+  color: var(--text-1);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.overflow-item:hover,
+.overflow-item:focus-visible {
+  background: var(--hover);
+}
+
+.overflow-item:focus-visible {
+  outline-offset: -2px;
+}
+
+.overflow-item.danger {
+  color: var(--danger);
+}
+
+.overflow-item.danger:hover {
+  background: var(--danger-soft);
+}
+
+.overflow-item:disabled,
+.overflow-item[aria-disabled='true'] {
+  color: var(--text-3);
+  cursor: not-allowed;
+  background: transparent;
+}
+
 /* ---- Modal ----------------------------------------------------------- */
 
 .lxr-fmt-delete {
@@ -1588,7 +1805,7 @@ input[type='checkbox'] {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.65);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -1603,10 +1820,28 @@ input[type='checkbox'] {
   max-height: calc(100vh - 96px);
   display: flex;
   flex-direction: column;
-  background: var(--ev-c-black);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  background: var(--surface-1);
+  border: 1px solid rgba(150, 178, 205, 0.2);
+  border-radius: var(--radius-modal);
+}
+
+/* Controls sit one step up from the modal surface. */
+.modal input,
+.modal select,
+.modal textarea {
+  background: var(--surface-2);
+}
+
+/* …except read-only / disabled, which stay quiet, and cell editors, which stay chrome-less. */
+.modal input[readonly],
+.modal input:disabled,
+.modal select:disabled,
+.modal textarea:disabled,
+.modal .sheet td input,
+.modal .sheet td select,
+.modal .ipsheet td.ipsheet-cell input,
+.modal .ipsheet td.ipsheet-cell select {
+  background: transparent;
 }
 
 .modal-header {
@@ -1628,7 +1863,7 @@ input[type='checkbox'] {
 .modal-close {
   background: transparent;
   border: none;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   font-size: 24px;
   line-height: 1;
   padding: 0 6px;
@@ -1638,7 +1873,7 @@ input[type='checkbox'] {
 
 .modal-close:hover {
   background: var(--hover);
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
 }
 
 .modal-body {
@@ -1681,16 +1916,16 @@ input[type='checkbox'] {
   gap: 14px;
   margin-bottom: 16px;
   padding: 12px 14px;
-  background: var(--ev-c-black-soft);
+  background: var(--surface-1);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .print-bar label {
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 .print-bar .muted {
   padding-bottom: 6px;
@@ -1701,7 +1936,7 @@ input[type='checkbox'] {
   align-items: center;
   justify-content: space-between;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   margin-bottom: 2px;
 }
 
@@ -1769,7 +2004,7 @@ input[type='checkbox'] {
   text-align: left;
   padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -1807,7 +2042,7 @@ input[type='checkbox'] {
   height: 28px;
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: none;
 }
 .wp-display {
@@ -1869,9 +2104,9 @@ input[type='checkbox'] {
 .server-live {
   margin: 12px 0;
   padding: 12px 14px;
-  background: var(--ev-c-black-soft);
+  background: var(--surface-1);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
 }
 .server-live-main {
   display: flex;
@@ -1903,7 +2138,7 @@ input[type='checkbox'] {
   flex-direction: column;
   gap: 5px;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 .server-row input {
   width: 110px;
@@ -1930,12 +2165,12 @@ input[type='checkbox'] {
   font-size: 13px;
   padding: 3px 11px;
   border-radius: 999px;
-  background: var(--ev-c-black-soft);
-  color: var(--ev-c-text-2);
+  background: var(--surface-1);
+  color: var(--text-2);
 }
 .patch-stats .pill.ok {
   background: #13351f;
-  color: #7fe0a1;
+  color: var(--ok-ink);
 }
 .patch-filters {
   display: flex;
@@ -1951,7 +2186,7 @@ input[type='checkbox'] {
 .patch-filters select {
   background: #0c0e12;
   border: 1px solid var(--line);
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
   border-radius: 7px;
   padding: 7px 9px;
   font: inherit;
@@ -1973,12 +2208,14 @@ input[type='checkbox'] {
 .patch-table th {
   vertical-align: top;
 }
+/* multi-line rows (name + sub lines): top-aligned, a little air at the new density */
 .patch-table td {
-  padding-top: 11px;
-  padding-bottom: 11px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 .patch-table th.chk,
 .patch-table td.chk {
+  display: table-cell; /* .chk is inline-flex for labels; a cell must stay a cell */
   text-align: center;
   width: 64px;
 }
@@ -1990,13 +2227,13 @@ input[type='checkbox'] {
   display: block;
 }
 .patch-table .sub {
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   font-size: 12.5px;
 }
 .patch-table .sub2 {
   display: block;
-  color: var(--ev-c-text-2);
-  font-size: 11.5px;
+  color: var(--text-2);
+  font-size: 12px;
   line-height: 1.35;
   opacity: 0.85;
 }
@@ -2008,7 +2245,7 @@ input[type='checkbox'] {
   min-width: 90px;
   background: #0c0e12;
   border: 1px solid var(--line);
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
   border-radius: 6px;
   padding: 5px 7px;
   font: inherit;
@@ -2018,7 +2255,7 @@ input[type='checkbox'] {
   border: 1px solid #1e3a52;
   color: #9fd0f0;
   padding: 9px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   margin-bottom: 12px;
   font-size: 13.5px;
 }
@@ -2100,7 +2337,7 @@ input[type='checkbox'] {
 .sched-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .sched-grid {
   border-collapse: collapse;
@@ -2115,8 +2352,8 @@ input[type='checkbox'] {
 }
 .sched-grid thead th {
   font-weight: 600;
-  color: var(--ev-c-text-2);
-  background: var(--ev-c-black-soft);
+  color: var(--text-2);
+  background: var(--surface-1);
 }
 .sched-grid .sched-name {
   position: sticky;
@@ -2124,7 +2361,7 @@ input[type='checkbox'] {
   z-index: 1;
   text-align: left;
   min-width: 170px;
-  background: var(--ev-c-black-soft);
+  background: var(--surface-1);
 }
 .sched-grid .sched-name small {
   display: block;
@@ -2135,20 +2372,20 @@ input[type='checkbox'] {
 }
 .sched-phase input {
   width: 74px;
-  font-size: 11.5px;
+  font-size: 12px;
   padding: 2px 4px;
 }
 .sched-cell {
   cursor: pointer;
   min-width: 74px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 .sched-cell.work {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
-  color: var(--ev-c-text-1);
+  color: var(--text-1);
 }
 .sched-cell.off {
-  color: var(--ev-c-text-3);
+  color: var(--text-2);
   font-style: italic;
 }
 .sched-grid .sel {
@@ -2163,7 +2400,7 @@ input[type='checkbox'] {
   margin-top: 14px;
   padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
 }
 .sched-editor-row {
   display: flex;
@@ -2301,9 +2538,11 @@ input[type='checkbox'] {
 }
 /* a fixture's warnings, right under its row */
 .table tbody tr.lx-warn-row > td {
+  height: auto;
   padding-top: 0;
+  padding-bottom: 8px;
   font-size: 12.5px;
-  color: #ffcf8a;
+  color: var(--warn-ink);
   border-top: none;
 }
 .lx-warnings {
@@ -2429,7 +2668,7 @@ input[type='checkbox'] {
   background: #fff;
   color: #1b1b1f;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 18px;
   overflow-x: auto;
 }
@@ -2552,7 +2791,7 @@ body.col-resizing {
 .lxr-more summary {
   cursor: pointer;
   font-size: 12.5px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
   margin-bottom: 8px;
 }
 .lxr-preview .lxr-sw {
@@ -2588,7 +2827,7 @@ body.col-resizing {
 .seg {
   display: inline-flex;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   overflow: hidden;
 }
 .seg button {
@@ -2660,7 +2899,7 @@ body.col-resizing {
   border-color: #e0a63a;
 }
 .ipsheet td.ipsheet-msg {
-  font-size: 11.5px;
+  font-size: 12px;
   white-space: normal;
 }
 .ipsheet tr.ipsheet-error td.ipsheet-msg {
@@ -2731,7 +2970,7 @@ body.col-resizing {
   max-height: 46vh;
   overflow-y: auto;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
 }
 .ps-pick label {
   display: flex;
@@ -2770,7 +3009,7 @@ body.col-resizing {
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  color: var(--ev-c-text-2);
+  color: var(--text-2);
 }
 .hdr-row {
   display: flex;

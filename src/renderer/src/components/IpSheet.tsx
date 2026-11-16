@@ -238,6 +238,9 @@ function IpSheet({ groups, subnets, onChanged, onOpenDevice }: Props): React.JSX
   }
 
   const problems = Object.values(status)
+  const conflicts = problems.filter((p) => p.level === 'error').length
+  const toCheck = problems.length - conflicts
+  const deviceCount = groups.reduce((n, [, list]) => n + list.length, 0)
   let lastDevice = -1
 
   return (
@@ -255,7 +258,12 @@ function IpSheet({ groups, subnets, onChanged, onOpenDevice }: Props): React.JSX
           />
           Show unused jacks
         </label>
-        {problems.length > 0 && <span className="ipsheet-count">{problems.length} to check</span>}
+        {conflicts > 0 && (
+          <span className="status-pill status-error">
+            ✕ {conflicts} conflict{conflicts === 1 ? '' : 's'}
+          </span>
+        )}
+        {toCheck > 0 && <span className="status-pill status-warn">⚠ {toCheck} to check</span>}
       </div>
       <table className="table ipsheet" ref={tableRef}>
         <colgroup>
@@ -281,8 +289,17 @@ function IpSheet({ groups, subnets, onChanged, onOpenDevice }: Props): React.JSX
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={7} className="empty-cell">
-                No ports to show.
+              <td colSpan={7}>
+                {deviceCount === 0 ? (
+                  <div className="empty-state">
+                    <p className="empty-body">No devices match your search.</p>
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-title">No ports yet</div>
+                    <p className="empty-body">Add ports to devices to see them here.</p>
+                  </div>
+                )}
               </td>
             </tr>
           )}
@@ -316,6 +333,8 @@ function IpSheet({ groups, subnets, onChanged, onOpenDevice }: Props): React.JSX
                     <input
                       data-cell={`${ri}:0`}
                       className="mono"
+                      aria-label={`${r.device.name} ${portLabel} IP address`}
+                      aria-invalid={st?.level === 'error' || undefined}
                       value={value(r, 'ip')}
                       placeholder="—"
                       spellCheck={false}
@@ -332,6 +351,8 @@ function IpSheet({ groups, subnets, onChanged, onOpenDevice }: Props): React.JSX
                   {editable(r, 'vlan') && (
                     <select
                       data-cell={`${ri}:1`}
+                      aria-label={`${r.device.name} ${portLabel} VLAN`}
+                      aria-invalid={st?.level === 'error' || undefined}
                       value={value(r, 'vlan')}
                       onChange={(e) => {
                         edit(r, 'vlan', e.target.value)
@@ -361,7 +382,18 @@ function IpSheet({ groups, subnets, onChanged, onOpenDevice }: Props): React.JSX
                     </button>
                   )}
                 </td>
-                <td className="ipsheet-msg">{st?.message ?? ''}</td>
+                <td className="ipsheet-msg">
+                  {st && (
+                    <>
+                      <span
+                        className={`status-pill ${st.level === 'error' ? 'status-error' : 'status-warn'}`}
+                      >
+                        {st.level === 'error' ? '✕ Conflict' : '⚠ Check'}
+                      </span>
+                      {st.message}
+                    </>
+                  )}
+                </td>
               </tr>
             )
           })}

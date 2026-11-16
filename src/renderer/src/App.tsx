@@ -22,7 +22,8 @@ import PaperworkPage from './pages/PaperworkPage'
 import SettingsPage from './pages/SettingsPage'
 import TimecodePage from './pages/TimecodePage'
 import ShowStatusPage from './pages/ShowStatusPage'
-import ProjectMenu from './components/ProjectMenu'
+import Sidebar from './components/Sidebar'
+import './assets/shell.css'
 
 type Tab =
   | 'devices'
@@ -49,7 +50,7 @@ type Tab =
 
 type NavGroup = { key: string; label: string; items: [Tab, string][] }
 
-// Sidebar, grouped by job. Groups fold; the one holding the open page stays open.
+// Sidebar, grouped by job. Groups are always open, under small labels.
 const NAV: NavGroup[] = [
   {
     key: 'network',
@@ -155,14 +156,25 @@ function loadMode(): Mode {
 const inMode = (mode: Mode, tab: Tab): boolean =>
   tab === 'settings' || MODE_NAV[mode].some((g) => g.items.some(([t]) => t === tab))
 
-const OPEN_GROUPS_KEY = 'sidebar.openGroups'
+const COLLAPSED_KEY = 'sidebar.collapsed'
 
-function loadOpenGroups(): Set<string> {
+function loadCollapsed(): boolean {
   try {
-    return new Set(JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY) ?? '["network","cables"]'))
+    return localStorage.getItem(COLLAPSED_KEY) === '1'
   } catch {
-    return new Set(['network', 'cables'])
+    return false
   }
+}
+
+// The mode a page lives in when the current one doesn't hold it (Prep holds every page).
+function modeFor(tab: Tab): Mode {
+  return MODES.map(([m]) => m).find((m) => inMode(m, tab)) ?? 'prep'
+}
+
+function tabLabel(tab: Tab): string {
+  for (const m of Object.values(MODE_NAV))
+    for (const g of m) for (const [t, label] of g.items) if (t === tab) return label
+  return tab
 }
 
 function App(): React.JSX.Element {
@@ -180,29 +192,40 @@ function App(): React.JSX.Element {
       return inMode(m, want) ? want : MODE_NAV[m][0].items[0][0]
     })
   }, [])
+  // Set when something opened a page the current mode doesn't hold, so the mode switch is explained.
+  const [modeNote, setModeNote] = useState<string | null>(null)
+  // Open a page from elsewhere in the app, switching mode (visibly) if this one doesn't hold it.
+  const goTo = useCallback(
+    (t: Tab): void => {
+      if (inMode(mode, t)) {
+        setTab(t)
+        return
+      }
+      const m = modeFor(t)
+      pickMode(m, t)
+      setModeNote(`Switched to ${MODES.find(([k]) => k === m)?.[1]} to show ${tabLabel(t)}.`)
+    },
+    [mode, pickMode]
+  )
   // an export menu's "Edit layout…" opens Paperwork on that export's template
   const [paperworkFocus, setPaperworkFocus] = useState<string | null>(null)
   useEffect(() => {
     const open = (e: Event): void => {
       setPaperworkFocus((e as CustomEvent<string>).detail)
-      pickMode('prep', 'paperwork') // Paperwork only lives in Prep
+      goTo('paperwork') // Paperwork only lives in Prep
     }
     window.addEventListener('open-paperwork', open)
     return () => window.removeEventListener('open-paperwork', open)
-  }, [pickMode])
-  const [openGroups, setOpenGroups] = useState<Set<string>>(loadOpenGroups)
-
-  const toggleGroup = (key: string): void =>
-    setOpenGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+  }, [goTo])
+  const [collapsed, setCollapsed] = useState(loadCollapsed)
+  const toggleCollapsed = (): void =>
+    setCollapsed((c) => {
       try {
-        localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify([...next]))
+        localStorage.setItem(COLLAPSED_KEY, c ? '0' : '1')
       } catch {
         /* remembered per session only */
       }
-      return next
+      return !c
     })
   const [project, setProject] = useState<ProjectInfo | null>(null)
   const [subnets, setSubnets] = useState<Subnet[]>([])
@@ -211,7 +234,6 @@ function App(): React.JSX.Element {
   const [cableTypes, setCableTypes] = useState<CableType[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [updateReady, setUpdateReady] = useState(false)
   // A save or action that failed where the page doesn't show its own error
   // (e.g. a change refused while viewing a shared show).
   const [notice, setNotice] = useState<string | null>(null)
@@ -281,15 +303,6 @@ function App(): React.JSX.Element {
     [refresh]
   )
 
-  // Flag the Settings tab when an update is ready, so it's noticed without
-  // opening Settings. Reflects the current state on mount, then live changes.
-  useEffect(() => {
-    const apply = (s: { phase: string }): void =>
-      setUpdateReady(s.phase === 'available' || s.phase === 'downloaded')
-    window.api.updates.getState().then(apply)
-    return window.api.onUpdateStatus(apply)
-  }, [])
-
   // Switching projects swaps the whole database — reload everything.
   const handleSwitch = useCallback(
     (info: ProjectInfo) => {
@@ -302,12 +315,6 @@ function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <div className="app-header-left">
-          <h1>Device Manager</h1>
-          <ProjectMenu current={project} onSwitched={handleSwitch} />
-        </div>
-      </header>
       {notice && (
         <div className="banner banner-error remote-banner app-notice">
           {notice}
@@ -333,50 +340,39 @@ function App(): React.JSX.Element {
       )}
 
       <div className="app-body">
-        <nav className="sidebar" aria-label="Sections">
-          {MODE_NAV[mode].map((g) => {
-            const hasActive = g.items.some(([t]) => t === tab)
-            // the group holding the open page can't fold away
-            const open = hasActive || openGroups.has(g.key)
-            return (
-              <div className="side-group" key={g.key}>
-                <button
-                  className={`side-group-head ${hasActive ? 'has-active' : ''}`}
-                  aria-expanded={open}
-                  onClick={() => !hasActive && toggleGroup(g.key)}
-                >
-                  <span className="side-caret">{open ? '▾' : '▸'}</span>
-                  {g.label}
-                </button>
-                {open && (
-                  <div className="side-sub">
-                    {g.items.map(([t, label]) => (
-                      <button
-                        key={t}
-                        className={`side-item ${tab === t ? 'active' : ''}`}
-                        aria-current={tab === t ? 'page' : undefined}
-                        onClick={() => setTab(t)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          <div className="side-spacer" />
-          <button
-            className={`side-item ${tab === 'settings' ? 'active' : ''}`}
-            onClick={() => setTab('settings')}
-          >
-            Settings
-            {updateReady && <span className="tab-dot" title="An update is available" />}
-          </button>
-        </nav>
+        <Sidebar
+          appName="Device Manager"
+          modes={MODES}
+          mode={mode}
+          onPickMode={(m) => {
+            setModeNote(null)
+            pickMode(m as Mode)
+          }}
+          modeBadges={{
+            program: tcPlaying ? { text: '▶', label: 'Timecode playing' } : undefined
+          }}
+          groups={MODE_NAV[mode]}
+          tab={tab}
+          onTab={(t) => {
+            setModeNote(null)
+            setTab(t as Tab)
+          }}
+          counts={loading ? {} : { devices: devices.length, subnets: subnets.length }}
+          collapsed={collapsed}
+          onToggleCollapsed={toggleCollapsed}
+          project={project}
+          onSwitched={handleSwitch}
+        />
 
         <main className="app-main">
+          {modeNote && (
+            <div className="mode-note" role="status">
+              <span>{modeNote}</span>
+              <button className="btn btn-small" onClick={() => setModeNote(null)}>
+                Dismiss
+              </button>
+            </div>
+          )}
           {loading ? (
             <p className="muted">Loading…</p>
           ) : tab === 'devices' ? (
@@ -449,22 +445,6 @@ function App(): React.JSX.Element {
           )}
         </main>
       </div>
-
-      <footer className="status-bar">
-        <span className="muted">{project?.name ?? ''}</span>
-        <div className="seg" role="group" aria-label="Mode">
-          {MODES.map(([m, label]) => (
-            <button
-              key={m}
-              className={mode === m ? 'is-on' : ''}
-              aria-pressed={mode === m}
-              onClick={() => pickMode(m)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </footer>
     </div>
   )
 }
