@@ -18,7 +18,7 @@ Download the installer for your computer from the **[Releases page](https://gith
 Each show is one **project file** (`.vwdm`). The convention is to keep it **next to your drawing with the same name** — `MyShow.vwx` → `MyShow.vwdm` — so the Vectorworks sync scripts find it automatically.
 
 1. Open Device Manager.
-2. Top-left **project menu → Save a Copy As…** and save it beside your `.vwx` with a matching name.
+2. **Project menu** (bottom-left of the sidebar) **→ Save a Copy As…** and save it beside your `.vwx` with a matching name.
 
 > Projects live in Dropbox and sync between your computers automatically. Don't edit the same project on two machines at once.
 
@@ -31,6 +31,8 @@ Each show is one **project file** (`.vwdm`). The convention is to keep it **next
 ---
 
 ## 4. Add your networks, then your gear
+
+The sidebar's **Prep / Program / Show** filter at the top picks which pages you see; stay on **Prep** while you build the show.
 
 1. **Subnets tab → add a subnet** for each network/VLAN (name, CIDR like `10.0.10.0/24`, VLAN tag, gateway).
 2. **Devices tab → add a device.** Give it a name, type, and a port; assign the port an IP and its untagged/tagged VLANs. Mark switches as switches — they get management/OOB IPs and VLAN-only ports. Got lots of IPs to enter? Switch Devices to **IP sheet** and type or paste them like a spreadsheet.
@@ -54,6 +56,7 @@ The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 - **Paperwork** — want the pull sheet, IP schedule or any other export laid out differently? Open **Paperwork** (or **Edit layout…** in an Export menu), pick the template, then click headings to change columns and drag their edges to resize. The export follows.
 - **Network → Projectors / Wallpapers / Software** — Panasonic projector setup sheets, branded desktop wallpapers, and USB install kits for show computers.
 - **Network → Configs** — a Hyper-V VLAN script for a Windows host, or **Save VLAN Manager…** for a small Windows GUI that shows a host's live VLANs and lets you change them (Preview first, then Apply).
+- **Program → Timecode** — drop in songs and place a flag for each Eos cue; playing a song here fires the cues on an ETC Eos console. **Show → Status** pings your devices every 30 seconds so you can see who's missing. See [Timecode](USER-GUIDE.md#timecode) and [Show status](USER-GUIDE.md#show-status).
 - **Settings → Paperwork header** — where your logos, the show name, the document title, the date and a line of your own sit at the top of every PDF.
 - **Settings → Table style** — the font, header style, colors and padding every Excel and PDF table uses.
 
@@ -63,7 +66,7 @@ The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 
 In Vectorworks, run the sync scripts to write everything back onto your ConnectCAD devices. One-time setup and the workflow are in **[vectorworks-scripts/README.md](../vectorworks-scripts/README.md)**.
 
-**Working as a team?** Keep the show on the Vectorworks computer, turn on the **Show Server** there with a **manager PIN**, and other computers running Device Manager can **join** it from the project menu (*Join a show on the network…* — the show appears in the list, just enter the PIN) to see it live — view-only for now. Details: [Sharing a show with other computers](USER-GUIDE.md#sharing-a-show-with-other-computers).
+**Working as a team?** Keep the show on the Vectorworks computer, turn on the **Show Server** there with a **manager PIN**, and other computers running Device Manager can **join** it from the project menu (sidebar project menu → *Join a show on the network…* — the show appears in the list, just enter the PIN) to see it live — view-only for now. Details: [Sharing a show with other computers](USER-GUIDE.md#sharing-a-show-with-other-computers).
 
 ---
 

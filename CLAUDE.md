@@ -89,8 +89,15 @@ workspace context and the cross-machine handoff log — check those first.
 - **Preload** (`src/preload/`): exposes the typed `VwDeviceManagerApi`
   (`src/shared/types.ts`) to the renderer via `contextBridge`.
 - **Renderer** (`src/renderer/src/`): React UI — `App.tsx` shell with a data-driven
-  `NAV` sidebar grouped by job (Network, Cables, Lighting, Paperwork, Schedule, Packing;
-  open groups kept in localStorage `sidebar.openGroups`) and one file per page in `pages/`. Shared two-pane page: `components/DeviceSetupPage.tsx`.
+  `NAV` (Network, Cables, Lighting, Paperwork, Schedule, Packing) and `MODE_NAV` per mode
+  (Prep = `NAV`; Program = Timecode/Fixtures/Universes; Show = Status/Devices/Configs/Patching;
+  mode in localStorage `app.mode`). `components/Sidebar.tsx` (+ `Icon.tsx`) is the whole
+  shell: mode filter at the top (▶ badge while timecode plays), icon nav, collapsible to an
+  80px rail (`sidebar.collapsed`), Show Server + update cards and the project menu
+  (`ProjectMenu.tsx`) at the bottom. No status bar. Page chrome: `PageHeader.tsx` (main
+  action + `OverflowMenu.tsx` ⋯ for rare actions), `Field.tsx` (inline errors). Colours are
+  role tokens in `assets/base.css` (`--surface-*`, `--text-*`); old `--ev-c-*` are aliases.
+  One file per page in `pages/`. Shared two-pane page: `components/DeviceSetupPage.tsx`.
 - **Shared** (`src/shared/`): `types.ts` (all data types + the
   `VwDeviceManagerApi` contract shared between main/preload/renderer), and pure
   logic used by both sides: `ip-utils.ts` (CIDR/IP helpers, `mainRoute` = a device's

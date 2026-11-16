@@ -5,7 +5,8 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 ## Contents
 
 - [Core concepts](#core-concepts)
-- [Projects (the top-left menu)](#projects)
+- [The sidebar and modes](#the-sidebar-and-modes)
+- [Projects (the sidebar menu)](#projects)
 - [Devices](#devices)
   - [Importing a ShowSandbox show](#importing-a-showsandbox-show)
   - [IP sheet (edit every IP at once)](#ip-sheet)
@@ -21,6 +22,8 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
   - [Loom labels (sticker sheets)](#loom-labels)
 - [Lighting](#lighting)
   - [Live sync with Vectorworks Spotlight](#live-sync-with-vectorworks-spotlight)
+- [Timecode (Eos)](#timecode)
+- [Show status](#show-status)
 - [Patching](#patching)
 - [Orders](#orders)
   - [Auto-add kits](#auto-add-kits)
@@ -35,7 +38,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Syncing to Vectorworks](#syncing-to-vectorworks)
 - [Troubleshooting](#troubleshooting)
 
-The left sidebar groups pages by job: **Network** (Devices, Subnets, Configs, Projectors, Wallpapers, Software), **Cables** (Cables, Patching, Loom labels), **Lighting** (Fixtures, Universes, Fixture types), **Paperwork** (Orders, Paperwork), **Schedule** (Crew, Trucking) and **Packing** (Case labels, Cases), with **Settings** at the bottom. Click a group's heading to fold it; the app remembers which groups you keep open. Every button and row can be reached with Tab, and Enter opens a row.
+The left sidebar groups pages by job: **Network** (Devices, Subnets, Configs, Projectors, Wallpapers, Software), **Cables** (Cables, Patching, Loom labels), **Lighting** (Fixtures, Universes, Fixture types), **Paperwork** (Orders, Paperwork), **Schedule** (Crew, Trucking) and **Packing** (Case labels, Cases), with **Settings** at the bottom. Two more pages, **Timecode** and **Show status**, live in the [modes](#the-sidebar-and-modes). Every button and row can be reached with Tab, and Enter opens a row.
 
 ---
 
@@ -48,16 +51,37 @@ The left sidebar groups pages by job: **Network** (Devices, Subnets, Configs, Pr
 
 ---
 
+## The sidebar and modes
+
+At the top of the sidebar a **Prep / Program / Show** filter picks which pages the sidebar lists. Pick one with a click or the arrow keys. The app remembers your choice.
+
+- **Prep** — building the show. Every page in the groups above, except Timecode and Show status.
+- **Program** — at the lighting desk: [Timecode](#timecode), Fixtures and Universes. A **▶** shows on the Program button while a song is playing, so you can see it from another mode.
+- **Show** — running live: [Show status](#show-status), Devices, Configs and Patching.
+
+If something opens a page the current mode doesn't list, the app switches mode and says so.
+
+The rest of the sidebar:
+
+- Each page has an icon. The collapse button at the top folds the sidebar into a narrow icon rail; hover an icon for its name.
+- At the bottom, a card shows whether the [Show Server](#show-server) is on and how many are signed in, with **Start** when it's off. Click it to open its settings.
+- When an update is waiting, a card shows **vX available** (click to open **Settings → Updates**) or **vX ready** with **Restart**.
+- The project menu (see below) and **Settings** sit at the very bottom. There's no status bar at the bottom of the window any more.
+
+Page headers keep the main button on the right. Less-used actions sit in a **⋯** menu, for example **Import ShowSandbox…** on Devices and **Clear all patching…** on Patching. Errors show under the field they're about. Tables are denser.
+
+---
+
 ## Projects
 
-The menu in the **top-left** of the window manages projects:
+The project menu at the **bottom-left** of the window, in the sidebar footer, manages projects:
 
 - **New** — start an empty project.
 - **Open…** — open an existing `.vwdm` file.
 - **Recent** — jump back to a project you've used.
 - **Save a Copy As…** — write the current project to a new file (this is how you first place a project next to its drawing).
 
-The name of the open project shows in the header. Switching projects just reopens the app's data from the other file — your per-machine list of recent projects is stored locally, not in the project, so absolute paths never clash between your Mac and PC.
+The name of the open project shows on that menu button. Switching projects just reopens the app's data from the other file — your per-machine list of recent projects is stored locally, not in the project, so absolute paths never clash between your Mac and PC.
 
 ---
 
@@ -95,7 +119,7 @@ Device **type** and **location** are usually owned by the drawing (read-only in 
 
 ### Importing a ShowSandbox show
 
-Planned the rig in **ShowSandbox**? Bring it in instead of typing it again: on **Devices** click **Import ShowSandbox…** and pick the show's `.json` file (ShowSandbox keeps them in `~/Library/Application Support/ShowSandbox/shows/`; in the file picker press ⌘⇧G and paste that path).
+Planned the rig in **ShowSandbox**? Bring it in instead of typing it again: on **Devices** open the **⋯** menu, choose **Import ShowSandbox…** and pick the show's `.json` file (ShowSandbox keeps them in `~/Library/Application Support/ShowSandbox/shows/`; in the file picker press ⌘⇧G and paste that path).
 
 What comes in:
 - **Devices** — named by their ShowSandbox **ident** (SW1, CON1…), or their label if they have none, with type (make + model) and location (rack, or position). A device whose category has *switch* in it comes in as a switch.
@@ -241,7 +265,7 @@ Builds a **Hyper-V VLAN trunk** for a Windows host — one untagged (native) ada
 
 ### VLAN Manager (host tool)
 
-For a GUI instead of a script, Device Manager carries a small Windows **VLAN Manager**. Click **Save VLAN Manager…** at the top of the Configs page and pick a folder: it writes a **VLAN Manager** folder with two files (`VlanManager.ps1` and `Apply-VlanConfig.ps1`). Copy that folder to the Hyper-V host (keep the two files together) and right-click **`VlanManager.ps1` → Run with PowerShell**. It asks for administrator rights itself. Use it to:
+For a GUI instead of a script, Device Manager carries a small Windows **VLAN Manager**. Click **Save VLAN Manager…** on the Configs page and pick a folder: it writes a **VLAN Manager** folder with two files (`VlanManager.ps1` and `Apply-VlanConfig.ps1`). Copy that folder to the Hyper-V host (keep the two files together) and right-click **`VlanManager.ps1` → Run with PowerShell**. It asks for administrator rights itself. Use it to:
 
 - **see the VLAN adapters that are there right now,**
 - add / edit / remove them (an adapter you remove is deleted from the host at the next Apply),
@@ -298,15 +322,58 @@ Good to know:
 
 ---
 
+## Timecode
+
+*(beta)* **Program › Timecode** is for an **ETC Eos** console. Drop in each song, put a flag on its waveform for every cue, and play the song here: the app fires each cue on the console as the song passes its flag. Pick **Program** in the sidebar's [mode filter](#the-sidebar-and-modes) to see it.
+
+**Connect.** Type the console's IP into **Console IP** and click **Connect**. The app talks to Eos over OSC on TCP port 3032 and shows the console's version once it's connected. Pick the **frame rate** (24, 25 or 30 fps).
+
+**Add songs.** Drop audio files on the page (WAV, MP3, AIFF) or click **+ Add songs…**. Each new song gets the next hour of timecode. The audio is copied into a `<project> Audio` folder beside the project file. For each song you can set:
+
+- **Starts at** — the song's first timecode. Flags keep their place in the song when you change this; only their timecodes shift. It doesn't rewrite the console yet.
+- **Cue list** — the console cue list its cues are in.
+- **Delete song…**
+
+If two songs overlap on the same cue list, a warning says so.
+
+**Flags.** Each flag is one Eos cue on the waveform, with its timecode. Drag a flag to move it. The timecode on the flag and in the **Cues in this song** table follow live, and when you let go the new timecode is sent to the console if the cue is already there. **Cmd+Z / Cmd+Shift+Z** (**Ctrl+Z / Ctrl+Y** on Windows) undo and redo flag moves, and the console follows. The **−** and **+** buttons zoom the waveform from 1× to 16×, so close-together flags are easy to pull apart. The **×** in the cue table removes a flag; the cue stays on the console.
+
+Get flags in two ways:
+
+- **Sync from console** reads the cue list. Cues that already have a timecode get flags. Cues without one are listed under **On the console, no timecode yet**: move the playhead to where the cue goes and click **Place at …**.
+- **+ Create cue** makes a new empty cue (no levels) on the console and puts its flag here. It starts at the playhead and the next free cue number; change either first if you like.
+
+> **+ Create cue is not yet tested end to end on a real console.** The rest was tried on ETCnomad, but check the cue it makes on your console before relying on it, and try it on a scratch show first.
+
+The **Console** column shows each cue's state: **On console**, **Created · empty**, **New here** or **Not on console**.
+
+**Scene.** The song's title (trimmed) is written to the first cue's **Scene** on the console, only when that cue's scene is empty. A scene you typed on the console is never changed.
+
+**Play it.** **Play** and **Pause** run the song on this computer. Click or use the arrow keys on the waveform to move the playhead. **Arm: fire cues** turns on firing; it needs a console connection. While **Armed**, turn off the console's own timecode input for that cue list so no cue fires twice. The page keeps playing if you switch to another page or mode.
+
+---
+
+## Show status
+
+*(beta)* **Show › Status** shows what's answering on the network while the show runs. This computer pings every device that has a main IP, every 30 seconds while the page is open. **Check now** pings right away.
+
+- Tiles at the top count **Devices online** and **Not answering**.
+- The table lists each device with its IP, when it was last **Seen**, and a status: **Online**, **Missing** or **Not checked yet**.
+- Type a name, IP or MAC in **Pull up a config** to narrow the list, then click **Config…** on a row to open that device.
+
+The pings are ordinary ping requests to addresses already in the project. See the [Privacy Policy](PRIVACY.md).
+
+---
+
 ## Patching
 
 Track the patching of cables on devices by importing a Vectorworks **ConnectCAD circuit report**.
 
-**Import:** in Vectorworks, export an **All Layers Circuit Report** to CSV. On the **Patching** tab click **Import circuit report…** and pick the file. Each row becomes a **circuit** — a run from a source device/socket to a destination device/socket, with its signal, cable number, connector and rack/U/slot.
+**Import:** in Vectorworks, export an **All Layers Circuit Report** to CSV. On the **Patching** tab click **Import circuit report…** (once circuits are in, the same button reads **Re-import report…**; **Clear all patching…** is in the **⋯** menu) and pick the file. Each row becomes a **circuit** — a run from a source device/socket to a destination device/socket, with its signal, cable number, connector and rack/U/slot.
 
 **Re-importing keeps your checkmarks:** it adds new circuits, updates existing ones and removes circuits no longer in the report. If the file you pick has no circuits in it (the wrong file), nothing is removed.
 
-**From ShowSandbox:** [Import ShowSandbox…](#importing-a-showsandbox-show) on the Devices page also fills Patching, one circuit per connection. It only *adds* circuits that aren't there yet: circuits from the drawing's report, and their checkmarks, are never changed or removed by it. Once the drawing exists, its circuit report is the one to trust.
+**From ShowSandbox:** **Import ShowSandbox…** ([details](#importing-a-showsandbox-show)) in the Devices page's **⋯** menu also fills Patching, one circuit per connection. It only *adds* circuits that aren't there yet: circuits from the drawing's report, and their checkmarks, are never changed or removed by it. Once the drawing exists, its circuit report is the one to trust.
 
 **Per-end tracking:**
 - **From ✓** / **To ✓** mark *that end* patched, so a run plugged in on only one side shows as "one end only".
@@ -461,9 +528,9 @@ Serve the open show over your **local production WiFi** so anyone helping with t
 *(beta — view-only for now)* Other computers running Device Manager can open the show that's on this computer, over the same network, and see everything live.
 
 1. **On the computer that has the show** (usually the Vectorworks machine — keep the `.vwdm` there): turn on the **Show Server**, set a **manager PIN**, and note the address it shows (e.g. `192.168.1.20:8787`). Joining is refused until a manager PIN is set.
-2. **On the other computer:** top-left project menu → **Join a show on the network…**. Shows whose Show Server is on appear under **On this network** within a couple of seconds — click one, enter the manager PIN → **Join**. If the show isn't listed (a different VLAN, or Wi-Fi that blocks devices from seeing each other), type the address instead. Both computers must run the **same version** of Device Manager.
+2. **On the other computer:** the project menu (bottom-left) → **Join a show on the network…**. Shows whose Show Server is on appear under **On this network** within a couple of seconds — click one, enter the manager PIN → **Join**. If the show isn't listed (a different VLAN, or Wi-Fi that blocks devices from seeing each other), type the address instead. Both computers must run the **same version** of Device Manager.
 3. The project button shows **"Show name · on <host>"** and a blue strip says you're viewing a shared show. Changes made on the host — or by a Vectorworks sync script — appear within a few seconds.
-4. **Leave** (on the strip, or in the project menu) goes back to your own project. Opening a local project also leaves.
+4. **Leave** (on the strip, or **Leave shared show** in the project menu) goes back to your own project. Opening a local project also leaves.
 
 **For now a joined computer can look but not change anything**: saves are refused with a message, and exports, printing and install kits are done from the host. Editing from several computers at once is the next step. If the host goes to sleep or drops off the network, the strip turns amber ("Can't reach …") and it reconnects on its own.
 
@@ -493,7 +560,7 @@ A joined computer can see the whole show **and the shared library on the host, i
 
 The app checks GitHub for new releases and surfaces them under **Settings → Updates**:
 
-- **Automatic vs. Manual** — choose whether it checks on launch. A dot appears on the Settings tab when an update is waiting.
+- **Automatic vs. Manual** — choose whether it checks on launch. When an update is waiting, a card at the bottom of the sidebar says so (**vX available** opens this page; **vX ready** has a **Restart** button).
 - **Check for updates** — check on demand; you'll see the new version's notes.
 - **Windows** installs updates in-app (restart to apply). **macOS** (unsigned) can't self-apply, so it opens the download page — grab the new `.dmg` and reinstall.
 

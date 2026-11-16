@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Device Manager**
-Effective date: November 11, 2026
+Effective date: November 16, 2026
 Provided by: Gabriel Awad ("we", "us") — contact: gabriel@gabrielawad.com
 
 ## The short version

@@ -28,13 +28,17 @@ The app is **not code-signed** yet (that costs money we're skipping during the b
   then right-click → Open. You only do this once.
 - **Windows:** run the installer; on the blue *"Windows protected your PC"* screen click **More info → Run anyway**.
 
-**Updates are automatic.** When a new version is released, the app notices and offers it under **Settings → Updates** (Windows installs it for you; macOS opens the download page). You can also check manually there.
+**Updates are automatic.** When a new version is released, the app notices and offers it at the bottom of the sidebar and under **Settings → Updates** (Windows installs it for you; macOS opens the download page). You can also check manually there.
 
 ---
 
 ## What it does
 
-Everything lives in **projects** — one `.vwdm` file per show, kept next to its `.vwx` drawing. Use the project menu in the top-left to make a new one, open another, or save a copy. The sidebar groups pages by job (fold any group you don't use):
+Everything lives in **projects** — one `.vwdm` file per show, kept next to its `.vwx` drawing. Use the project menu at the bottom of the sidebar to make a new one, open another, or save a copy. The sidebar groups pages by job, and a **Prep / Program / Show** filter at its top picks how much of the app you see:
+
+- **Prep** — building the show: the pages below, except Timecode and Status.
+- **Program** — at the lighting desk: **Timecode**, **Fixtures** and **Universes**. A ▶ appears on the button while a song is playing.
+- **Show** — running live: **Show › Status**, plus Devices, Configs and Patching.
 
 **Network**
 - **Devices** — every piece of gear, its ports, IPs, VLANs, MAC, type and location (Details / Ports / Connections tabs); the list shows each device's main VLAN and IP. Switches get management/OOB IPs, VLAN-only ports, LAGs and a generated NETGEAR config, including SNMP and syslog for your monitoring PC. The app warns about duplicate IPs and IPs outside their subnet. The **IP sheet** view edits every IP and VLAN in one spreadsheet (paste a column from Excel). **Import ShowSandbox…** brings in a show planned in ShowSandbox: devices, network ports and IPs, cables and patching circuits.
@@ -49,7 +53,11 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
 - **Loom labels** — import a sticker sheet template (Word or PDF, e.g. OnlineLabels / Avery), design the sticker, and print one for each end of every cable in the looms you pick.
 
 **Lighting** *(beta)*
+- **Timecode** *(beta, Program mode)* — for an ETC Eos console: drop in a song, see its waveform and place a flag where each cue goes. Playing the song here fires each cue on the console over OSC (TCP 3032), and each flag's timecode is sent to the console. The song's title becomes the first cue's Scene when it's empty. Flag moves can be undone and redone, and the waveform zooms. **+ Create cue** makes an empty cue on the console; that part is **not yet tested end to end on a real console**.
 - **Fixtures**: the lighting rig (position, unit, type, mode, purpose, channel, universe/address, color, gobos, dimmer, circuit, user fields, notes) with **live two-way sync with Vectorworks Spotlight** through its Lightwright exchange file. **Universes**: what's patched where in each DMX universe, overlaps in red, and which DMX/sACN node from Devices each universe comes out of. **Fixture types**: DMX modes and footprints, shared by every show. Patch checks flag overlapping addresses, fixtures past 512, half-patched fixtures and universes with no node. Each fixture's mode and DMX footprint come from the drawing when Vectorworks sends them, and template holders aren't counted as fixtures.
+
+**Show** *(beta, Show mode)*
+- **Status** — pings every device that has a main IP every 30 seconds and shows who is online and who is missing, with each device's config one click away.
 
 **Paperwork**
 - **Orders** — shop orders with equipment + cables, tracking **ordered vs. received**. Import from the drawing, paste from Excel, auto-add kits, and export **pull orders** and **receiving checklists** (PDF/Excel/CSV) in your own **export formats** — columns, header text, widths, text size, and a ready-made **Equipment list** layout with Old/New qty and a Balance column.
@@ -62,11 +70,11 @@ Everything lives in **projects** — one `.vwdm` file per show, kept next to its
 - **Case labels** (templates on a freeform canvas, printed two-up on Uline S-19323) and **Cases** (what's in each road case → a label per case).
 
 **Settings**
-- Company + show branding, the **Paperwork header** (where the logos, names, title, date and a line of your own sit at the top of every PDF, plus an optional company-logo watermark), the **Table style** (one look for every Excel and PDF table: font, header colors, stripes, lines, padding), the shared library and the folder it syncs from, kits, the switch-config template and monitoring, the **Show Server** and updates.
+- Company + show branding, the **Paperwork header** (where the logos, names, title, date and a line of your own sit at the top of every PDF, plus an optional company-logo watermark), the **Table style** (one look for every Excel and PDF table: font, header colors, stripes, lines, padding), the shared library and the folder it syncs from, kits, the switch-config template and monitoring, the **Show Server** and updates. The sidebar's bottom shows whether the Show Server is on and any waiting update.
 
 **Also**
 - **Crew phone app** — the **Show Server** puts the show on the production WiFi: crew open it in a phone browser (or add it to the home screen) to receive orders, look up devices, tick off patching and print a cable's labels through VectorLabel.
-- **Share a show with other computers** *(beta, view-only for now)* — other copies of Device Manager on the same network can **join** the show open on the host (project menu → *Join a show on the network…* lists the shows it finds on the network; pick one and enter the manager PIN) and see it update live.
+- **Share a show with other computers** *(beta, view-only for now)* — other copies of Device Manager on the same network can **join** the show open on the host (sidebar project menu → *Join a show on the network…* lists the shows it finds on the network; pick one and enter the manager PIN) and see it update live.
 
 📖 **New here? Start with the [Quick Start](docs/QUICK-START.md), then the full [User Guide](docs/USER-GUIDE.md).**
 
