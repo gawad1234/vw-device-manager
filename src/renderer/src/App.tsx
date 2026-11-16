@@ -20,6 +20,8 @@ import UniversesPage from './pages/UniversesPage'
 import FixtureTypesPage from './pages/FixtureTypesPage'
 import PaperworkPage from './pages/PaperworkPage'
 import SettingsPage from './pages/SettingsPage'
+import TimecodePage from './pages/TimecodePage'
+import ShowStatusPage from './pages/ShowStatusPage'
 import ProjectMenu from './components/ProjectMenu'
 
 type Tab =
@@ -41,10 +43,14 @@ type Tab =
   | 'universes'
   | 'fixtureTypes'
   | 'paperwork'
+  | 'timecode'
+  | 'showstatus'
   | 'settings'
 
+type NavGroup = { key: string; label: string; items: [Tab, string][] }
+
 // Sidebar, grouped by job. Groups fold; the one holding the open page stays open.
-const NAV: { key: string; label: string; items: [Tab, string][] }[] = [
+const NAV: NavGroup[] = [
   {
     key: 'network',
     label: 'Network',
@@ -101,6 +107,54 @@ const NAV: { key: string; label: string; items: [Tab, string][] }[] = [
   }
 ]
 
+// Prep = building the show (the whole app); Program = at the desks; Show = running live.
+type Mode = 'prep' | 'program' | 'show'
+const MODES: [Mode, string][] = [
+  ['prep', 'Prep'],
+  ['program', 'Program'],
+  ['show', 'Show']
+]
+const MODE_NAV: Record<Mode, NavGroup[]> = {
+  prep: NAV,
+  program: [
+    {
+      key: 'lighting',
+      label: 'Lighting',
+      items: [
+        ['timecode', 'Timecode'],
+        ['fixtures', 'Fixtures'],
+        ['universes', 'Universes']
+      ]
+    }
+  ],
+  show: [
+    { key: 'show', label: 'Show', items: [['showstatus', 'Status']] },
+    {
+      key: 'network',
+      label: 'Network',
+      items: [
+        ['devices', 'Devices'],
+        ['configs', 'Configs']
+      ]
+    },
+    { key: 'cables', label: 'Cables', items: [['patching', 'Patching']] }
+  ]
+}
+const MODE_KEY = 'app.mode'
+
+function loadMode(): Mode {
+  try {
+    const m = localStorage.getItem(MODE_KEY)
+    if (m === 'prep' || m === 'program' || m === 'show') return m
+  } catch {
+    /* falls back to Prep */
+  }
+  return 'prep'
+}
+
+const inMode = (mode: Mode, tab: Tab): boolean =>
+  tab === 'settings' || MODE_NAV[mode].some((g) => g.items.some(([t]) => t === tab))
+
 const OPEN_GROUPS_KEY = 'sidebar.openGroups'
 
 function loadOpenGroups(): Set<string> {
@@ -112,17 +166,30 @@ function loadOpenGroups(): Set<string> {
 }
 
 function App(): React.JSX.Element {
-  const [tab, setTab] = useState<Tab>('devices')
+  const [mode, setMode] = useState<Mode>(loadMode)
+  const [tab, setTab] = useState<Tab>(() => MODE_NAV[mode][0].items[0][0])
+  const pickMode = useCallback((m: Mode, keepTab?: Tab): void => {
+    setMode(m)
+    try {
+      localStorage.setItem(MODE_KEY, m)
+    } catch {
+      /* remembered per session only */
+    }
+    setTab((t) => {
+      const want = keepTab ?? t
+      return inMode(m, want) ? want : MODE_NAV[m][0].items[0][0]
+    })
+  }, [])
   // an export menu's "Edit layout…" opens Paperwork on that export's template
   const [paperworkFocus, setPaperworkFocus] = useState<string | null>(null)
   useEffect(() => {
     const open = (e: Event): void => {
       setPaperworkFocus((e as CustomEvent<string>).detail)
-      setTab('paperwork')
+      pickMode('prep', 'paperwork') // Paperwork only lives in Prep
     }
     window.addEventListener('open-paperwork', open)
     return () => window.removeEventListener('open-paperwork', open)
-  }, [])
+  }, [pickMode])
   const [openGroups, setOpenGroups] = useState<Set<string>>(loadOpenGroups)
 
   const toggleGroup = (key: string): void =>
@@ -148,6 +215,7 @@ function App(): React.JSX.Element {
   // A save or action that failed where the page doesn't show its own error
   // (e.g. a change refused while viewing a shared show).
   const [notice, setNotice] = useState<string | null>(null)
+  const [tcPlaying, setTcPlaying] = useState(false)
 
   // Only the newest load may land: a slow read of a host you just left mustn't
   // put its rows on screen for the local project.
@@ -199,7 +267,16 @@ function App(): React.JSX.Element {
     () =>
       window.api.onDataChanged(() => {
         void refresh()
-        window.api.projects.current().then(setProject)
+        window.api.projects.current().then((info) =>
+          setProject((prev) => {
+            // Leave goes through handleSwitch, so a shared show vanishing here means the host ended it.
+            if (prev?.remote && !info?.remote)
+              setNotice(
+                `${prev.remote.host} ended the shared session (it restarted, changed its PIN or opened another show). Join again to keep viewing.`
+              )
+            return info
+          })
+        )
       }),
     [refresh]
   )
@@ -257,7 +334,7 @@ function App(): React.JSX.Element {
 
       <div className="app-body">
         <nav className="sidebar" aria-label="Sections">
-          {NAV.map((g) => {
+          {MODE_NAV[mode].map((g) => {
             const hasActive = g.items.some(([t]) => t === tab)
             // the group holding the open page can't fold away
             const open = hasActive || openGroups.has(g.key)
@@ -346,6 +423,14 @@ function App(): React.JSX.Element {
             <UniversesPage key={project?.path} devices={devices} />
           ) : tab === 'fixtureTypes' ? (
             <FixtureTypesPage key={project?.path} />
+          ) : tab === 'timecode' ? null : tab === 'showstatus' ? (
+            <ShowStatusPage
+              key={project?.path}
+              devices={devices}
+              subnets={subnets}
+              categories={categories}
+              onChanged={refresh}
+            />
           ) : tab === 'paperwork' ? (
             <PaperworkPage key={`${project?.path}|${paperworkFocus}`} focusId={paperworkFocus} />
           ) : (
@@ -356,8 +441,30 @@ function App(): React.JSX.Element {
               onChanged={refresh}
             />
           )}
+          {/* stays mounted (hidden) while playing so leaving the tab doesn't stop the show */}
+          {!loading && (tab === 'timecode' || tcPlaying) && (
+            <div style={{ display: tab === 'timecode' ? 'contents' : 'none' }}>
+              <TimecodePage key={project?.path} onPlayingChange={setTcPlaying} />
+            </div>
+          )}
         </main>
       </div>
+
+      <footer className="status-bar">
+        <span className="muted">{project?.name ?? ''}</span>
+        <div className="seg" role="group" aria-label="Mode">
+          {MODES.map(([m, label]) => (
+            <button
+              key={m}
+              className={mode === m ? 'is-on' : ''}
+              aria-pressed={mode === m}
+              onClick={() => pickMode(m)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </footer>
     </div>
   )
 }

@@ -7,6 +7,7 @@ import QRCode from 'qrcode'
 import { readFileSync } from 'node:fs'
 import appIcon from '../../resources/icon.png?asset'
 import { startBeacon, stopBeacon } from './discovery'
+import { notePinResult, pinFailures, pinLocked, pinLogin, type Role } from './pin-login'
 import { getLabelFolder, printCableLabel } from './vectorlabel'
 import type {
   OrderItem,
@@ -56,26 +57,10 @@ let win: BrowserWindow | null = null
 let lastPort = getShowServerPort()
 let lastError: string | null = null
 
-type Role = 'crew' | 'manager'
 // kind 'app' = another Device Manager that joined this show (bearer token, /rpc/*).
 const sessions = new Map<string, { role: Role; kind?: 'app' }>()
 
-// Wrong PINs per address. A 4-digit PIN would otherwise fall to a script in seconds.
-const MAX_PIN_TRIES = 5
-const PIN_LOCK_MS = 30_000
-const pinFailures = new Map<string, { count: number; until: number }>()
-
-function pinLocked(req: http.IncomingMessage): boolean {
-  const f = pinFailures.get(req.socket.remoteAddress ?? '')
-  return !!f && f.count >= MAX_PIN_TRIES && Date.now() < f.until
-}
-function notePinResult(req: http.IncomingMessage, ok: boolean): void {
-  const key = req.socket.remoteAddress ?? ''
-  if (ok) return void pinFailures.delete(key)
-  const f = pinFailures.get(key)
-  const count = f && Date.now() < f.until ? f.count + 1 : 1
-  pinFailures.set(key, { count, until: Date.now() + PIN_LOCK_MS })
-}
+const pinKey = (req: http.IncomingMessage): string => req.socket.remoteAddress ?? ''
 
 /** Log everyone out: what they logged in to has changed (a new PIN, another show). */
 export function resetSessions(): void {
@@ -448,12 +433,12 @@ async function handleRpc(
     }
     // The crew directory and every contact detail are readable once joined,
     // so joining needs the Manager PIN — never an open, PIN-less show.
-    if (pinLocked(req))
+    if (pinLocked(pinKey(req)))
       return sendJson(res, 429, { ok: false, error: 'Too many wrong PINs. Wait 30 seconds and try again.' })
     if (managerPin() === '')
       return sendJson(res, 403, { ok: false, error: 'Set a Manager PIN on the host (Settings → Show Server) to let other computers join.' })
     const pinOk = String(body.pin ?? '').trim() === managerPin()
-    notePinResult(req, pinOk)
+    notePinResult(pinKey(req), pinOk ? 'ok' : 'fail')
     if (!pinOk)
       return sendJson(res, 401, { ok: false, error: 'That isn’t the host’s Manager PIN.' })
     if (body.appVersion !== app.getVersion())
@@ -619,15 +604,12 @@ function loginPage(err?: string): string {
   )
 }
 async function doLogin(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-  if (pinLocked(req)) return sendHtml(res, 429, loginPage('Too many wrong PINs. Wait 30 seconds.'))
+  if (pinLocked(pinKey(req)))
+    return sendHtml(res, 429, loginPage('Too many wrong PINs. Wait 30 seconds.'))
   const body = await readBody(req)
   const pin = (new URLSearchParams(body).get('pin') ?? '').trim()
-  let role: Role | null = null
-  if (managerPin() !== '' && pin === managerPin()) role = 'manager'
-  else if (crewPin() !== '' && pin === crewPin()) role = 'crew'
-  else if (managerPin() === '' && crewPin() === '') role = 'manager' // nothing set → open
-  else if (crewPin() === '') role = 'crew'
-  notePinResult(req, !!role)
+  const { role, result } = pinLogin(pin, managerPin(), crewPin())
+  notePinResult(pinKey(req), result)
   if (!role) return sendHtml(res, 401, loginPage('That PIN didn’t match.'))
   const sid = randomUUID()
   sessions.set(sid, { role })

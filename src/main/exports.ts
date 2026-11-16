@@ -30,6 +30,7 @@ import {
   markOrderExported
 } from './repository'
 import { ipInCidr } from '../shared/ip-utils'
+import { csvCell } from './csv'
 import { withPrintWindow } from './print-html'
 import { maskFromCidr } from './switch-config'
 import {
@@ -102,12 +103,6 @@ function collectBundles(opts: ExportOptions): Bundle[] {
 }
 
 // ---- CSV -----------------------------------------------------------------
-function csvCell(v: string): string {
-  // A leading = + - @ makes Excel run the cell as a formula. Plain numbers are fine.
-  const safe = /^[=+\-@\t\r]/.test(v) && !/^[+-]?\d[\d.,]*$/.test(v) ? "'" + v : v
-  return /[",\n\r]/.test(safe) ? '"' + safe.replace(/"/g, '""') + '"' : safe
-}
-
 /** The byte-order mark tells Excel on Windows this is UTF-8 (☐, →, accents). */
 function writeCsv(path: string, text: string): void {
   writeFileSync(path, '\ufeff' + text, 'utf-8')

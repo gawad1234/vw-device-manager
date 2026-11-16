@@ -241,6 +241,13 @@ CREATE TABLE IF NOT EXISTS fixtures (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   data_json TEXT NOT NULL
 );
+
+-- Timecode songs (per show), data_json = Song minus id. The audio file itself
+-- sits in "<project> Audio/" beside the .vwdm; only its name is stored.
+CREATE TABLE IF NOT EXISTS songs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  data_json TEXT NOT NULL
+);
 `
 
 // A real embedded SQLite (Node's built-in node:sqlite — no native module) that
@@ -605,8 +612,13 @@ export function reopenIfReplaced(): boolean {
   const id = fileId(dbPath)
   if (id === null || id === dbFileId) return false
   const next = new DatabaseSync(dbPath)
-  next.exec('PRAGMA busy_timeout = 5000')
-  applySchemaAndMigrations(next)
+  try {
+    next.exec('PRAGMA busy_timeout = 5000')
+    applySchemaAndMigrations(next)
+  } catch (e) {
+    next.close()
+    throw e
+  }
   db?.close()
   db = next
   dbFileId = id

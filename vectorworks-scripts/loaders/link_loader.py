@@ -15,6 +15,7 @@ import os
 TARGET_CANDIDATES = [
     os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\vectorworks-scripts\link_selected.py"),
     os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/vectorworks-scripts/link_selected.py"),
+    os.path.expanduser("~/Dropbox/Claude/Database Vectorworks/vw-device-manager/vectorworks-scripts/link_selected.py"),
 ]
 
 

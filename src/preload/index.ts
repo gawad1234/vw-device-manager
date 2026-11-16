@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { PaperworkSource, PaperworkTemplate } from '../shared/paperwork'
 import type { TableStyle } from '../shared/table-style'
@@ -33,6 +33,8 @@ import type {
   ServerPins,
   ShopOrderInput,
   SubnetInput,
+  Song,
+  TimecodeSettings,
   VwDeviceManagerApi
 } from '../shared/types'
 
@@ -269,6 +271,9 @@ const api: VwDeviceManagerApi = {
   vlanManager: {
     save: () => invoke('vlanManager:save')
   },
+  show: {
+    ping: (ips: string[]) => invoke('show:ping', ips)
+  },
   orders: {
     list: () => invoke('orders:list'),
     create: (input: ShopOrderInput) => invoke('orders:create', input),
@@ -299,6 +304,44 @@ const api: VwDeviceManagerApi = {
   },
   showSandbox: {
     import: () => invoke('showsandbox:import')
+  },
+  songs: {
+    list: () => invoke('songs:list'),
+    add: (paths: string[]) => invoke('songs:add', paths),
+    pick: () => invoke('songs:pick'),
+    pathFor: (file: File) => webUtils.getPathForFile(file), // File.path is gone since Electron 32
+    update: (song: Song) => invoke('songs:update', song),
+    remove: (id: number) => invoke('songs:remove', id),
+    audio: (id: number) =>
+      invoke('songs:audio', id).then((b: Uint8Array<ArrayBuffer>) =>
+        b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)
+      )
+  },
+  eos: {
+    connect: (host: string) => invoke('eos:connect', host),
+    disconnect: () => invoke('eos:disconnect'),
+    status: () => invoke('eos:status'),
+    cues: (list: number) => invoke('eos:cues', list),
+    fire: (list: number, cue: string) => invoke('eos:fire', list, cue),
+    createCue: (list: number, cue: string) => invoke('eos:createCue', list, cue),
+    setTimecode: (list: number, cue: string, tc: string) =>
+      invoke('eos:setTimecode', list, cue, tc),
+    setScene: (list: number, cue: string, scene: string) =>
+      invoke('eos:setScene', list, cue, scene),
+    onStatus: (cb) => {
+      const listener = (_e: unknown, status: Parameters<typeof cb>[0]): void => cb(status)
+      ipcRenderer.on('eos-status', listener)
+      return () => ipcRenderer.removeListener('eos-status', listener)
+    },
+    onCues: (cb) => {
+      const listener = (_e: unknown, list: number): void => cb(list)
+      ipcRenderer.on('eos-cues', listener)
+      return () => ipcRenderer.removeListener('eos-cues', listener)
+    }
+  },
+  timecode: {
+    getSettings: () => invoke('timecode:getSettings'),
+    setSettings: (s: TimecodeSettings) => invoke('timecode:setSettings', s)
   },
   orderFormats: {
     list: () => invoke('orderFormats:list'),

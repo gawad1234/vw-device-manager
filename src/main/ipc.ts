@@ -1,7 +1,7 @@
-import { ipcMain, dialog, shell } from 'electron'
-import { existsSync, mkdirSync, writeFileSync } from 'fs'
-import { copyFile } from 'fs/promises'
-import { join } from 'path'
+import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
+import { existsSync, mkdirSync, writeFileSync, constants as fsConstants } from 'fs'
+import { copyFile, readFile, unlink } from 'fs/promises'
+import { basename, dirname, extname, join } from 'path'
 import * as repo from './repository'
 import * as projects from './projects'
 import * as library from './library'
@@ -27,6 +27,10 @@ import { projectorCommandsCsv } from '../shared/projector-settings'
 import { generateInstallScript, INSTALL_BAT, kitFileNames } from './software-kit'
 import { printStickers, printStickerTest } from './stickers'
 import * as lighting from './lightwright-sync'
+import { eos } from './eos'
+import { getCurrentDbPath } from './db'
+import { defaultOffset } from '../shared/timecode'
+import { checkHostsOnce } from './reachability'
 import type {
   BuildKitResult,
   PrintStickersOptions,
@@ -58,7 +62,9 @@ import type {
   PackCaseInput,
   PortInput,
   ShopOrderInput,
-  SubnetInput
+  SubnetInput,
+  Song,
+  TimecodeSettings
 } from '../shared/types'
 
 const VIEW_ONLY =
@@ -171,6 +177,97 @@ export function registerIpcHandlers(): void {
   handle('lightingSync:status', () => lighting.getLightingSyncStatus())
   handle('lightingSync:set', (_e, on: boolean) => lighting.setLightingSync(on))
   handle('lightingSync:choose', () => lighting.chooseExchangeFile())
+
+  // Timecode: songs (audio in "<project> Audio/" beside the .vwdm) + the Eos console.
+  const audioDir = (): string => {
+    const db = getCurrentDbPath()
+    if (!db) throw new Error('Open a project first.')
+    return join(dirname(db), `${basename(db, extname(db))} Audio`)
+  }
+  handle('songs:list', () => repo.listSongs())
+  handle('songs:pick', async () => {
+    const res = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Audio', extensions: ['wav', 'mp3', 'aif', 'aiff', 'm4a', 'flac'] }]
+    })
+    return res.canceled ? [] : res.filePaths
+  })
+  handle('songs:add', async (_e, paths: string[]) => {
+    const dir = audioDir()
+    mkdirSync(dir, { recursive: true })
+    const { fps } = repo.getTimecodeSettings()
+    const added: Song[] = []
+    const failed: string[] = []
+    for (const src of paths) {
+      try {
+        const ext = extname(src)
+        const title = basename(src, ext)
+        // Never overwrite another song's audio: "Intro.wav" → "Intro 2.wav" if taken.
+        let file = basename(src)
+        for (let n = 2; ; n++) {
+          try {
+            await copyFile(src, join(dir, file), fsConstants.COPYFILE_EXCL)
+            break
+          } catch (err) {
+            if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
+            file = `${title} ${n}${ext}`
+          }
+        }
+        const order = repo.listSongs().reduce((m, s) => Math.max(m, s.order + 1), 0)
+        added.push(
+          repo.saveSong(null, {
+            title,
+            file,
+            order,
+            cueList: 1,
+            offsetFrames: defaultOffset(order, fps),
+            durationSec: 0,
+            markers: []
+          })
+        )
+      } catch (err) {
+        failed.push(`${basename(src)} (${(err as Error).message})`)
+      }
+    }
+    // The good ones are saved; the page's songs list picks them up on its next reload.
+    if (failed.length)
+      throw new Error(
+        `Couldn't add ${failed.join(', ')}${added.length ? ` — ${added.length} other song(s) were added` : ''}`
+      )
+    return added
+  })
+  handle('songs:update', (_e, song: Song) => repo.saveSong(song.id, song))
+  handle('songs:remove', async (_e, id: number) => {
+    const song = repo.listSongs().find((s) => s.id === id)
+    repo.deleteSong(id)
+    if (song)
+      await unlink(join(audioDir(), basename(song.file))).catch((err) => {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+      })
+  })
+  handle('songs:audio', (_e, id: number) => {
+    const song = repo.listSongs().find((s) => s.id === id)
+    if (!song) throw new Error('That song is gone.')
+    return readFile(join(audioDir(), basename(song.file)))
+  })
+  handle('timecode:getSettings', () => repo.getTimecodeSettings())
+  handle('timecode:setSettings', (_e, s: TimecodeSettings) => repo.setTimecodeSettings(s))
+  handle('eos:connect', (_e, host: string) => eos.connect(host))
+  handle('eos:disconnect', () => eos.disconnect())
+  handle('eos:status', () => eos.status())
+  handle('eos:cues', (_e, list: number) => eos.getCues(list))
+  handle('eos:fire', (_e, list: number, cue: string) => eos.fireCue(list, cue))
+  handle('eos:createCue', (_e, list: number, cue: string) => eos.createEmptyCue(list, cue))
+  handle('eos:setTimecode', (_e, list: number, cue: string, tc: string) =>
+    eos.setCueTimecode(list, cue, tc)
+  )
+  handle('eos:setScene', (_e, list: number, cue: string, scene: string) =>
+    eos.setCueScene(list, cue, scene)
+  )
+  const toWindows = (channel: string) => (payload: unknown) =>
+    BrowserWindow.getAllWindows().forEach((w) => w.webContents.send(channel, payload))
+  eos.on('status', toWindows('eos-status'))
+  eos.on('cues', toWindows('eos-cues'))
 
   // Software library (shared) + per-computer install kits.
   handle('software:list', () => library.listSoftware())
@@ -395,6 +492,8 @@ export function registerIpcHandlers(): void {
   // The standalone host VLAN Manager (host-tools/, bundled at build time): write both
   // scripts into a folder the user picks. UTF-8 with BOM, or Windows PowerShell 5.1
   // misreads non-ASCII characters.
+  handle('show:ping', (_e, ips: string[]) => checkHostsOnce(Array.isArray(ips) ? ips : []))
+
   handle('vlanManager:save', async () => {
     const res = await dialog.showOpenDialog({
       title: 'Choose a folder for the VLAN Manager',

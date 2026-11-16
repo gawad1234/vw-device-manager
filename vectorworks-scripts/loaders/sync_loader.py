@@ -15,6 +15,7 @@ import os
 TARGET_CANDIDATES = [
     os.path.expanduser(r"~\Dropbox\Claude\Database Vectorworks\vw-device-manager\vectorworks-scripts\sync_app_to_drawing.py"),
     os.path.expanduser("~/Library/CloudStorage/Dropbox/Claude/Database Vectorworks/vw-device-manager/vectorworks-scripts/sync_app_to_drawing.py"),
+    os.path.expanduser("~/Dropbox/Claude/Database Vectorworks/vw-device-manager/vectorworks-scripts/sync_app_to_drawing.py"),
 ]
 
 

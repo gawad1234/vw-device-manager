@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Device Manager**
-Effective date: November 10, 2026
+Effective date: November 11, 2026
 Provided by: Gabriel Awad ("we", "us") — contact: gabriel@gabrielawad.com
 
 ## The short version
@@ -9,16 +9,19 @@ Provided by: Gabriel Awad ("we", "us") — contact: gabriel@gabrielawad.com
 Device Manager is a **local-first desktop app**. It does **not** collect your
 data, does **not** track you, and sends **nothing** to us. Everything you create
 stays on your own computer and in your own cloud storage. The only time the app
-reaches the internet on its own is to check GitHub for a software update.
+reaches the internet on its own is to check GitHub for a software update; its
+other connections (listed below) stay on your local network.
 
 ## What data the app handles, and where it lives
 
 Everything you enter — devices, networks/VLANs, cables, shop orders, case
 labels, cases, patching, projector and wallpaper setups, software install kits,
-crew and trucking schedules, lighting fixtures and universes, and your company/show branding — is stored in
+crew and trucking schedules, lighting fixtures and universes, timecode songs and their cue lists, and your company/show branding — is stored in
 **files on your own computer**:
 
 - **Project files** (`*.vwdm`) — one per show, plain SQLite databases.
+- **Song audio files** — audio you add on the Timecode page is copied into a
+  `<project> Audio` folder beside the project file.
 - **A shared library file** (`library.json`) — your cross-project catalogs
   (device categories, cable types, signal types, auto-add kits, the software
   library, the switch-config template and admin user name, lighting fixture types and paperwork templates, the table style and paperwork header for exports), your **company name and
@@ -26,10 +29,14 @@ crew and trucking schedules, lighting fixtures and universes, and your company/s
 - **Per-machine settings** (`settings.json` in the app's data folder) — e.g.
   your recent-projects list, update preference, where your shared library
   lives, and the switch admin password and SNMP community, which stay on each
-  computer and are never synced.
+  computer and are never synced. Settings are saved in one step so a crash can't
+  leave a half-written file; if the file can't be read, the app sets it aside
+  as `settings.json.unreadable-<time>` (still on your computer) and starts fresh.
 
 These files are created and read **only on your device**. Software install kits
-you build are written only to the folder you choose (for example a USB stick). If you keep them in a
+you build are written only to the folder you choose (for example a USB stick), and
+cable labels printed from a phone are written as small CSV files to the VectorLabel
+folder set on that computer. If you keep them in a
 folder synced by a service like **Dropbox**, that service syncs them between your
 own machines on your behalf — that is your account and your choice, governed by
 that service's own privacy policy, not by us.
@@ -43,7 +50,8 @@ the app never uploads it, and the Show Server does not serve crew details,
 schedules or rates to phones or browsers. If you let another computer running
 Device Manager **join** your show (which needs your manager PIN), that computer
 can read the whole show and your shared library — crew directory included — over
-your local network while it is joined. You are responsible for how you share those files, so only
+your local network while it is joined; if the host changes its PIN or stops the
+show, the joined computer is signed out. You are responsible for how you share those files, so only
 keep them in storage you control and trust.
 
 ## What we collect
@@ -75,6 +83,17 @@ usage statistics, crash reports, your IP address, or any personal information.
    small announcement on your local network every few seconds — the show name,
    the computer's name and the server's port, nothing else — so those computers
    can find the show without typing an address. It never leaves your local network.
+
+3. **The ETC Eos lighting console (Timecode page, your local network only).** If
+   you enter a console address on the Timecode page, the app connects to that
+   console over your LAN (OSC over TCP, port 3032) to read its cue lists, cue
+   labels and timecodes, fire cues, and — only when you ask — record empty cues
+   on it. Nothing goes anywhere but the console address you entered.
+
+4. **Device reachability checks (Show › Status, your local network).** While the
+   Status page is open, the app pings each device's IP address from this computer
+   about every 30 seconds to show whether it is reachable. These are ordinary
+   ping requests to the addresses already in your project; no data is sent.
 
 Apart from these, the app makes no outbound connections. (Lighting sync with
 Vectorworks is not a network connection: the app reads and writes the exchange

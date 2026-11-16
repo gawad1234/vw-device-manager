@@ -1,10 +1,11 @@
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import * as library from '../src/main/library.ts'
 import { openDb } from '../src/main/db.ts'
+import { readSettings, writeSettings } from '../src/main/settings.ts'
 
 const path = join(app.getPath('userData'), 'library.json')
 const member = { name: 'A', phone: '', email: '' } as never
@@ -65,4 +66,17 @@ test('switch logins never land in the library file', async () => {
   assert.equal(back.snmpCommunity, 'showro')
   assert.equal(back.logServers, '10.0.0.5')
   assert.equal(back.syslogPort, 514)
+})
+
+test('a missing shared library file throws (or uses its .bak), never starts empty', () => {
+  const folder = mkdtempSync(join(app.getPath('userData'), 'shared-'))
+  writeSettings({ ...readSettings(), libraryFolder: folder })
+  try {
+    assert.throws(() => library.listCrew(), /can't be read/)
+    assert.equal(existsSync(join(folder, 'library.json')), false)
+    writeFileSync(join(folder, 'library.json.bak'), JSON.stringify({ crew: [{ id: 1, name: 'Kept' }] }))
+    assert.deepEqual(library.listCrew().map((c) => c.name), ['Kept'])
+  } finally {
+    writeSettings({ ...readSettings(), libraryFolder: undefined })
+  }
 })

@@ -36,7 +36,9 @@ const READ = new Set([
   'lighting:get',
   'fixtureTypes:list',
   'paperwork:list',
-  'paperwork:records'
+  'paperwork:records',
+  'songs:list',
+  'timecode:getSettings'
 ])
 
 /** Need this machine's files, dialogs or printer but read the open project's data:
@@ -55,7 +57,9 @@ const HOST_ONLY = new Set([
   'circuits:import',
   'showsandbox:import',
   'paperwork:export',
-  'wallpapers:save'
+  'wallpapers:save',
+  'songs:pick',
+  'songs:audio' // the audio files sit beside the host's .vwdm
 ])
 
 /** Always this machine: where its library lives, app updates, this machine's Show Server, project switching,
@@ -67,7 +71,9 @@ const LOCAL_GROUPS = [
   'project:',
   'lightingSync:',
   'vlanManager:',
-  'library:'
+  'library:',
+  'show:', // Show › Status pings from this computer's network
+  'eos:' // this computer's link to the Eos lighting console
 ]
 
 /** Anything not listed is a write — refused while joined, so a new channel is safe by default. */

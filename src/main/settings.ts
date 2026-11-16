@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 
 export interface Settings {
@@ -27,9 +27,20 @@ function settingsPath(): string {
 }
 
 export function readSettings(): Settings {
+  let text: string
   try {
-    return JSON.parse(readFileSync(settingsPath(), 'utf-8')) as Settings
-  } catch {
+    text = readFileSync(settingsPath(), 'utf-8')
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return {}
+    throw e
+  }
+  try {
+    return JSON.parse(text) as Settings
+  } catch (e) {
+    // Unreadable: set it aside (never save over it) and start fresh so the app still opens.
+    const aside = `${settingsPath()}.unreadable-${Date.now()}`
+    console.error(`settings.json is unreadable (${(e as Error).message}); moved to ${aside}`)
+    renameSync(settingsPath(), aside)
     return {}
   }
 }
@@ -37,7 +48,10 @@ export function readSettings(): Settings {
 export function writeSettings(s: Settings): void {
   try {
     mkdirSync(dirname(settingsPath()), { recursive: true })
-    writeFileSync(settingsPath(), JSON.stringify(s, null, 2))
+    // temp file + rename: a crash mid-write can't leave a half-written settings.json
+    const tmp = `${settingsPath()}.tmp`
+    writeFileSync(tmp, JSON.stringify(s, null, 2))
+    renameSync(tmp, settingsPath())
   } catch {
     // Settings are a convenience (recent list / reopen) — never fatal.
   }

@@ -238,3 +238,30 @@ export function fixtureToExchange(
   // Fixture_Mode and Num_Channels are Vectorworks' own: echoed back untouched from fx.vw
   return out
 }
+
+/** Finds the app row each incoming fixture is. UID first; trust a Lightwright_ID only
+ *  if it isn't another fixture's row (old ids from a real Lightwright can collide with
+ *  ours). A partial file lists only what changed, so there a row owned by any other UID
+ *  is off limits too: a copied fixture carries the original's id. */
+export function fixtureMatcher<R extends Pick<Fixture, 'id' | 'vwUid'>>(
+  rows: R[],
+  x: Pick<Exchange, 'action' | 'fixtures'>
+): (f: Record<string, string>) => R | undefined {
+  const byId = new Map(rows.map((r) => [String(r.id), r]))
+  const byUid = new Map(rows.filter((r) => r.vwUid).map((r) => [r.vwUid, r]))
+  const uidsInFile = new Set(x.fixtures.map((f) => f.UID))
+  const entirePlot = x.action === 'Entire Plot'
+  return (f) => {
+    const idRow = byId.get(f.Lightwright_ID ?? '')
+    const idFree = idRow && (entirePlot ? !uidsInFile.has(idRow.vwUid) : !idRow.vwUid)
+    return byUid.get(f.UID ?? '') ?? (idFree ? idRow : undefined)
+  }
+}
+
+/** After an Entire Plot: the drawing owns which fixtures exist, so drawn rows it didn't list go. */
+export function droppedFromPlot<R extends Pick<Fixture, 'id' | 'vwUid'>>(
+  rows: R[],
+  kept: Set<number>
+): R[] {
+  return rows.filter((r) => r.vwUid && !kept.has(r.id))
+}

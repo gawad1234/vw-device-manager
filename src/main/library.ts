@@ -130,7 +130,8 @@ function loadRaw(): Partial<Library> {
   try {
     return parseLibrary(path)
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return {}
+    // Only this machine's own library may start empty: a missing shared file may just not have synced yet.
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT' && path === localLibraryPath()) return {}
     try {
       return parseLibrary(path + '.bak')
     } catch {

@@ -24,7 +24,9 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      // keep timers running when hidden/covered so Timecode cues still fire
+      backgroundThrottling: false
     }
   })
 

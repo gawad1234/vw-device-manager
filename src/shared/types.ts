@@ -1,6 +1,7 @@
 import type { PaperworkSource, PaperworkTemplate } from './paperwork'
 import type { TableStyle } from './table-style'
 import type { PaperworkHeader } from './paperwork-header'
+import type { Fps } from './timecode'
 export interface Subnet {
   id: number
   name: string
@@ -1141,6 +1142,10 @@ export interface VwDeviceManagerApi {
     /** write both scripts into "<picked folder>/VLAN Manager"; returns that folder, or null */
     save: () => Promise<string | null>
   }
+  /** Show › Status: which IPv4 addresses answer a ping from this computer */
+  show: {
+    ping: (ips: string[]) => Promise<Record<string, boolean>>
+  }
   /** Shop orders: equipment purchasing + receiving tracking. */
   orders: {
     list: () => Promise<ShopOrder[]>
@@ -1194,6 +1199,85 @@ export interface VwDeviceManagerApi {
     /** open a file dialog, read a ShowSandbox show (.json), merge it into the project */
     import: () => Promise<ShowSandboxImportResult | null>
   }
+  /** Timecode songs (per show); audio files live in "<project> Audio/" beside the .vwdm. */
+  songs: {
+    list: () => Promise<Song[]>
+    /** copy audio files into the project's audio folder and add a song for each */
+    add: (paths: string[]) => Promise<Song[]>
+    /** open a file dialog for audio files; [] if cancelled */
+    pick: () => Promise<string[]>
+    /** a dropped File's path on disk */
+    pathFor: (file: File) => string
+    update: (song: Song) => Promise<Song>
+    remove: (id: number) => Promise<void>
+    audio: (id: number) => Promise<ArrayBuffer>
+  }
+  /** The ETC Eos console (OSC over TCP), from this computer. */
+  eos: {
+    connect: (host: string) => Promise<void>
+    disconnect: () => Promise<void>
+    status: () => Promise<EosStatus>
+    cues: (list: number) => Promise<EosCue[]>
+    fire: (list: number, cue: string) => Promise<void>
+    createCue: (list: number, cue: string) => Promise<void>
+    /** move a cue's timecode event (HH:MM:SS:FF) */
+    setTimecode: (list: number, cue: string, tc: string) => Promise<void>
+    setScene: (list: number, cue: string, scene: string) => Promise<void>
+    onStatus: (cb: (status: EosStatus) => void) => () => void
+    /** a cue list changed on the console */
+    onCues: (cb: (list: number) => void) => () => void
+  }
+  timecode: {
+    getSettings: () => Promise<TimecodeSettings>
+    setSettings: (s: TimecodeSettings) => Promise<void>
+  }
+}
+
+// ---- Timecode (songs + Eos console) ------------------------------------------
+
+export interface SongMarker {
+  cue: string
+  label: string
+  /** seconds into the song */
+  t: number
+  /** made here with "+ Create cue" (an empty cue on the console) */
+  created?: boolean
+}
+
+export interface Song {
+  id: number
+  title: string
+  /** file name inside "<project> Audio/" beside the .vwdm */
+  file: string
+  order: number
+  cueList: number
+  offsetFrames: number
+  durationSec: number
+  markers: SongMarker[]
+}
+
+/** Project meta `timecode`; the console port is fixed at 3032 for now. */
+export interface TimecodeSettings {
+  host: string
+  fps: Fps
+}
+
+// Eos console shapes (used by src/main/eos.ts and the renderer).
+export type EosState = 'offline' | 'connecting' | 'connected' | 'error'
+export interface EosStatus {
+  state: EosState
+  host: string
+  version?: string
+  error?: string
+}
+export interface EosCue {
+  list: number
+  cue: string
+  label: string
+  timecode: string | null
+  uid: string
+  /** the cue's Scene name ('' = none) */
+  scene: string
 }
 
 /** Where this computer keeps the shared library. */

@@ -1,6 +1,8 @@
 import { dbAll, dbGet, dbRun, lastInsertRowId, withTx } from './db'
 import { isValidIpv4, ipInCidr, parseCidr } from '../shared/ip-utils'
 import type {
+  Song,
+  TimecodeSettings,
   Bundle,
   BundleInput,
   Cable,
@@ -1231,7 +1233,7 @@ export function mergeCircuits(
 // ---- Crew + trucking schedule (per show) ---------------------------------
 // Rows are {id, data_json}; these three helpers serve all three tables.
 
-type JsonTable = 'crew_assignments' | 'trucks' | 'truck_trips' | 'fixtures'
+type JsonTable = 'crew_assignments' | 'trucks' | 'truck_trips' | 'fixtures' | 'songs'
 
 function listJsonRows<T>(table: JsonTable): T[] {
   return queryAll(`SELECT id, data_json FROM ${table} ORDER BY id`).map(
@@ -1303,4 +1305,21 @@ export function getLightingSettings(): LightingSettings {
 
 export function setLightingSettings(settings: LightingSettings): void {
   setProjectMeta('lighting', JSON.stringify(settings))
+}
+
+// ---- Timecode songs (per show) -------------------------------------------
+
+export const listSongs = (): Song[] =>
+  listJsonRows<Song>('songs').sort((a, b) => a.order - b.order)
+export const saveSong = (id: number | null, input: Omit<Song, 'id'>): Song =>
+  saveJsonRow<Song>('songs', id, input)
+export const deleteSong = (id: number): void => deleteJsonRow('songs', id)
+
+export function getTimecodeSettings(): TimecodeSettings {
+  const empty: TimecodeSettings = { host: '', fps: 30 }
+  return { ...empty, ...parseJson<TimecodeSettings>(getProjectMeta('timecode')) }
+}
+
+export function setTimecodeSettings(settings: TimecodeSettings): void {
+  setProjectMeta('timecode', JSON.stringify(settings))
 }

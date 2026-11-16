@@ -110,6 +110,15 @@ function failed(s: Session): void {
   if (++s.fails >= 3) setOffline(s, true)
 }
 
+const SESSION_ENDED =
+  'The host ended this shared session (it restarted, changed its PIN or opened another show). Join again to keep viewing.'
+/** The host no longer knows our token: drop the session; the header re-reads project:current. */
+function ended(s: Session): void {
+  if (session !== s) return // an old session's late reply: a newer join stays
+  leave()
+  notify()
+}
+
 async function checkChanges(): Promise<void> {
   const s = session
   if (!s) return
@@ -118,6 +127,7 @@ async function checkChanges(): Promise<void> {
       headers: { Authorization: `Bearer ${s.token}` },
       signal: AbortSignal.timeout(TIMEOUT_MS)
     })
+    if (res.status === 401) return ended(s)
     const data = (await res.json()) as { ok?: boolean; seq?: number }
     if (!data.ok) return failed(s)
     s.fails = 0
@@ -141,6 +151,10 @@ export async function call(channel: string, args: unknown[]): Promise<unknown> {
   } catch {
     failed(s)
     throw new Error(HOST_UNREACHABLE)
+  }
+  if (r.status === 401) {
+    ended(s)
+    throw new Error(SESSION_ENDED)
   }
   s.fails = 0
   setOffline(s, false)

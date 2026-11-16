@@ -3,7 +3,9 @@ import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'f
 import { dirname, join, parse as parsePath } from 'path'
 import {
   buildExchange,
+  droppedFromPlot,
   fixtureFromExchange,
+  fixtureMatcher,
   fixtureToExchange,
   parseExchange,
   type Exchange
@@ -102,21 +104,13 @@ function ingest(x: Exchange): void {
   setProjectMeta('lightingVw', JSON.stringify(base))
 
   const rows = listFixtures()
-  const byId = new Map(rows.map((r) => [String(r.id), r]))
-  const byUid = new Map(rows.filter((r) => r.vwUid).map((r) => [r.vwUid, r]))
-  const uidsInFile = new Set(x.fixtures.map((f) => f.UID))
+  const match = fixtureMatcher(rows, x)
   const kept = new Set<number>()
   let needIds = false
   const entirePlot = x.action === 'Entire Plot'
   withTx(() => {
     for (const f of x.fixtures) {
-      // UID first; trust a Lightwright_ID only if it isn't another fixture's row (old
-      // ids from a real Lightwright can collide with ours). A partial file lists only
-      // what changed, so there a row owned by any other UID is off limits too: a
-      // copied fixture carries the original's id.
-      const idRow = byId.get(f.Lightwright_ID ?? '')
-      const idFree = idRow && (entirePlot ? !uidsInFile.has(idRow.vwUid) : !idRow.vwUid)
-      const prev = byUid.get(f.UID ?? '') ?? (idFree ? idRow : undefined)
+      const prev = match(f)
       if (f.Action === 'Delete') {
         if (prev) deleteFixture(prev.id)
         continue
@@ -130,10 +124,7 @@ function ingest(x: Exchange): void {
       kept.add(saved.id)
       if (String(saved.id) !== f.Lightwright_ID) needIds = true
     }
-    if (entirePlot) {
-      // the drawing owns which fixtures exist
-      for (const r of rows) if (r.vwUid && !kept.has(r.id)) deleteFixture(r.id)
-    }
+    if (entirePlot) for (const r of droppedFromPlot(rows, kept)) deleteFixture(r.id)
   })
   status.lastIn = new Date().toISOString()
   bumpChange()

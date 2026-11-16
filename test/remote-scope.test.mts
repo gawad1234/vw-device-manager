@@ -36,3 +36,13 @@ test('every list and get handler is readable remotely, and local tools stay loca
   assert.equal(channelScope('library:chooseFolder'), 'local')
   assert.equal(channelScope('wallpapers:save'), 'host-only')
 })
+
+test('show and timecode channels: pings and the console stay local, edits are writes', () => {
+  assert.equal(channelScope('show:ping'), 'local')
+  assert.equal(channelScope('eos:fire'), 'local')
+  assert.equal(channelScope('songs:audio'), 'host-only')
+  assert.equal(channelScope('songs:add'), 'write')
+  assert.equal(channelScope('timecode:setSettings'), 'write')
+  for (const c of ['show:ping', 'eos:fire', 'songs:audio', 'songs:add', 'timecode:setSettings'])
+    assert.equal(remoteReadable(c), false, c)
+})

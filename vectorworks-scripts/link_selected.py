@@ -304,7 +304,6 @@ def main():
     copies = 0
     skipped = 0
     errors = []
-    stamps = []  # written after commit: a rollback would otherwise leave ids in the drawing
 
     # A copied device keeps its id, so count who else holds each one.
     id_counts = {}
@@ -323,79 +322,88 @@ def main():
             if not vs.GetParametricRecord(h):
                 skipped += 1  # text, a line, a cable: not a device
                 continue
-            existing_id = vs.GetRField(h, RECORD_NAME, FIELD_ID)
+            stamp = None
+            # One object at a time, like sync_app_to_drawing.py: holding the write
+            # lock across a big selection makes the app time out, and one bad
+            # object must not undo the rest.
+            try:
+                existing_id = vs.GetRField(h, RECORD_NAME, FIELD_ID)
 
-            status = "unlinked"
-            numeric_id = None
-            if existing_id is not None and existing_id.strip() != "":
-                try:
-                    numeric_id = int(existing_id.strip())
-                except ValueError:
-                    status = "invalid"
-                else:
-                    cur.execute("SELECT name FROM devices WHERE id = ?", (numeric_id,))
-                    row = cur.fetchone()
-                    status = "already_linked" if row else "orphaned"
-                    if (
-                        row
-                        and id_counts.get(existing_id.strip(), 0) > 1
-                        and row[0] != get_device_name(h)
-                    ):
-                        status = "unlinked"  # a copy: it needs its own row
-                        copies += 1
+                status = "unlinked"
+                numeric_id = None
+                if existing_id is not None and existing_id.strip() != "":
+                    try:
+                        numeric_id = int(existing_id.strip())
+                    except ValueError:
+                        status = "invalid"
+                    else:
+                        cur.execute("SELECT name FROM devices WHERE id = ?", (numeric_id,))
+                        row = cur.fetchone()
+                        status = "already_linked" if row else "orphaned"
+                        if (
+                            row
+                            and id_counts.get(existing_id.strip(), 0) > 1
+                            and row[0] != get_device_name(h)
+                        ):
+                            status = "unlinked"  # a copy: it needs its own row
+                            copies += 1
 
-            device_type, location = read_type_and_location(h)
+                device_type, location = read_type_and_location(h)
 
-            if status == "already_linked":
-                # Keep the row; refresh the drawing-owned fields.
-                device_id = numeric_id
-                cur.execute(
-                    "UPDATE devices SET device_type = ?, location = ? WHERE id = ?",
-                    (device_type, location, device_id),
-                )
-                already_linked += 1
-            else:
-                name = get_device_name(h)
-                # Dedupe by name FIRST. A device name is a unique identifier in
-                # ConnectCAD, so if a row with this name already exists in the
-                # project, reuse it instead of inserting a duplicate. This makes
-                # re-running Link Selected idempotent and stops duplicates when an
-                # object's vwdm_id is blank/stale/from another project.
-                cur.execute("SELECT id FROM devices WHERE name = ? ORDER BY id LIMIT 1", (name,))
-                match = cur.fetchone()
-                if match:
-                    device_id = match[0]
+                if status == "already_linked":
+                    # Keep the row; refresh the drawing-owned fields.
+                    device_id = numeric_id
                     cur.execute(
                         "UPDATE devices SET device_type = ?, location = ? WHERE id = ?",
                         (device_type, location, device_id),
                     )
-                    reused_by_name += 1
+                    already_linked += 1
                 else:
-                    cur.execute(
-                        "INSERT INTO devices (name, device_type, location) VALUES (?, ?, ?)",
-                        (name, device_type, location),
-                    )
-                    device_id = cur.lastrowid
-                    if status == "unlinked":
-                        linked += 1
-                    elif status == "invalid":
-                        relinked_invalid += 1
-                    elif status == "orphaned":
-                        relinked_orphaned += 1
+                    name = get_device_name(h)
+                    # Dedupe by name FIRST. A device name is a unique identifier in
+                    # ConnectCAD, so if a row with this name already exists in the
+                    # project, reuse it instead of inserting a duplicate. This makes
+                    # re-running Link Selected idempotent and stops duplicates when an
+                    # object's vwdm_id is blank/stale/from another project.
+                    cur.execute("SELECT id FROM devices WHERE name = ? ORDER BY id LIMIT 1", (name,))
+                    match = cur.fetchone()
+                    if match:
+                        device_id = match[0]
+                        cur.execute(
+                            "UPDATE devices SET device_type = ?, location = ? WHERE id = ?",
+                            (device_type, location, device_id),
+                        )
+                        reused_by_name += 1
+                    else:
+                        cur.execute(
+                            "INSERT INTO devices (name, device_type, location) VALUES (?, ?, ?)",
+                            (name, device_type, location),
+                        )
+                        device_id = cur.lastrowid
+                        if status == "unlinked":
+                            linked += 1
+                        elif status == "invalid":
+                            relinked_invalid += 1
+                        elif status == "orphaned":
+                            relinked_orphaned += 1
 
-                stamps.append((h, device_id))
+                    stamp = device_id
 
-            # Discover network jacks -> ports for every linked device.
-            created, refreshed = upsert_ports(cur, device_id, h, net_signals)
-            ports_created += created
-            ports_refreshed += refreshed
+                # Discover network jacks -> ports for every linked device.
+                created, refreshed = upsert_ports(cur, device_id, h, net_signals)
+                ports_created += created
+                ports_refreshed += refreshed
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                errors.append("{0}: {1}".format(get_device_name(h), e))
+                continue
+            if stamp is not None:  # only after its row is committed
+                if not has_record(h, RECORD_NAME):
+                    vs.SetRecord(h, RECORD_NAME)
+                # (Re)stamp the object with the resolved id — repairs blank/stale ids.
+                vs.SetRField(h, RECORD_NAME, FIELD_ID, str(stamp))
 
-        conn.commit()
-        for h, device_id in stamps:
-            if not has_record(h, RECORD_NAME):
-                vs.SetRecord(h, RECORD_NAME)
-            # (Re)stamp the object with the resolved id — repairs blank/stale ids.
-            vs.SetRField(h, RECORD_NAME, FIELD_ID, str(device_id))
     except Exception as e:
         conn.rollback()
         errors.append(str(e))

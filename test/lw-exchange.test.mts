@@ -227,3 +227,24 @@ test('mode and footprint come from Vectorworks; split address fields follow a re
   assert.equal(off.Absolute_Address, '0')
   assert.ok(!('Universe' in off) && !('DMX_Address' in off) && !('UniverseAddress' in off))
 })
+
+test('incoming fixtures match by UID first, and a Lightwright_ID only when no other UID owns it', async () => {
+  const { fixtureMatcher, droppedFromPlot } = await import('../src/shared/lw-exchange.ts')
+  const rows = [
+    { id: 1, vwUid: 'A' },
+    { id: 2, vwUid: 'B' },
+    { id: 3, vwUid: '' }
+  ]
+  const partial = fixtureMatcher(rows, { action: '', fixtures: [] })
+  assert.equal(partial({ UID: 'B', Lightwright_ID: '1' })?.id, 2) // UID wins over id
+  assert.equal(partial({ UID: 'C', Lightwright_ID: '1' }), undefined) // copied fixture: id 1 is A's
+  assert.equal(partial({ UID: 'C', Lightwright_ID: '3' })?.id, 3) // id of an undrawn row is fine
+  // Entire Plot: an id is free if its row's UID isn't in the file (the drawing re-UID'd it)
+  const plotFixtures = [{ UID: 'C', Lightwright_ID: '1' }, { UID: 'B' }]
+  const plot = fixtureMatcher(rows, { action: 'Entire Plot', fixtures: plotFixtures })
+  assert.equal(plot(plotFixtures[0])?.id, 1)
+  assert.deepEqual(
+    droppedFromPlot(rows, new Set([2])).map((r) => r.id),
+    [1] // drawn but not listed → deleted; the undrawn row 3 stays
+  )
+})

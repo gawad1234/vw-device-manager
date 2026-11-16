@@ -1,0 +1,327 @@
+/* Lighting › Timecode (TimecodePage.tsx) — built on .page/.panel/.btn/.table/.badge/.banner */
+
+.tc-header {
+  margin-bottom: 8px;
+}
+.tc-conn {
+  margin-bottom: 0;
+}
+.tc-host {
+  width: 150px;
+}
+.tc-small {
+  font-size: 12.5px;
+}
+.tc-intro {
+  margin: 0 0 20px;
+  font-size: 14px;
+}
+.tc-banner {
+  margin-bottom: 16px;
+}
+
+.tc-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  align-items: flex-start;
+}
+.tc-layout .panel {
+  margin-bottom: 0;
+}
+
+/* Songs list */
+.tc-songs {
+  flex: 1 1 240px;
+  max-width: 280px;
+  padding: 14px 10px;
+}
+.tc-songs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 8px;
+}
+.tc-song {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.tc-song:hover {
+  background: var(--hover);
+}
+.tc-song.is-on {
+  background: var(--accent-soft);
+  border-color: rgba(34, 199, 184, 0.32);
+}
+.tc-song-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.tc-song-row.tc-small {
+  font-size: 12.5px;
+  font-weight: 400;
+}
+.tc-drop {
+  margin-top: 12px;
+  padding: 18px 12px;
+  border: 1.5px dashed rgba(150, 178, 205, 0.28);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ev-c-text-2);
+}
+.tc-drop.is-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.tc-drop-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ev-c-text-1);
+}
+
+/* Selected song */
+.tc-main {
+  flex: 999 1 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tc-panel {
+  padding: 16px 18px;
+}
+.tc-song-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 20px;
+  align-items: flex-end;
+}
+.tc-title {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.tc-song-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.tc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ev-c-text-2);
+}
+.tc-tc {
+  width: 132px;
+}
+.tc-num {
+  width: 90px;
+}
+.tc-note {
+  margin-top: 10px;
+}
+
+/* Waveform + flags */
+.tc-ruler {
+  position: relative;
+  height: 22px;
+  margin-bottom: 6px;
+}
+.tc-ruler span {
+  position: absolute;
+  top: 0;
+  font-size: 11px;
+  transform: translateX(-50%);
+}
+.tc-ruler span:first-child {
+  transform: none; /* 0:00 would be clipped by the scrolling box */
+}
+.tc-wave {
+  position: relative;
+  height: 150px;
+  background: var(--ev-c-black);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  touch-action: none;
+}
+.tc-canvas {
+  --wave: rgba(150, 178, 205, 0.35);
+  position: absolute;
+  inset: 14px 0;
+  width: 100%;
+  height: calc(100% - 28px);
+}
+.tc-flag {
+  --flag: var(--accent);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1.5px solid var(--flag);
+}
+.tc-flag.is-current {
+  --flag: #ffffff;
+}
+.tc-flag.is-orphan {
+  --flag: var(--ev-c-text-2);
+}
+.tc-flag span {
+  position: absolute;
+  top: 4px;
+  left: -1px;
+  padding: 0 5px;
+  border-radius: 0 4px 4px 0;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--flag);
+  color: var(--accent-ink);
+  cursor: grab;
+}
+.tc-flag span:active {
+  cursor: grabbing;
+}
+.tc-flag.is-dragging {
+  z-index: 2;
+}
+/* the flag's timecode while it is being dragged */
+.tc-flag-tc {
+  position: absolute;
+  bottom: 4px;
+  left: -1px;
+  padding: 1px 5px;
+  border-radius: 0 4px 4px 0;
+  font-size: 11px;
+  white-space: nowrap;
+  background: var(--flag);
+  color: var(--accent-ink);
+  pointer-events: none;
+}
+.tc-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 2px solid #ffffff;
+  pointer-events: none;
+}
+
+/* Transport */
+.tc-transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin-top: 14px;
+}
+.tc-buttons {
+  display: flex;
+  gap: 8px;
+}
+.tc-play {
+  min-width: 96px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.tc-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  font-size: 15px;
+}
+.tc-big {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.tc-spacer {
+  flex: 1;
+}
+/* ruler + waveform scroll sideways together when zoomed in */
+.tc-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.tc-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tc-zoom .btn {
+  min-width: 30px;
+}
+.tc-next {
+  color: var(--ev-c-text-1);
+}
+.tc-arm {
+  color: var(--danger);
+  border-color: rgba(239, 112, 103, 0.45);
+}
+.tc-arm:hover {
+  background: rgba(239, 112, 103, 0.12);
+}
+.tc-arm.is-on {
+  background: var(--danger);
+  color: #2a0b08;
+  border-color: transparent;
+  font-weight: 600;
+}
+.tc-arm:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Cues */
+.tc-cues {
+  overflow-x: auto;
+}
+.tc-new {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+  margin: 10px 0 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--ev-c-black);
+  border: 1px solid var(--line-soft);
+}
+.tc-new-help {
+  flex: 1 1 220px;
+}
+.tc-cue {
+  font-weight: 600;
+}
+.tc-cues .badge {
+  margin-left: 0;
+}
+.tc-cues-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tc-cues-head h3 {
+  margin: 0;
+}
+.tc-unplaced-head {
+  margin-top: 22px;
+}
+.tc-place {
+  text-align: right;
+}
