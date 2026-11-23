@@ -14,8 +14,9 @@ export const EMPTY_CUE_CMD = (list: number, cue: string): string =>
 // From Live, per the Show Control guide ("Cue 3 Execute Timecode 3215 Enter"): the console picks
 // the event number, so we never track event numbers (they renumber on every add). Checked on
 // ETCnomad 3.3: it MOVES the cue's existing event (one event per cue), it doesn't add a second.
+// The token is Time_Code: a live 3.3.0 desk parses "Execute Timecode" as "Execute Cue" (2026-11-20).
 export const CUE_TC_CMD = (list: number, cue: string, tc: string): string =>
-  `Cue ${list} / ${cue} Execute Timecode ${tc.replace(/\D/g, '')} #`
+  `Cue ${list} / ${cue} Execute Time_Code ${tc.replace(/\D/g, '')} #`
 const TIMEOUT_MS = 3000
 
 /**
@@ -257,6 +258,11 @@ export class EosClient extends EventEmitter {
   // Checked on ETCnomad 3.3: sets that cue's Scene; '' clears it.
   setCueScene(list: number, cue: string, scene: string): void {
     this.send(`/eos/set/cue/${list}/${cue}/scene`, [scene])
+  }
+
+  // shortcut: documented like /scene but not yet run on a console; check on ETCnomad before a show
+  setCueLabel(list: number, cue: string, label: string): void {
+    this.send(`/eos/set/cue/${list}/${cue}/label`, [label])
   }
 }
 

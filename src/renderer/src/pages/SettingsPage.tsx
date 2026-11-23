@@ -4,8 +4,21 @@ import UpdatesPanel from '../components/UpdatesPanel'
 import ServerPanel from '../components/ServerPanel'
 import KitModal from '../components/KitModal'
 import TableStylePanel from '../components/TableStylePanel'
+import ChecklistPanel from '../components/ChecklistPanel'
 import HeaderPanel from '../components/HeaderPanel'
 import LibraryPanel from '../components/LibraryPanel'
+import PageHeader from '../components/PageHeader'
+
+/** Settings is long: one section at a time, picked from the bar at the top. */
+const SECTIONS = [
+  ['general', 'General'],
+  ['branding', 'Branding'],
+  ['paperwork', 'Paperwork'],
+  ['checklist', 'Checklist'],
+  ['lists', 'Lists & kits'],
+  ['switches', 'Switches']
+] as const
+type Section = (typeof SECTIONS)[number][0]
 
 interface Props {
   cableTypes: CableType[]
@@ -41,6 +54,7 @@ function downscaleImage(file: File, maxW: number): Promise<string> {
 }
 
 function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.Element {
+  const [section, setSection] = useState<Section>('general')
   const [signals, setSignals] = useState<string[]>([])
   const [signalInput, setSignalInput] = useState('')
   const [typeName, setTypeName] = useState('')
@@ -167,17 +181,42 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
   }
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <h2>Settings</h2>
-      </div>
+    <div className="page settings-page">
+      <PageHeader
+        title="Settings"
+        filters={
+          <nav className="subtabs settings-tabs" aria-label="Settings sections">
+            {SECTIONS.map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={`tab ${section === key ? 'active' : ''}`}
+                aria-current={section === key ? 'page' : undefined}
+                onClick={(e) => {
+                  setSection(key)
+                  // a new section starts at its top, not wherever the last one was scrolled to
+                  e.currentTarget.closest('main')?.scrollTo({ top: 0 })
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        }
+      />
 
+      {section === 'general' && (
+        <>
       <UpdatesPanel />
 
       <ServerPanel />
 
       <LibraryPanel />
+        </>
+      )}
 
+      {section === 'branding' && (
+        <>
       <div className="panel">
         <h3>Show branding</h3>
         <p className="muted">
@@ -252,10 +291,23 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           </div>
         </div>
       </div>
+        </>
+      )}
 
+      {section === 'paperwork' && (
+        <>
       <HeaderPanel />
       <TableStylePanel />
+        </>
+      )}
+      {section === 'checklist' && (
+        <>
+      <ChecklistPanel />
+        </>
+      )}
 
+      {section === 'lists' && (
+        <>
       <div className="panel">
         <h3>Network signal types</h3>
         <p className="muted">
@@ -362,8 +414,10 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           ))}
         </ul>
       </div>
+        </>
+      )}
 
-      {swCfg && (
+      {section === 'switches' && swCfg && (
         <div className="panel">
           <h3>Switch config generator</h3>
           <p className="muted">
@@ -464,6 +518,8 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
         </div>
       )}
 
+      {section === 'lists' && (
+        <>
       <div className="panel">
         <h3>Auto-add kits</h3>
         <p className="muted">
@@ -476,6 +532,8 @@ function SettingsPage({ cableTypes, categories, onChanged }: Props): React.JSX.E
           Manage kits…
         </button>
       </div>
+        </>
+      )}
 
       {managingKits && (
         <KitModal

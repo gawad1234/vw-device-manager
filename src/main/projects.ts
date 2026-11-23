@@ -1,7 +1,7 @@
 import { dialog, shell } from 'electron'
-import { existsSync, copyFileSync } from 'fs'
+import { existsSync, copyFileSync, cpSync } from 'fs'
 import { basename, extname } from 'path'
-import { openDb, getCurrentDbPath } from './db'
+import { openDb, getCurrentDbPath, audioDirFor } from './db'
 import {
   clearProjectOrderKits,
   getProjectMeta,
@@ -163,6 +163,9 @@ export async function saveCopyAs(): Promise<ProjectInfo | null> {
   const path = ensureExt(res.filePath)
   // node:sqlite writes are already durable on disk, so the copy is up to date.
   copyFileSync(current, path)
+  // Timecode audio is found by project name, so the copy needs its own audio folder.
+  if (existsSync(audioDirFor(current)))
+    cpSync(audioDirFor(current), audioDirFor(path), { recursive: true })
   return switchTo(path) // continue working on the copy
 }
 

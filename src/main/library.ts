@@ -28,6 +28,7 @@ import type {
 import { DOC_TEMPLATES, withBuiltIns, type PaperworkTemplate } from '../shared/paperwork'
 import { normalizeTableStyle, type TableStyle } from '../shared/table-style'
 import { normalizeHeader, type PaperworkHeader } from '../shared/paperwork-header'
+import { normalizeSteps, type ChecklistStep } from '../shared/checklist'
 
 const LIBRARY_FILE = 'library.json'
 
@@ -82,6 +83,8 @@ interface Library {
   tableStyle: TableStyle | null
   /** The header on every PDF (what goes left/center/right); null = the default look. */
   paperworkHeader?: PaperworkHeader | null
+  /** Provisioning checklist steps; null/missing = the built-in defaults. */
+  checklistSteps?: ChecklistStep[] | null
   /** Next id per list, so a deleted row's id is never handed to someone new:
    *  projects keep these ids (crew bookings, a computer's software). */
   nextIds?: Partial<Record<IdList, number>>
@@ -690,4 +693,18 @@ export function setTableStyle(style: TableStyle): TableStyle {
   lib.tableStyle = normalizeTableStyle(style)
   writeLibrary(lib)
   return lib.tableStyle
+}
+
+// ---- Provisioning checklist steps (shared) --------------------------------
+
+export function getChecklistSteps(): ChecklistStep[] {
+  return normalizeSteps(readLibrary().checklistSteps)
+}
+
+/** null = back to the built-in steps. */
+export function setChecklistSteps(steps: ChecklistStep[] | null): ChecklistStep[] {
+  const lib = readLibrary()
+  lib.checklistSteps = steps == null ? null : normalizeSteps(steps)
+  writeLibrary(lib)
+  return getChecklistSteps()
 }

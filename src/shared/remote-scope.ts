@@ -24,6 +24,7 @@ const READ = new Set([
   'companyName:get',
   'tableStyle:get',
   'paperworkHeader:get',
+  'checklistSteps:get',
   'switchConfig:get',
   'configs:list',
   'orders:list',
@@ -73,7 +74,8 @@ const LOCAL_GROUPS = [
   'vlanManager:',
   'library:',
   'show:', // Show › Status pings from this computer's network
-  'eos:' // this computer's link to the Eos lighting console
+  'eos:', // this computer's link to the Eos lighting console
+  'sacn:' // Program › sACN listens on this computer's network
 ]
 
 /** Anything not listed is a write — refused while joined, so a new channel is safe by default. */

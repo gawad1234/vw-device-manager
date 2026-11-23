@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Device, Subnet } from '../../../shared/types'
 import DeviceModal from '../components/DeviceModal'
+import DeviceSheetModal from '../components/DeviceSheetModal'
 import ExportMenu, { type ExportSection } from '../components/ExportMenu'
 import IpSheet from '../components/IpSheet'
 import PageHeader from '../components/PageHeader'
@@ -39,6 +40,7 @@ interface Props {
 function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.JSX.Element {
   const [search, setSearch] = useState('')
   const [openId, setOpenId] = useState<number | 'new' | null>(null)
+  const [checklists, setChecklists] = useState(false)
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [view, setView] = useState<'list' | 'sheet'>('list')
@@ -186,6 +188,16 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
         title="Devices"
         count={devices.length}
         overflow={[
+          ...(devices.length
+            ? [
+                {
+                  label: 'Provisioning checklists…',
+                  title:
+                    'Print a setup checklist per device. Steps come from Settings › Provisioning checklist and only appear when the device has that data.',
+                  onClick: () => setChecklists(true)
+                }
+              ]
+            : []),
           {
             label: 'Import ShowSandbox…',
             title:
@@ -296,6 +308,15 @@ function DevicesPage({ devices, subnets, categories, onChanged }: Props): React.
             await onChanged() // or the open row looks deleted
             setOpenId(id)
           }}
+        />
+      )}
+      {checklists && (
+        <DeviceSheetModal
+          doc="checklist"
+          title="Provisioning checklists"
+          intro="One page per device: the setup steps that apply to it, in order, with a box to tick or initial for each. Edit the steps in Settings › Provisioning checklist."
+          notes={new Map(devices.map((d) => [d.name, d.category ?? '']))}
+          onClose={() => setChecklists(false)}
         />
       )}
     </div>

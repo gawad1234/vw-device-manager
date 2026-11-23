@@ -120,6 +120,6 @@ test('connect gives up after 3 s when the console never answers', async () => {
 })
 
 test('command-line cues have spaces around the list slash (Eos rejects "1/13")', () => {
-  assert.equal(CUE_TC_CMD(2, '4.5', '01:02:03:04'), 'Cue 2 / 4.5 Execute Timecode 01020304 #')
+  assert.equal(CUE_TC_CMD(2, '4.5', '01:02:03:04'), 'Cue 2 / 4.5 Execute Time_Code 01020304 #')
   assert.equal(EMPTY_CUE_CMD(1, '13'), 'Record_Only Cue 1 / 13 #')
 })

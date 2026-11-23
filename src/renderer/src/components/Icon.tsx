@@ -123,6 +123,8 @@ function paths(name: string): React.JSX.Element {
           <path d="M12 9v4l2 2M10 2h4" />
         </>
       )
+    case 'sacn':
+      return <path d="M2 12h3M19 12h3M8 8a6 6 0 0 0 0 8M16 8a6 6 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14" />
     case 'showstatus':
       return <path d="M2 12h4l3-8 6 16 3-8h4" />
     case 'settings':

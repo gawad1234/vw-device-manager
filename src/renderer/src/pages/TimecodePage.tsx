@@ -57,6 +57,7 @@ function TimecodePage({
   const [startInput, setStartInput] = useState<string | null>(null)
   const [newCue, setNewCue] = useState<string | null>(null)
   const [newTc, setNewTc] = useState<string | null>(null)
+  const [newLabel, setNewLabel] = useState('')
   const [error, setError] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -433,12 +434,22 @@ function TimecodePage({
     setError('')
     setNewCue(null)
     setNewTc(null)
-    saveSong({ ...song, markers: [...markers, { cue, label: '', t: at, created: true }] })
+    const label = newLabel.trim()
+    setNewLabel('')
+    saveSong({ ...song, markers: [...markers, { cue, label, t: at, created: true }] })
     if (!connected) return
+    const tc = songTc(song.offsetFrames, at, fps)
     try {
       await window.api.eos.createCue(song.cueList, cue)
-      await window.api.eos.setTimecode(song.cueList, cue, songTc(song.offsetFrames, at, fps))
+      await window.api.eos.setTimecode(song.cueList, cue, tc)
+      // Sync from console copies console labels onto flags, so the name must reach the console too.
+      if (label) await window.api.eos.setLabel(song.cueList, cue, label)
+      // Read the list back: the console sends no errors, so this is the only proof the timecode stuck.
+      const back = (await window.api.eos.cues(song.cueList)).find((c) => cueKey(c.cue) === cueKey(cue))
       refreshCues()
+      if (!back) setError(`The flag is placed, but cue ${cue} isn’t on the console’s list ${song.cueList}.`)
+      else if (!back.timecode)
+        setError(`Cue ${cue} is on the console, but its timecode (${tc}) didn’t take. Drag its flag to resend it.`)
     } catch (err) {
       setError(`The flag is placed, but the console didn’t make cue ${cue}: ${errText(err)}`)
     }
@@ -927,11 +938,20 @@ function TimecodePage({
                     onChange={(e) => setNewTc(e.target.value)}
                   />
                 </label>
+                <label className="tc-field">
+                  Name
+                  <input
+                    aria-label="Name for the new cue"
+                    placeholder="optional"
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                  />
+                </label>
                 <button className="btn btn-primary btn-small" type="submit">
                   + Create cue
                 </button>
                 <span className="muted tc-small tc-new-help">
-                  Makes an empty cue (no levels) on the console and puts its flag here. Defaults to
+                  Makes an empty cue (no levels) on the console with this name and timecode, and puts its flag here. Defaults to
                   the playhead and the next free number.
                 </span>
               </form>

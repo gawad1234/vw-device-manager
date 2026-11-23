@@ -56,7 +56,7 @@ The app flags duplicate IPs and IPs that fall outside their subnet as you go.
 - **Paperwork** — want the pull sheet, IP schedule or any other export laid out differently? Open **Paperwork** (or **Edit layout…** in an Export menu), pick the template, then click headings to change columns and drag their edges to resize. The export follows.
 - **Network → Projectors / Wallpapers / Software** — Panasonic projector setup sheets, branded desktop wallpapers, and USB install kits for show computers.
 - **Network → Configs** — a Hyper-V VLAN script for a Windows host, or **Save VLAN Manager…** for a small Windows GUI that shows a host's live VLANs and lets you change them (Preview first, then Apply).
-- **Program → Timecode** — drop in songs and place a flag for each Eos cue; playing a song here fires the cues on an ETC Eos console. **Show → Status** pings your devices every 30 seconds so you can see who's missing. See [Timecode](USER-GUIDE.md#timecode) and [Show status](USER-GUIDE.md#show-status).
+- **Program → Timecode** — drop in songs and place a flag for each Eos cue; playing a song here fires the cues on an ETC Eos console. **Program → sACN** shows which systems are sending which universes on the lighting network, with live channel levels ([sACN](USER-GUIDE.md#sacn)). **Show → Status** pings your devices every 30 seconds so you can see who's missing. See [Timecode](USER-GUIDE.md#timecode) and [Show status](USER-GUIDE.md#show-status).
 - **Settings → Paperwork header** — where your logos, the show name, the document title, the date and a line of your own sit at the top of every PDF.
 - **Settings → Table style** — the font, header style, colors and padding every Excel and PDF table uses.
 

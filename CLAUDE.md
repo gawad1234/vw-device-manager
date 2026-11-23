@@ -61,6 +61,11 @@ workspace context and the cross-machine handoff log — check those first.
     interface's directed broadcast address on port **8786** every 2 s (/32 VPN
     interfaces skipped); the Join dialog polls `project:discover` (local scope),
     which listens while asked and stops after 10 s idle. Errors switch it off, never the server.
+  - `sacn.ts` — **Program › sACN monitor** (listen-only): one UDP socket on **5568** (reuseAddr), joins
+    239.255.250.214 (universe discovery) + each watched/announced universe's group on the chosen
+    adapter (or all); `parseSacn` (data + discovery, pure, tested), `onAdapter` drops unicast from
+    other networks. `sacn:*` channels are local scope; the page polls `sacn:scan(watch, adapter)`
+    every 500 ms and it stops 10 s after the last poll. Highest-priority source's levels are shown.
   - `remote.ts` — the **joining side**: `join/leave/info/call`; polls `/rpc/changes`
     (1.5 s focused, 4.5 s in the background) and sends `data-changed`.
   - `ipc.ts` registers every handler through `handle(channel, fn)`: while joined,
@@ -90,7 +95,7 @@ workspace context and the cross-machine handoff log — check those first.
   (`src/shared/types.ts`) to the renderer via `contextBridge`.
 - **Renderer** (`src/renderer/src/`): React UI — `App.tsx` shell with a data-driven
   `NAV` (Network, Cables, Lighting, Paperwork, Schedule, Packing) and `MODE_NAV` per mode
-  (Prep = `NAV`; Program = Timecode/Fixtures/Universes; Show = Status/Devices/Configs/Patching;
+  (Prep = `NAV`; Program = Timecode/Fixtures/Universes/sACN; Show = Status/Devices/Configs/Patching;
   mode in localStorage `app.mode`). `components/Sidebar.tsx` (+ `Icon.tsx`) is the whole
   shell: mode filter at the top (▶ badge while timecode plays), icon nav, collapsible to an
   80px rail (`sidebar.collapsed`), Show Server + update cards and the project menu
@@ -119,6 +124,12 @@ workspace context and the cross-machine handoff log — check those first.
   `LabelModal` doubles as the sticker designer via its `sticker` prop (any size).
   Renderer-only libraries (`pdfjs-dist`, `jszip`) are **devDependencies**: Vite bundles them,
   and anything in `dependencies` is also copied into the installer by electron-builder.
+- **Provisioning checklists:** `shared/checklist.ts` (phases, triggers, `DEFAULT_STEPS`,
+  `checklistRecords`, `fillDetail` with `{field}` / `[optional part]`, `normalizeSteps`); steps in
+  `library.json` → `checklistSteps` (null = defaults; Settings → `ChecklistPanel`). `paperwork-data.ts`
+  `checklistSheets(names)` builds per-device facts; paperwork source/template `checklist`, printed one
+  page per device by `exports.ts` `deviceSheetParts/deviceSheetHtml` (shared with patch sheets) via
+  `components/DeviceSheetModal.tsx` (Devices ⋯ menu; Patching uses it too).
 - **Tests:** `npm test` → `node --test` over `test/*.test.mts`; they import the
   pure `.ts` modules directly (so those must not import Electron or use
   extensionless relative imports).

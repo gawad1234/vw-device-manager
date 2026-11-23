@@ -12,6 +12,7 @@ import {
   caseRecords,
   recordsFor,
   patchRecords,
+  checklistSheets,
   resolveEndpoint,
   TRIP_KIND_LABEL,
   type DeviceIndex
@@ -816,42 +817,48 @@ async function writeTemplated(
     )
 }
 
-/** Each device's patch sheet, built from the Patch sheet template. */
-export function patchSheetParts(
-  devices: string[]
-): { device: string; t: PaperworkTemplate; built: BuiltReport }[] {
-  const [t] = templatesForDoc('patchsheet')
-  const recs = patchRecords()
-  return devices.map((device) => ({
-    device,
-    t,
-    built: buildReport(
-      t,
-      recs.filter((r) => r.device === device)
-    )
-  }))
+/** Docs printed one page per device, each from its own template. */
+type DeviceSheetDoc = 'patchsheet' | 'checklist'
+const SHEET_TITLE: Record<DeviceSheetDoc, string> = {
+  patchsheet: 'Patch Sheet',
+  checklist: 'Provisioning Checklist'
 }
 
-/** Patch sheets as a PDF page body: every device starts a new page under its own header. */
-export function patchSheetHtml(devices: string[], logo: string | null): string {
-  const parts = patchSheetParts(devices)
+/** Each device's sheet, built from the doc's template. */
+export function deviceSheetParts(
+  doc: DeviceSheetDoc,
+  devices: string[]
+): { device: string; t: PaperworkTemplate; built: BuiltReport }[] {
+  const [t] = templatesForDoc(doc)
+  const patch = doc === 'patchsheet' ? patchRecords() : []
+  const sheets: { device: string; recs: object[] }[] =
+    doc === 'checklist'
+      ? checklistSheets(devices)
+      : devices.map((device) => ({ device, recs: patch.filter((r) => r.device === device) }))
+  return sheets.map(({ device, recs }) => ({ device, t, built: buildReport(t, recs) }))
+}
+
+/** Per-device sheets as a PDF page body: every device starts a new page under its own header. */
+export function deviceSheetHtml(doc: DeviceSheetDoc, devices: string[], logo: string | null): string {
+  const parts = deviceSheetParts(doc, devices)
   const body = parts
     .map(
       (p) =>
-        `<div class="ps">${pageHeader(`${p.device} — Patch Sheet`, logo)}${templateHtml(p.t, p.built)}</div>`
+        `<div class="ps">${pageHeader(`${p.device} — ${SHEET_TITLE[doc]}`, logo)}${templateHtml(p.t, p.built)}</div>`
     )
     .join('')
   const css = '<style>.ps + .ps { page-break-before: always; }</style>'
-  return page('Patch Sheet', TEMPLATE_CSS + css + body, logo, 12, false, true)
+  return page(SHEET_TITLE[doc], TEMPLATE_CSS + css + body, logo, 12, false, true)
 }
 
-async function writePatchSheets(
+async function writeDeviceSheets(
+  doc: DeviceSheetDoc,
   outPath: string,
   format: ExportOptions['format'],
   devices: string[],
   logo: string | null
 ): Promise<void> {
-  const parts = patchSheetParts(devices)
+  const parts = deviceSheetParts(doc, devices)
   if (format === 'csv')
     writeCsv(
       outPath,
@@ -874,7 +881,7 @@ async function writePatchSheets(
   else
     writeFileSync(
       outPath,
-      await htmlToPdf(patchSheetHtml(devices, logo), parts[0]?.t.orientation === 'landscape')
+      await htmlToPdf(deviceSheetHtml(doc, devices, logo), parts[0]?.t.orientation === 'landscape')
     )
 }
 
@@ -1363,6 +1370,7 @@ const DOC_LABEL: Record<ExportOptions['doc'], string> = {
   projectorsheet: 'projector setup sheet',
   loadsheet: 'load sheet',
   patchsheet: 'patch sheet',
+  checklist: 'provisioning checklist',
   order: 'pull order',
   receiving: 'receiving checklist'
 }
@@ -1457,20 +1465,21 @@ export async function exportDocument(opts: ExportOptions): Promise<string | null
     return res.filePath
   }
 
-  // Patch sheets: one page per device, every connection on it (inputs, then outputs).
-  if (opts.doc === 'patchsheet') {
+  // Patch sheets / provisioning checklists: one page per device.
+  if (opts.doc === 'patchsheet' || opts.doc === 'checklist') {
     const devices = opts.devices ?? []
     if (!devices.length) return null
+    const what = DOC_LABEL[opts.doc]
     const res = await dialog.showSaveDialog({
       defaultPath:
-        `${devices.length === 1 ? `${devices[0]} patch sheet` : 'Patch sheets'}.${opts.format}`.replace(
+        `${devices.length === 1 ? `${devices[0]} ${what}` : `${what[0].toUpperCase()}${what.slice(1)}s`}.${opts.format}`.replace(
           /[/\\:*?"<>|]/g,
           '-'
         ),
       filters: [{ name: opts.format.toUpperCase(), extensions: [opts.format] }]
     })
     if (res.canceled || !res.filePath) return null
-    await writePatchSheets(res.filePath, opts.format, devices, logo)
+    await writeDeviceSheets(opts.doc, res.filePath, opts.format, devices, logo)
     shell.openPath(res.filePath)
     return res.filePath
   }

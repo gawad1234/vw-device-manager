@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Circuit } from '../../../shared/types'
-import PatchSheetModal from '../components/PatchSheetModal'
+import DeviceSheetModal from '../components/DeviceSheetModal'
 import PageHeader from '../components/PageHeader'
 
 type GroupBy = 'none' | 'device' | 'rack' | 'signal'
@@ -8,6 +8,15 @@ type StatusFilter = 'all' | 'unpatched' | 'patched' | 'untested'
 
 function loc(rack: string, u: string, slot: string): string {
   return [rack, u && `U${u}`, slot && `slot ${slot}`].filter(Boolean).join(' · ')
+}
+
+/** Each patched device → how many connections it has. */
+function patchCounts(circuits: Circuit[]): Map<string, string> {
+  const m = new Map<string, number>()
+  for (const c of circuits)
+    for (const name of new Set([c.srcName, c.dstName].filter(Boolean)))
+      m.set(name, (m.get(name) ?? 0) + 1)
+  return new Map([...m].map(([k, n]) => [k, String(n)]))
 }
 
 function PatchingPage(): React.JSX.Element {
@@ -358,7 +367,15 @@ function PatchingPage(): React.JSX.Element {
           ))}
         </>
       )}
-      {sheets && <PatchSheetModal circuits={circuits} onClose={() => setSheets(false)} />}
+      {sheets && (
+        <DeviceSheetModal
+          doc="patchsheet"
+          title="Patch sheets"
+          intro="One page per device: its inputs and outputs, with where each one comes from and goes to. Hand them to anyone patching without the app."
+          notes={patchCounts(circuits)}
+          onClose={() => setSheets(false)}
+        />
+      )}
     </div>
   )
 }

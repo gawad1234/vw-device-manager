@@ -23,6 +23,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Lighting](#lighting)
   - [Live sync with Vectorworks Spotlight](#live-sync-with-vectorworks-spotlight)
 - [Timecode (Eos)](#timecode)
+- [sACN monitor](#sacn)
 - [Show status](#show-status)
 - [Patching](#patching)
 - [Orders](#orders)
@@ -38,7 +39,7 @@ The complete reference for beta testers. For a fast first run, see the **[Quick 
 - [Syncing to Vectorworks](#syncing-to-vectorworks)
 - [Troubleshooting](#troubleshooting)
 
-The left sidebar groups pages by job: **Network** (Devices, Subnets, Configs, Projectors, Wallpapers, Software), **Cables** (Cables, Patching, Loom labels), **Lighting** (Fixtures, Universes, Fixture types), **Paperwork** (Orders, Paperwork), **Schedule** (Crew, Trucking) and **Packing** (Case labels, Cases), with **Settings** at the bottom. Two more pages, **Timecode** and **Show status**, live in the [modes](#the-sidebar-and-modes). Every button and row can be reached with Tab, and Enter opens a row.
+The left sidebar groups pages by job: **Network** (Devices, Subnets, Configs, Projectors, Wallpapers, Software), **Cables** (Cables, Patching, Loom labels), **Lighting** (Fixtures, Universes, Fixture types), **Paperwork** (Orders, Paperwork), **Schedule** (Crew, Trucking) and **Packing** (Case labels, Cases), with **Settings** at the bottom. Three more pages, **Timecode**, **sACN** and **Show status**, live in the [modes](#the-sidebar-and-modes). Every button and row can be reached with Tab, and Enter opens a row.
 
 ---
 
@@ -55,8 +56,8 @@ The left sidebar groups pages by job: **Network** (Devices, Subnets, Configs, Pr
 
 At the top of the sidebar a **Prep / Program / Show** filter picks which pages the sidebar lists. Pick one with a click or the arrow keys. The app remembers your choice.
 
-- **Prep** — building the show. Every page in the groups above, except Timecode and Show status.
-- **Program** — at the lighting desk: [Timecode](#timecode), Fixtures and Universes. A **▶** shows on the Program button while a song is playing, so you can see it from another mode.
+- **Prep** — building the show. Every page in the groups above, except Timecode, sACN and Show status.
+- **Program** — at the lighting desk: [Timecode](#timecode), Fixtures, Universes and [sACN](#sacn). A **▶** shows on the Program button while a song is playing, so you can see it from another mode.
 - **Show** — running live: [Show status](#show-status), Devices, Configs and Patching.
 
 If something opens a page the current mode doesn't list, the app switches mode and says so.
@@ -131,6 +132,14 @@ What comes in:
 **Importing again is safe.** Everything is matched by name, and an existing row only has its *empty* fields filled — MACs, IPs, notes and pulled / labeled / patched ticks you've entered are never overwritten, and nothing is deleted. A summary lists what was added and anything to check (such as an IP already used by another device).
 
 **With the drawing:** name your ConnectCAD devices like the ShowSandbox idents. **Link Selected** in Vectorworks then picks up the imported devices and ports by name instead of making duplicates.
+
+### Provisioning checklists
+
+A setup sheet per device for the tech prepping it. On the Devices tab open **⋯ → Provisioning checklists…**, tick the devices and choose **PDF**, **Excel** or **CSV**: one page per device, its steps sectioned by phase (Receive & inspect, Firmware / OS / software, Display & output, Network, Device-specific config, Labeling, Burn-in / test, Rack install, Final sign-off), each with a box, an initials blank or a write-in line.
+
+**Only steps that apply print.** Each step has a trigger that reads the device: *Per port with IP / VLAN* gives one line per port (`NIC 1: 10.0.1.5 (Media) VLAN 10`), *Per software install* one per installer, *Per patch connection* one per patched socket, *Per rack position* the rack/U from Patching, and so on. A phase with nothing in it is left off.
+
+**Edit the steps** in **Settings → Provisioning checklist** (shared by every show): phase, step name, trigger, detail text, sign-off type and the device categories it applies to (blank = every device). In the detail, `{port}`, `{ip}`, `{vlan}`… are filled in (each trigger lists its fields), and a `[bracketed part]` drops out when its fields are empty. **Reset to defaults** brings back the built-in steps. The page layout (columns, text size) is the *Provisioning checklist* template in [Paperwork](#paperwork); the header and table style are the same as every other PDF.
 
 ### IP sheet
 
@@ -328,7 +337,7 @@ Good to know:
 
 **Connect.** Type the console's IP into **Console IP** and click **Connect**. The app talks to Eos over OSC on TCP port 3032 and shows the console's version once it's connected. Pick the **frame rate** (24, 25 or 30 fps).
 
-**Add songs.** Drop audio files on the page (WAV, MP3, AIFF) or click **+ Add songs…**. Each new song gets the next hour of timecode. The audio is copied into a `<project> Audio` folder beside the project file. For each song you can set:
+**Add songs.** Drop audio files on the page (WAV, MP3, AIFF) or click **+ Add songs…**. Each new song gets the next hour of timecode. The audio is copied into a `<project> Audio` folder beside the project file. **Save a Copy As** copies that folder too; if you rename or move a project in Finder/Explorer, rename or move its Audio folder with it. For each song you can set:
 
 - **Starts at** — the song's first timecode. Flags keep their place in the song when you change this; only their timecodes shift. It doesn't rewrite the console yet.
 - **Cue list** — the console cue list its cues are in.
@@ -341,7 +350,7 @@ If two songs overlap on the same cue list, a warning says so.
 Get flags in two ways:
 
 - **Sync from console** reads the cue list. Cues that already have a timecode get flags. Cues without one are listed under **On the console, no timecode yet**: move the playhead to where the cue goes and click **Place at …**.
-- **+ Create cue** makes a new empty cue (no levels) on the console and puts its flag here. It starts at the playhead and the next free cue number; change either first if you like.
+- **+ Create cue** makes a new empty cue (no levels) on the console and puts its flag here. It starts at the playhead and the next free cue number; change either first if you like. Type a **Name** to label the cue on the console too. Afterwards the app reads the cue list back and tells you if the cue or its timecode didn't stick.
 
 > **+ Create cue is not yet tested end to end on a real console.** The rest was tried on ETCnomad, but check the cue it makes on your console before relying on it, and try it on a scratch show first.
 
@@ -350,6 +359,20 @@ The **Console** column shows each cue's state: **On console**, **Created · empt
 **Scene.** The song's title (trimmed) is written to the first cue's **Scene** on the console, only when that cue's scene is empty. A scene you typed on the console is never changed.
 
 **Play it.** **Play** and **Pause** run the song on this computer. Click or use the arrow keys on the waveform to move the playhead. **Arm: fire cues** turns on firing; it needs a console connection. While **Armed**, turn off the console's own timecode input for that cue list so no cue fires twice. The page keeps playing if you switch to another page or mode.
+
+---
+
+## sACN
+
+**Program → sACN** listens to the lighting network from this computer and shows what's on it. It only listens; it never sends anything to the network or the console.
+
+- **Network adapter** — which of this computer's network connections to listen on (e.g. `en0 — 10.101.1.5`), or **All adapters**. With one adapter picked, sACN from other networks is ignored. The choice is remembered on this computer; if that adapter isn't connected, the page listens on all of them.
+- **Sources** — every system sending sACN: its name, IP address, the device from [Devices](#devices) with that IP, the universes it's **sending** right now and the ones it **announces** (sACN universe discovery, sent by Eos, grandMA and most consoles).
+- **Universes** — a list on the left: each universe, who is sending it and how many channels are up. Universes the app is listening to but nobody is sending show as **silent**. Click one to see its sources (name, IP, priority, packets per second, *in control* when two systems send the same universe — the highest priority wins) and a **grid of all 512 channels** with their live levels. **Show levels as %** switches between percent and 0–255; hover a channel for both.
+
+Which universes it hears: every universe patched in this show, plus any universe a console announces. If a source doesn't announce its universes, type them in **Also listen to universes** (e.g. `1-8, 20`).
+
+If another program on this computer already holds the sACN port (5568), the page says so instead of showing data. Close that program, or leave the page and come back.
 
 ---
 
@@ -449,6 +472,7 @@ Create several — e.g. a tight *"Pull order — compact, landscape"* for the sh
 | Cables | **Pull sheet**, **Cable schedule** | Cables → Export |
 | Devices & network | **Device list**, **IP schedule — switches**, **IP schedule — devices** (printed together as the IP schedule) | Devices → Export |
 | Cables | **Patch sheet (one device)** | Patching → Patch sheets |
+| Devices & network | **Provisioning checklist (one device)** | Devices → ⋯ → Provisioning checklists |
 | Trucking | **Truck load sheet (case list)** — the case table on each load sheet | Trucking → load sheets |
 | Lighting | **Channel hookup**, **Instrument schedule**, **Patch (by address)**, **Color schedule**, **Gobo pull list** | exported from this page |
 
@@ -539,6 +563,8 @@ A joined computer can see the whole show **and the shared library on the host, i
 ---
 
 ## Settings
+
+Settings is split into sections, picked from the bar at the top (it stays in view while you scroll): **General** (updates, Show Server, shared library), **Branding** (show and company), **Paperwork** (PDF header, table style), **Checklist** (provisioning checklist steps), **Lists & kits** (network signals, cable types, device categories, auto-add kits) and **Switches** (switch config generator). It opens on General.
 
 - **Shared library** — where crew, kits, cable types, templates and the other shared lists live. To use them on more than one computer, choose the same folder that syncs, such as one in Dropbox, on each computer. The first computer moves its library in. The next one uses what's there and keeps its old library as a backup (`library.before-sharing.json`); the two aren't merged, so start with the computer that has the fuller list.
 - **Company branding** — your company name and logo, stamped as a letterhead on every project's paperwork. Shared across all projects.

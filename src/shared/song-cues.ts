@@ -2,12 +2,10 @@
 import { tcToFrames, type Fps } from './timecode'
 import type { EosCue, SongMarker } from './types'
 
-/** Longest step between two playhead reads that still counts as playing (not a seek). */
-export const MAX_STEP_SEC = 0.25
-
-/** Markers the playhead passed going forward from `prev` to `now`; a seek or rewind fires nothing. */
+/** Markers the playhead passed going forward from `prev` to `now`. Seeks reset `prev` first
+ *  (TimecodePage `seek`), so a big step here is a stalled timer: fire late, never skip. */
 export function crossedMarkers(markers: SongMarker[], prev: number, now: number): SongMarker[] {
-  if (!(now > prev) || now - prev >= MAX_STEP_SEC) return []
+  if (!(now > prev)) return []
   return markers.filter((m) => m.t > prev && m.t <= now)
 }
 

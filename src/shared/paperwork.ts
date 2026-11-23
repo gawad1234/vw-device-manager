@@ -1,4 +1,5 @@
 import type { Fixture } from './types'
+import type { ChecklistRec } from './checklist'
 
 // Paperwork: user-built report templates (pull sheet, IP schedule, channel
 // hookup, load sheet…) turned into tables. Every source of rows (cables,
@@ -7,7 +8,7 @@ import type { Fixture } from './types'
 // exact same rows. Pure: the main process supplies the records.
 
 export type PaperworkSource =
-  'cables' | 'devices' | 'switchPorts' | 'ports' | 'cases' | 'fixtures' | 'patch'
+  'cables' | 'devices' | 'switchPorts' | 'ports' | 'cases' | 'fixtures' | 'patch' | 'checklist'
 
 export interface ReportColumn {
   /** a field key of the template's source */
@@ -307,7 +308,25 @@ export const SOURCES: Record<PaperworkSource, SourceDef> = {
       { key: 'testedBox', label: 'Tested ☐', get: (r) => box(r.tested), center: true },
       { key: 'notes', label: 'Notes', get: (r) => r.notes }
     ])
+  },
+  checklist: {
+    label: 'Provisioning checklist (one device)',
+    area: 'Devices & network',
+    fields: fieldsOf<ChecklistRec>([
+      { key: 'step', label: 'Step', get: (r) => r.step },
+      { key: 'detail', label: 'Detail', get: (r) => r.detail },
+      { key: 'signoff', label: 'Done', get: (r) => SIGNOFF_CELL[r.signoff], center: true },
+      { key: 'phase', label: 'Phase', get: (r) => r.phase },
+      { key: 'device', label: 'Device', get: (r) => r.device },
+      { key: 'order', label: 'Step order', get: (r) => r.order }
+    ])
   }
+}
+
+const SIGNOFF_CELL: Record<ChecklistRec['signoff'], string> = {
+  check: '☐',
+  initials: 'Init. ______',
+  value: '______________'
 }
 
 /** "Server A › OUT 1" */
@@ -376,8 +395,22 @@ const fx = (f: string, w: number, l?: string): ReportColumn => col('fixtures', f
 const pt = (f: string, w: number, l?: string): ReportColumn => col('patch', f, w, l)
 const cb = (f: string, w: number, l?: string): ReportColumn => col('cables', f, w, l)
 
+const ck = (f: string, w: number, l?: string): ReportColumn => col('checklist', f, w, l)
+
 /** The built-in templates. Ones bound to an export (DOC_TEMPLATES) can be reset but never deleted. */
 export const PRESETS: PaperworkTemplate[] = [
+  preset({
+    id: 'checklist',
+    name: 'Provisioning checklist (one device)',
+    source: 'checklist',
+    columns: [ck('step', 200), ck('detail', 320), ck('signoff', 110)],
+    groupBy: 'phase',
+    sortBy: ['order'],
+    // a step with several lines (one per port, per connection…) names itself once
+    mergeRepeats: 1,
+    orientation: 'portrait',
+    fontSize: 12
+  }),
   preset({
     id: 'patchsheet',
     name: 'Patch sheet (one device)',
@@ -586,7 +619,8 @@ export const DOC_TEMPLATES = {
   devicelist: ['devicelist'],
   ipschedule: ['ipschedule-switches', 'ipschedule-devices'],
   loadsheet: ['loadsheet'],
-  patchsheet: ['patchsheet']
+  patchsheet: ['patchsheet'],
+  checklist: ['checklist']
 } as const
 
 export type TemplatedDoc = keyof typeof DOC_TEMPLATES
@@ -599,7 +633,8 @@ export function usedBy(id: string): string | null {
     devicelist: 'Devices › Export › Device list',
     ipschedule: 'Devices › Export › IP schedule',
     loadsheet: 'Trucking › Load sheets',
-    patchsheet: 'Patching › Patch sheets'
+    patchsheet: 'Patching › Patch sheets',
+    checklist: 'Devices › ⋯ › Provisioning checklists'
   }
   for (const [doc, ids] of Object.entries(DOC_TEMPLATES))
     if ((ids as readonly string[]).includes(id)) return label[doc as TemplatedDoc]

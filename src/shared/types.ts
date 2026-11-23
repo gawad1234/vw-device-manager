@@ -1,6 +1,7 @@
 import type { PaperworkSource, PaperworkTemplate } from './paperwork'
 import type { TableStyle } from './table-style'
 import type { PaperworkHeader } from './paperwork-header'
+import type { ChecklistStep } from './checklist'
 import type { Fps } from './timecode'
 export interface Subnet {
   id: number
@@ -221,7 +222,7 @@ export interface ExportOptions {
   orderId?: number
   /** `loadsheet`: one trip's sheet; omitted = every trip, one page each */
   tripId?: number
-  /** `patchsheet`: the devices to print, one page each (names as in Patching) */
+  /** `patchsheet` / `checklist`: the devices to print, one page each (names as in Patching / Devices) */
   devices?: string[]
   doc:
     | 'pullsheet'
@@ -232,6 +233,7 @@ export interface ExportOptions {
     | 'projectorsheet'
     | 'loadsheet'
     | 'patchsheet'
+    | 'checklist'
     | 'order'
     | 'receiving'
   format: 'pdf' | 'xlsx' | 'csv'
@@ -882,6 +884,47 @@ export interface LightingSyncStatus {
  *  every child row (ports/cables), not just the top-level fields. */
 export type RowSaver = () => Promise<{ ok: boolean; error?: string }>
 
+export interface SacnAdapter {
+  /** e.g. en0, Ethernet 2 */
+  name: string
+  address: string
+  netmask: string
+}
+
+/** Program › sACN: what this computer hears on the network (E1.31, port 5568). */
+export interface SacnSnapshot {
+  listening: boolean
+  /** the adapter address listened on; '' = every adapter */
+  adapter: string
+  /** e.g. the port is taken by another app; '' when fine */
+  error: string
+  port: number
+  /** each sending system, keyed by its sACN CID */
+  sources: {
+    cid: string
+    name: string
+    ip: string
+    /** universes it's sending data on right now */
+    sending: number[]
+    /** universes its discovery packets list (may include ones not joined yet) */
+    announced: number[]
+  }[]
+  universes: {
+    universe: number
+    /** highest priority first — the one a receiver follows */
+    sources: {
+      cid: string
+      name: string
+      ip: string
+      priority: number
+      rate: number
+      preview: boolean
+    }[]
+    /** 512 levels (0–255) from the top source; null if it only sent non-level start codes */
+    levels: number[] | null
+  }[]
+}
+
 export interface VwDeviceManagerApi {
   subnets: {
     list: () => Promise<Subnet[]>
@@ -1083,6 +1126,11 @@ export interface VwDeviceManagerApi {
     get: () => Promise<PaperworkHeader>
     set: (h: PaperworkHeader) => Promise<PaperworkHeader>
   }
+  /** Provisioning checklist steps, shared by every show; set(null) restores the defaults. */
+  checklistSteps: {
+    get: () => Promise<ChecklistStep[]>
+    set: (steps: ChecklistStep[] | null) => Promise<ChecklistStep[]>
+  }
   /** How exported tables look (Excel + PDF), shared by every show. */
   tableStyle: {
     get: () => Promise<TableStyle>
@@ -1145,6 +1193,12 @@ export interface VwDeviceManagerApi {
   /** Show › Status: which IPv4 addresses answer a ping from this computer */
   show: {
     ping: (ips: string[]) => Promise<Record<string, boolean>>
+  }
+  /** Program › sACN: listen while polled (also joins `watch` universes); stops 10 s after the last poll */
+  sacn: {
+    scan: (watch: number[], adapter: string) => Promise<SacnSnapshot>
+    adapters: () => Promise<SacnAdapter[]>
+    stop: () => Promise<void>
   }
   /** Shop orders: equipment purchasing + receiving tracking. */
   orders: {
@@ -1223,6 +1277,7 @@ export interface VwDeviceManagerApi {
     /** move a cue's timecode event (HH:MM:SS:FF) */
     setTimecode: (list: number, cue: string, tc: string) => Promise<void>
     setScene: (list: number, cue: string, scene: string) => Promise<void>
+    setLabel: (list: number, cue: string, label: string) => Promise<void>
     onStatus: (cb: (status: EosStatus) => void) => () => void
     /** a cue list changed on the console */
     onCues: (cb: (list: number) => void) => () => void

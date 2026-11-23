@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { existsSync, mkdirSync, statSync } from 'fs'
-import { dirname } from 'path'
+import { basename, dirname, extname, join } from 'path'
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS subnets (
@@ -628,6 +628,10 @@ export function reopenIfReplaced(): boolean {
 export function getCurrentDbPath(): string | null {
   return dbPath
 }
+
+/** Where a project's Timecode audio lives: "<project> Audio/" beside its .vwdm. */
+export const audioDirFor = (projectPath: string): string =>
+  join(dirname(projectPath), `${basename(projectPath, extname(projectPath))} Audio`)
 
 export function getDb(): DatabaseSync {
   if (!db) throw new Error('Database not initialized — call openDb() first')

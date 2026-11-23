@@ -8,6 +8,8 @@ import {
   listTruckTrips
 } from './repository'
 import { mainRoute } from '../shared/ip-utils'
+import { getChecklistSteps, listSoftware } from './library'
+import { checklistRecords, type ChecklistDevice, type ChecklistRec } from '../shared/checklist'
 import { isAccessory } from '../shared/lighting-checks'
 import type { Bundle, CableEndpoint, PackCase } from '../shared/types'
 import type {
@@ -237,6 +239,67 @@ export function patchDevices(recs = patchRecords()): string[] {
   )
 }
 
+// ---- Provisioning checklists -----------------------------------------------
+
+/** What the checklist triggers read, for every device (patch rows matched by device name). */
+function checklistDevices(): ChecklistDevice[] {
+  const subnets = new Map(listSubnets().map((s) => [s.id, s]))
+  const software = new Map(listSoftware().map((p) => [p.id, p.name]))
+  const patch = patchRecords()
+  return listDevices().map((d) => {
+    const mine = patch.filter((r) => r.device === d.name)
+    return {
+      name: d.name,
+      category: d.category?.trim() || '',
+      location: d.location ?? '',
+      mac: d.macAddress ?? '',
+      isSwitch: d.isSwitch,
+      mgmtIp: d.managementIp ?? '',
+      oobIp: d.oobIp ?? '',
+      ports: d.ports
+        .filter((p) => !p.isUnused)
+        .map((p) => {
+          const s = p.untaggedSubnetId != null ? subnets.get(p.untaggedSubnetId) : undefined
+          return {
+            port: p.label,
+            ip: p.ipAddress ?? '',
+            network: s?.name ?? '',
+            vlan: s?.vlan != null ? String(s.vlan) : '',
+            tagged: p.taggedSubnetIds
+              .map((id) => subnets.get(id)?.vlan)
+              .filter((v) => v != null && v !== '')
+              .join(', ')
+          }
+        }),
+      software: (d.software ?? []).map((id) => software.get(id)).filter((n): n is string => !!n),
+      projectorModel: d.projector?.model ?? '',
+      projectorSettings: Object.keys(d.projector?.values ?? {}).length,
+      displays: d.wallpaper?.displays.length ?? 0,
+      patch: mine.map((r) => ({
+        direction: r.direction === 'Inputs' ? 'In' : 'Out',
+        socket: r.socket,
+        other:
+          r.direction === 'Inputs'
+            ? [r.srcDevice, r.srcSocket].filter(Boolean).join(' › ')
+            : [r.dstDevice, r.dstSocket].filter(Boolean).join(' › '),
+        cable: r.cable,
+        signal: r.signal
+      })),
+      racks: [...new Set(mine.map((r) => r.rack).filter(Boolean))]
+    }
+  })
+}
+
+/** Each named device's checklist lines (one sheet each); unknown names get none. */
+export function checklistSheets(names: string[]): { device: string; recs: ChecklistRec[] }[] {
+  const steps = getChecklistSteps()
+  const byName = new Map(checklistDevices().map((d) => [d.name, d]))
+  return names.map((device) => {
+    const d = byName.get(device)
+    return { device, recs: d ? checklistRecords(steps, d) : [] }
+  })
+}
+
 /** Every record a source lists in the open project (cables: the given bundles, or all).
  *  Patch connections are per device: the Paperwork preview shows the first device. */
 export function recordsFor(source: PaperworkSource, bundles?: Bundle[]): object[] {
@@ -257,6 +320,10 @@ export function recordsFor(source: PaperworkSource, bundles?: Bundle[]): object[
       const recs = patchRecords()
       const first = patchDevices(recs)[0]
       return recs.filter((r) => r.device === first)
+    }
+    case 'checklist': {
+      const first = listDevices()[0]
+      return first ? checklistSheets([first.name])[0].recs : []
     }
   }
 }

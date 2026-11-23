@@ -1,7 +1,7 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
 import { existsSync, mkdirSync, writeFileSync, constants as fsConstants } from 'fs'
 import { copyFile, readFile, unlink } from 'fs/promises'
-import { basename, dirname, extname, join } from 'path'
+import { basename, extname, join } from 'path'
 import * as repo from './repository'
 import * as projects from './projects'
 import * as library from './library'
@@ -10,6 +10,7 @@ import { recordsFor } from './paperwork-data'
 import type { PaperworkSource, PaperworkTemplate } from '../shared/paperwork'
 import type { TableStyle } from '../shared/table-style'
 import type { PaperworkHeader } from '../shared/paperwork-header'
+import type { ChecklistStep } from '../shared/checklist'
 import { generateVlanScript } from './vlan-script'
 import vlanManagerPs1 from '../../host-tools/VlanManager.ps1?raw'
 import applyVlanConfigPs1 from '../../host-tools/Apply-VlanConfig.ps1?raw'
@@ -20,6 +21,7 @@ import * as updater from './updater'
 import * as server from './server'
 import * as remote from './remote'
 import * as discovery from './discovery'
+import * as sacn from './sacn'
 import * as vectorlabel from './vectorlabel'
 import { handlers, bumpChange, type Handler } from './rpc-registry'
 import { channelScope } from '../shared/remote-scope'
@@ -28,7 +30,7 @@ import { generateInstallScript, INSTALL_BAT, kitFileNames } from './software-kit
 import { printStickers, printStickerTest } from './stickers'
 import * as lighting from './lightwright-sync'
 import { eos } from './eos'
-import { getCurrentDbPath } from './db'
+import { audioDirFor, getCurrentDbPath } from './db'
 import { defaultOffset } from '../shared/timecode'
 import { checkHostsOnce } from './reachability'
 import type {
@@ -182,7 +184,7 @@ export function registerIpcHandlers(): void {
   const audioDir = (): string => {
     const db = getCurrentDbPath()
     if (!db) throw new Error('Open a project first.')
-    return join(dirname(db), `${basename(db, extname(db))} Audio`)
+    return audioDirFor(db)
   }
   handle('songs:list', () => repo.listSongs())
   handle('songs:pick', async () => {
@@ -263,6 +265,9 @@ export function registerIpcHandlers(): void {
   )
   handle('eos:setScene', (_e, list: number, cue: string, scene: string) =>
     eos.setCueScene(list, cue, scene)
+  )
+  handle('eos:setLabel', (_e, list: number, cue: string, label: string) =>
+    eos.setCueLabel(list, cue, label)
   )
   const toWindows = (channel: string) => (payload: unknown) =>
     BrowserWindow.getAllWindows().forEach((w) => w.webContents.send(channel, payload))
@@ -419,6 +424,17 @@ export function registerIpcHandlers(): void {
   handle('project:join', (_e, address: string, pin: string) => remote.join(address, pin))
   handle('project:discover', () => discovery.scan())
   handle('project:stopDiscover', () => discovery.stopScan())
+  handle('sacn:scan', (_e, watch: unknown, adapter: unknown) =>
+    sacn.scan(
+      Array.isArray(watch)
+        ? watch.filter((u): u is number => Number.isInteger(u)).slice(0, 256)
+        : [],
+      // only an address this computer actually has; anything else = every adapter
+      sacn.adapters().some((a) => a.address === adapter) ? String(adapter) : ''
+    )
+  )
+  handle('sacn:adapters', () => sacn.adapters())
+  handle('sacn:stop', () => sacn.stopScan())
   handle('project:leave', () => (remote.leave(), projects.getCurrentProject()))
   handle('project:saveCopyAs', async () => leaveIfOpened(await projects.saveCopyAs()))
   handle('project:reveal', () => projects.revealCurrent())
@@ -438,6 +454,10 @@ export function registerIpcHandlers(): void {
   handle('tableStyle:get', () => library.getTableStyle())
   handle('paperworkHeader:get', () => library.getPaperworkHeader())
   handle('paperworkHeader:set', (_e, h: PaperworkHeader) => library.setPaperworkHeader(h))
+  handle('checklistSteps:get', () => library.getChecklistSteps())
+  handle('checklistSteps:set', (_e, steps: ChecklistStep[] | null) =>
+    library.setChecklistSteps(steps)
+  )
   handle('tableStyle:set', (_e, style: TableStyle) => library.setTableStyle(style))
   handle('switchConfig:get', () => library.getSwitchConfig())
   handle('switchConfig:set', (_e, input: SwitchConfigSettings) => library.setSwitchConfig(input))

@@ -1,26 +1,22 @@
 import { useMemo, useState } from 'react'
-import type { Circuit } from '../../../shared/types'
 import Modal from './Modal'
 import { openPaperwork } from '../lib/paperwork'
 
 interface Props {
-  circuits: Circuit[]
+  doc: 'patchsheet' | 'checklist'
+  title: string
+  intro: string
+  /** device name → a short note shown beside it (connection count, category) */
+  notes: Map<string, string>
   onClose: () => void
 }
 
 const byName = (a: string, b: string): number =>
   a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 
-/** Patching › Patch sheets: pick devices, print one page each (what plugs into it, where it goes). */
-function PatchSheetModal({ circuits, onClose }: Props): React.JSX.Element {
-  const counts = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const c of circuits)
-      for (const name of new Set([c.srcName, c.dstName].filter(Boolean)))
-        m.set(name, (m.get(name) ?? 0) + 1)
-    return m
-  }, [circuits])
-  const devices = useMemo(() => [...counts.keys()].sort(byName), [counts])
+/** Pick devices, print one page each (patch sheets, provisioning checklists). */
+function DeviceSheetModal({ doc, title, intro, notes, onClose }: Props): React.JSX.Element {
+  const devices = useMemo(() => [...notes.keys()].sort(byName), [notes])
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -41,7 +37,7 @@ function PatchSheetModal({ circuits, onClose }: Props): React.JSX.Element {
     try {
       await window.api.exports.run({
         scope: 'all',
-        doc: 'patchsheet',
+        doc,
         format,
         // print in list order, not click order
         devices: devices.filter((d) => picked.has(d))
@@ -55,7 +51,7 @@ function PatchSheetModal({ circuits, onClose }: Props): React.JSX.Element {
 
   const footer = (
     <>
-      <button className="btn" type="button" onClick={() => openPaperwork('patchsheet')}>
+      <button className="btn" type="button" onClick={() => openPaperwork(doc)}>
         Edit layout…
       </button>
       <span className="footer-spacer" />
@@ -73,10 +69,9 @@ function PatchSheetModal({ circuits, onClose }: Props): React.JSX.Element {
   )
 
   return (
-    <Modal title="Patch sheets" onClose={onClose} footer={footer}>
+    <Modal title={title} onClose={onClose} footer={footer}>
       <p className="muted" style={{ marginTop: 0 }}>
-        One page per device: its inputs and outputs, with where each one comes from and goes to.
-        Hand them to anyone patching without the app.
+        {intro}
       </p>
       {error && <div className="banner banner-error">{error}</div>}
       <div className="ps-pick-bar">
@@ -104,7 +99,7 @@ function PatchSheetModal({ circuits, onClose }: Props): React.JSX.Element {
             <label>
               <input type="checkbox" checked={picked.has(d)} onChange={() => toggle(d)} />
               <span>{d}</span>
-              <span className="muted">{counts.get(d)}</span>
+              <span className="muted">{notes.get(d)}</span>
             </label>
           </li>
         ))}
@@ -114,4 +109,4 @@ function PatchSheetModal({ circuits, onClose }: Props): React.JSX.Element {
   )
 }
 
-export default PatchSheetModal
+export default DeviceSheetModal

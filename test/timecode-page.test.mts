@@ -22,7 +22,11 @@ test('only markers passed while playing forward fire', () => {
     crossedMarkers(ms, 1.0, 1.1).map((x) => x.cue),
     ['3']
   ) // prev < t <= now
-  assert.deepEqual(crossedMarkers(ms, 0.9, 4.9), []) // a seek forward
+  // a stalled timer (seeks reset prev first): every passed cue still fires, in order
+  assert.deepEqual(
+    crossedMarkers(ms, 0.9, 4.9).map((x) => x.cue),
+    ['2', '3']
+  )
   assert.deepEqual(crossedMarkers(ms, 1.2, 0.9), []) // a rewind
   assert.deepEqual(crossedMarkers(ms, 1, 1), [])
   // Play from 0 starts just below 0 so a flag at 0 fires

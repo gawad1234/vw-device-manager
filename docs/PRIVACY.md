@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Device Manager**
-Effective date: November 16, 2026
+Effective date: November 23, 2026
 Provided by: Gabriel Awad ("we", "us") — contact: gabriel@gabrielawad.com
 
 ## The short version
@@ -94,6 +94,12 @@ usage statistics, crash reports, your IP address, or any personal information.
    Status page is open, the app pings each device's IP address from this computer
    about every 30 seconds to show whether it is reachable. These are ordinary
    ping requests to the addresses already in your project; no data is sent.
+
+5. **sACN monitor (Program › sACN, your local network only).** While the sACN
+   page is open, the app listens for sACN lighting data (E1.31, UDP port 5568)
+   on the network adapter you choose, joining the multicast groups of the
+   universes it shows. It only receives; it sends nothing. What it hears is
+   shown on screen and not saved.
 
 Apart from these, the app makes no outbound connections. (Lighting sync with
 Vectorworks is not a network connection: the app reads and writes the exchange

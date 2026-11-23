@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type { PaperworkSource, PaperworkTemplate } from '../shared/paperwork'
 import type { TableStyle } from '../shared/table-style'
 import type { PaperworkHeader } from '../shared/paperwork-header'
+import type { ChecklistStep } from '../shared/checklist'
 import type {
   FixtureInput,
   FixtureType,
@@ -224,6 +225,10 @@ const api: VwDeviceManagerApi = {
     get: () => invoke('paperworkHeader:get'),
     set: (h: PaperworkHeader) => invoke('paperworkHeader:set', h)
   },
+  checklistSteps: {
+    get: () => invoke('checklistSteps:get'),
+    set: (steps: ChecklistStep[] | null) => invoke('checklistSteps:set', steps)
+  },
   tableStyle: {
     get: () => invoke('tableStyle:get'),
     set: (style: TableStyle) => invoke('tableStyle:set', style)
@@ -273,6 +278,11 @@ const api: VwDeviceManagerApi = {
   },
   show: {
     ping: (ips: string[]) => invoke('show:ping', ips)
+  },
+  sacn: {
+    scan: (watch: number[], adapter: string) => invoke('sacn:scan', watch, adapter),
+    adapters: () => invoke('sacn:adapters'),
+    stop: () => invoke('sacn:stop')
   },
   orders: {
     list: () => invoke('orders:list'),
@@ -328,6 +338,8 @@ const api: VwDeviceManagerApi = {
       invoke('eos:setTimecode', list, cue, tc),
     setScene: (list: number, cue: string, scene: string) =>
       invoke('eos:setScene', list, cue, scene),
+    setLabel: (list: number, cue: string, label: string) =>
+      invoke('eos:setLabel', list, cue, label),
     onStatus: (cb) => {
       const listener = (_e: unknown, status: Parameters<typeof cb>[0]): void => cb(status)
       ipcRenderer.on('eos-status', listener)

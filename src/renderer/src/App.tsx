@@ -17,6 +17,7 @@ import LoomLabelsPage from './pages/LoomLabelsPage'
 import TruckingPage from './pages/TruckingPage'
 import FixturesPage from './pages/FixturesPage'
 import UniversesPage from './pages/UniversesPage'
+import SacnPage from './pages/SacnPage'
 import FixtureTypesPage from './pages/FixtureTypesPage'
 import PaperworkPage from './pages/PaperworkPage'
 import SettingsPage from './pages/SettingsPage'
@@ -42,6 +43,7 @@ type Tab =
   | 'patching'
   | 'fixtures'
   | 'universes'
+  | 'sacn'
   | 'fixtureTypes'
   | 'paperwork'
   | 'timecode'
@@ -124,7 +126,8 @@ const MODE_NAV: Record<Mode, NavGroup[]> = {
       items: [
         ['timecode', 'Timecode'],
         ['fixtures', 'Fixtures'],
-        ['universes', 'Universes']
+        ['universes', 'Universes'],
+        ['sacn', 'sACN']
       ]
     }
   ],
@@ -417,6 +420,8 @@ function App(): React.JSX.Element {
             <FixturesPage key={project?.path} />
           ) : tab === 'universes' ? (
             <UniversesPage key={project?.path} devices={devices} />
+          ) : tab === 'sacn' ? (
+            <SacnPage devices={devices} />
           ) : tab === 'fixtureTypes' ? (
             <FixtureTypesPage key={project?.path} />
           ) : tab === 'timecode' ? null : tab === 'showstatus' ? (
